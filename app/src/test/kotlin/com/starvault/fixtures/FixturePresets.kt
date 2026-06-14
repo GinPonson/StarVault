@@ -4,6 +4,7 @@ import com.starvault.data.model.AlbumPhoto
 import com.starvault.data.model.Direction
 import com.starvault.data.model.DisplayMode
 import com.starvault.data.model.FileItem
+import com.starvault.data.model.FileTag
 import com.starvault.data.model.FileType
 import com.starvault.data.model.ShareLink
 import com.starvault.data.model.TagColor
@@ -20,11 +21,11 @@ import com.starvault.data.model.WallpaperConfig
 object FixturePresets {
 
     fun homeFiles(): List<FileItem> = listOf(
-        FileItem("f01", "旅行 2025",     FileType.FOLDER, mtime = 1_718_000_000_000, tag = TagColor.TAG1),
-        FileItem("f02", "东京 vlog.mp4", FileType.VIDEO,  sizeBytes = 104_857_600, mtime = 1_717_900_000_000, tag = TagColor.TAG1),
-        FileItem("f03", "海边日落.jpg",   FileType.IMAGE,  sizeBytes = 2_097_152,  mtime = 1_717_800_000_000, tag = TagColor.TAG3),
+        FileItem("f01", "旅行 2025",     FileType.FOLDER, durationOrCount = "38 项", mtime = 1_718_000_000_000, tag = FileTag("生活", TagColor.TAG2)),
+        FileItem("f02", "东京 vlog.mp4", FileType.VIDEO,  sizeBytes = 104_857_600, durationOrCount = "08:42",     mtime = 1_717_900_000_000, tag = FileTag("生活", TagColor.TAG2)),
+        FileItem("f03", "海边日落.jpg",   FileType.IMAGE,  sizeBytes = 2_097_152,  durationOrCount = "4032 × 3024", mtime = 1_717_800_000_000, tag = FileTag("影视", TagColor.TAG3)),
         FileItem("f04", "会议纪要.docx",  FileType.DOC,    sizeBytes = 40_960,     mtime = 1_717_700_000_000),
-        FileItem("f05", "钢琴曲.wav",     FileType.AUDIO,  sizeBytes = 31_457_280, mtime = 1_717_600_000_000, tag = TagColor.TAG5),
+        FileItem("f05", "钢琴曲.wav",     FileType.AUDIO,  sizeBytes = 31_457_280, durationOrCount = "02:18",     mtime = 1_717_600_000_000, tag = FileTag("音乐", TagColor.TAG5)),
     )
 
     fun transfers(): List<Transfer> = listOf(
