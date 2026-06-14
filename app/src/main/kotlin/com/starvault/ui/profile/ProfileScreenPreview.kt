@@ -6,7 +6,7 @@ import com.starvault.theme.StarVaultTheme
 
 /**
  * Profile 屏 Preview — 2 个 case：
- *  1. Default  : 完整我的屏（未启用壁纸引擎 / 黑 VIP 卡 / 71% 存储环 / 退出登录）
+ *  1. Default  : 完整我的屏（未启用壁纸引擎 / 71% 存储环 / 6 段标准布局 / 退出登录）
  *  2. Wallpaper: 同上，但壁纸引擎切换为"启用中"态（带 album 名 + meta 行）
  */
 @Preview(name = "Profile/Default", showBackground = true, widthDp = 412, heightDp = 1380)
@@ -28,7 +28,6 @@ fun ProfileWallpaperOnPreview() = StarVaultTheme {
 }
 
 internal fun profilePreviewSuccess(): ProfileUiState.Success = ProfileUiState.Success(
-    user = User(avatarInitial = "H", name = "何湘湘", isVip = true, id = "UID_8945721"),
     storage = Storage(
         usedPct = 71,
         totalLabel = "1 TB",
@@ -43,7 +42,6 @@ internal fun profilePreviewSuccess(): ProfileUiState.Success = ProfileUiState.Su
         remainingGb = "761.6 GB",
         trashGb = "2.1 GB",
     ),
-    vip = Vip("L4", "钻石会员", "2027/03/15 到期", listOf("极速下载", "50 GB 离线", "4K 投屏")),
     wallpaper = Wallpaper(enabled = false, subText = "让相册成为会动的壁纸"),
     commonRows = listOf(
         RowItem("↻", iconAccent = true,  label = "我的分享", rightText = "12 个进行中"),

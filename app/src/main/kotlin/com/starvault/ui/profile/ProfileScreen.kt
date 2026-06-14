@@ -38,24 +38,24 @@ import androidx.compose.ui.unit.sp
 import com.starvault.theme.StarVaultTheme
 
 /**
- * Profile 屏（对应 design/05-profile.html 的"我的" 1:1 复刻）。
+ * Profile 屏（严格 1:1 对应 design/05-profile.html 的 body 段）。
  *
- * 整体结构（垂直滚动）：
+ * 整体结构（垂直滚动，6 段）：
  *   ┌─ Header       "我的" + 钱包/设置 icon-btn
- *   ├─ UserCard     56dp 头像 + 名称 + VIP 徽 + UID + QR btn
  *   ├─ StorageCard  132dp 环 + 71% + 5 行 breakdown + 剩余/扩容
- *   ├─ VipCard      渐变黑卡 + L4 + 续费 + 3 perks
  *   ├─ WpCard       壁纸引擎 + off 徽 + 单行 sub
- *   ├─ CommonSection 3 row（我的分享 / 回收站 / 设备管理）
- *   ├─ SettingSection 3 row（隐私 / 外观 / 帮助）
+ *   ├─ Section      3 row（我的分享 / 回收站 / 设备管理）
+ *   ├─ Section      3 row（隐私 / 外观 / 帮助）
  *   └─ Logout       "退出登录" muted → danger on hover
+ *
+ * 设计历史：早期版本错误地把头像 UserCard 和 VIP 卡加进来了，但 design body 里没有
+ * 那两段（CSS 定义了但未引用）。当前 6 段是 design 真有的。
  */
 @Composable
 fun ProfileScreen(
     state: ProfileUiState,
     onWallet: () -> Unit = {},
     onSettings: () -> Unit = {},
-    onQr: () -> Unit = {},
     onUpgrade: () -> Unit = {},
     onRow: (RowItem) -> Unit = {},
     onWallpaper: () -> Unit = {},
@@ -82,9 +82,7 @@ fun ProfileScreen(
                     .verticalScroll(rememberScrollState()),
             ) {
                 ProfileHeader(onWallet = onWallet, onSettings = onSettings)
-                UserCard(user = state.user, onQr = onQr)
                 StorageCard(storage = state.storage, onUpgrade = onUpgrade)
-                VipCard(vip = state.vip)
                 WallpaperCard(wallpaper = state.wallpaper, onClick = onWallpaper)
                 SectionBox(rows = state.commonRows, onRow = onRow)
                 SectionBox(rows = state.settingRows, onRow = onRow)
@@ -134,83 +132,7 @@ private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: Stri
     }
 }
 
-/* ───────────────────── UserCard ───────────────────── */
-
-@Composable
-private fun UserCard(user: User, onQr: () -> Unit) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 14.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(c.surface)
-            .border(1.dp, c.border, RoundedCornerShape(16.dp))
-            .padding(18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(modifier = Modifier.size(56.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(listOf(Color(0xFF111111), Color(0xFF444444))),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = user.avatarInitial,
-                    style = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF10B981))
-                    .border(2.dp, c.surface, CircleShape),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = user.name,
-                    style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-                    color = c.fg,
-                )
-                if (user.isVip) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(c.fg)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(text = "VIP", style = t.micro, color = c.surface)
-                    }
-                }
-            }
-            Spacer(Modifier.height(2.dp))
-            Text(text = user.id, style = t.mono, color = c.muted)
-        }
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(c.bg)
-                .border(1.dp, c.border, RoundedCornerShape(8.dp))
-                .clickable(onClick = onQr),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "▦", style = t.subtitle, color = c.muted)
-        }
-    }
-}
+/* ───────────────────── (历史 UserCard 已删除，design body 里不存在) ───────────────────── */
 
 /* ───────────────────── StorageCard ───────────────────── */
 
@@ -333,96 +255,7 @@ private fun StorageRing(usedPct: Int, totalLabel: String) {
     }
 }
 
-/* ───────────────────── VipCard ───────────────────── */
-
-@Composable
-private fun VipCard(vip: Vip) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 14.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.linearGradient(listOf(Color(0xFF1A1A1A), Color(0xFF2A2A2A))),
-            )
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(140.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 40.dp, y = (-40).dp)
-                .background(
-                    Brush.radialGradient(
-                        listOf(Color.White.copy(alpha = 0.08f), Color.Transparent),
-                        radius = 200f,
-                    ),
-                ),
-        )
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(text = "★", style = StarVaultTheme.typography.subtitle, color = Color.White)
-                    Text(text = "VIP 会员", style = StarVaultTheme.typography.caption, color = Color.White)
-                }
-                Text(text = vip.expireText, style = StarVaultTheme.typography.micro, color = Color.White.copy(alpha = 0.6f))
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column {
-                    Text(
-                        text = vip.tierCode,
-                        style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = vip.tierName,
-                        style = StarVaultTheme.typography.caption,
-                        color = Color.White.copy(alpha = 0.6f),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White)
-                        .clickable { /* TODO: 续费 */ }
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                ) {
-                    Text(
-                        text = "续费",
-                        style = StarVaultTheme.typography.caption,
-                        color = Color(0xFF111111),
-                    )
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                vip.perks.forEach { p ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(text = "✓", style = StarVaultTheme.typography.micro, color = Color.White)
-                        Text(text = p, style = StarVaultTheme.typography.micro, color = Color.White.copy(alpha = 0.7f))
-                    }
-                }
-            }
-        }
-    }
-}
+/* ───────────────────── (历史 VipCard 已删除，design body 里不存在) ───────────────────── */
 
 /* ───────────────────── WallpaperCard ───────────────────── */
 

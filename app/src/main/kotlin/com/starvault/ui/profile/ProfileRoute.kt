@@ -22,7 +22,6 @@ fun ProfileRoute(
         state = state,
         onWallet = { /* TODO: 弹钱包面板 */ },
         onSettings = { /* TODO: 跳设置 */ },
-        onQr = { /* TODO: 弹我的二维码 */ },
         onUpgrade = { /* TODO: 跳扩容 */ },
         onRow = { /* TODO: 按 row.label 决定 */ },
         onWallpaper = { nav.navigate(com.starvault.nav.Route.Wallpaper) },

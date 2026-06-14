@@ -3,11 +3,19 @@ package com.starvault.ui.profile
 import androidx.compose.ui.graphics.Color
 
 /**
- * Profile 屏 UiState（对应 design/05-profile.html）。
+ * Profile 屏 UiState（严格对应 design/05-profile.html 的 body 段）。
  *
- *  - Loading : 占位
- *  - Success : 用户信息 + 存储用量 + VIP 状态 + 壁纸引擎 + 2 个功能区 + 退出
- *  - Error   : 拉取失败
+ * design 里的 6 段（按出现顺序）：
+ *   1. header           我的 + 钱包/设置
+ *   2. storage-big      云端空间 + 环 + breakdown
+ *   3. wp-card          壁纸引擎（单行）
+ *   4. section          我的分享 / 回收站 / 设备管理
+ *   5. section          隐私与安全 / 外观与主题 / 帮助与反馈
+ *   6. logout           退出登录
+ *
+ * 注意：design HTML 里 **没有** 头像 UserCard，也 **没有** VIP 卡 —— 那两个 card 的
+ * CSS（.avatar / .user / .vip）虽然定义在 <style>，但 body 里从未引用。先前实现的
+ * 两段是凭空加的，需移除。
  */
 sealed interface ProfileUiState {
 
@@ -16,9 +24,7 @@ sealed interface ProfileUiState {
     ) : ProfileUiState
 
     data class Success(
-        val user: User,
         val storage: Storage,
-        val vip: Vip,
         val wallpaper: Wallpaper,
         val commonRows: List<RowItem>,
         val settingRows: List<RowItem>,
@@ -30,14 +36,6 @@ sealed interface ProfileUiState {
 }
 
 /* ───────────────────── 子模型 ───────────────────── */
-
-/** 顶部用户卡。 */
-data class User(
-    val avatarInitial: String,     // 头像中央的字母（"H"）
-    val name: String,              // "何湘湘"
-    val isVip: Boolean = true,     // true 时显示 VIP 徽章
-    val id: String,                // UID：UID_8945721
-)
 
 /** 存储大卡：环 + 5 条 breakdown + 剩余。 */
 data class Storage(
@@ -54,14 +52,6 @@ data class Breakdown(
     val label: String,             // "视频"
     val swatch: Color,             // 8x8 色块
     val sizeText: String,          // "112.4 GB"
-)
-
-/** VIP 卡。 */
-data class Vip(
-    val tierCode: String,          // "L4"
-    val tierName: String,          // "钻石会员"
-    val expireText: String,        // "2027/03/15 到期"
-    val perks: List<String>,       // 3 个 perk 标签
 )
 
 /** 壁纸引擎卡（5 个字段支持两态：off 单行 / on 双行详情）。 */

@@ -10,11 +10,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * Profile 屏 ViewModel — Phase 1 mock。
  *
  * 真实接入 115 后：
- *  - user    ← /user/info
- *  - storage ← /user/space
- *  - vip     ← /user/vip
- *  - wallpaper← 读 SharedPreferences 同步
+ *  - storage        ← /user/space
+ *  - wallpaper      ← 读 SharedPreferences 同步
  *  - commonRows / settingRows ← 静态配置
+ *
+ * design body 里没有 user / vip 段，所以也不在 state 里。
  */
 class ProfileViewModel : ViewModel() {
 
@@ -24,12 +24,6 @@ class ProfileViewModel : ViewModel() {
     /* ─────────────────── mock state ─────────────────── */
 
     private fun mockState(): ProfileUiState.Success {
-        val user = User(
-            avatarInitial = "H",
-            name = "何湘湘",
-            isVip = true,
-            id = "UID_8945721",
-        )
         val storage = Storage(
             usedPct = 71,
             totalLabel = "1 TB",
@@ -43,12 +37,6 @@ class ProfileViewModel : ViewModel() {
             ),
             remainingGb = "761.6 GB",
             trashGb = "2.1 GB",
-        )
-        val vip = Vip(
-            tierCode = "L4",
-            tierName = "钻石会员",
-            expireText = "2027/03/15 到期",
-            perks = listOf("极速下载", "50 GB 离线", "4K 投屏"),
         )
         val wallpaper = Wallpaper(
             enabled = false,
@@ -65,9 +53,7 @@ class ProfileViewModel : ViewModel() {
             RowItem("?",  iconAccent = false, label = "帮助与反馈", rightBadge = "v6.2.1"),
         )
         return ProfileUiState.Success(
-            user = user,
             storage = storage,
-            vip = vip,
             wallpaper = wallpaper,
             commonRows = commonRows,
             settingRows = settingRows,

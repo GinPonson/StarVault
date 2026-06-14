@@ -9,16 +9,14 @@ import com.starvault.ui.profile.ProfileScreen
 import com.starvault.ui.profile.ProfileUiState
 import com.starvault.ui.profile.RowItem
 import com.starvault.ui.profile.Storage
-import com.starvault.ui.profile.User
-import com.starvault.ui.profile.Vip
 import com.starvault.ui.profile.Wallpaper
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * Profile 屏 Paparazzi 回归基线 — 与 design/05-profile.html 对齐。
+ * Profile 屏 Paparazzi 回归基线 — 与 design/05-profile.html 对齐（仅 6 段，无 avatar/VIP）。
  *
- *  - ready  : 默认主态（71% 存储 + L4 钻石 VIP + 5 行 breakdown）
+ *  - ready  : 默认主态（71% 存储环 + 5 行 breakdown + 壁纸引擎 + 2 个 section + 退出登录）
  *  - error  : 用户信息拉取失败
  */
 class ProfileScreenshotTest {
@@ -31,12 +29,6 @@ class ProfileScreenshotTest {
     )
 
     private val mockSuccess = ProfileUiState.Success(
-        user = User(
-            avatarInitial = "H",
-            name = "何湘湘",
-            isVip = true,
-            id = "UID_8945721",
-        ),
         storage = Storage(
             usedPct = 71,
             totalLabel = "1 TB",
@@ -50,12 +42,6 @@ class ProfileScreenshotTest {
             ),
             remainingGb = "761.6 GB",
             trashGb = "2.1 GB",
-        ),
-        vip = Vip(
-            tierCode = "L4",
-            tierName = "钻石会员",
-            expireText = "2027/03/15 到期",
-            perks = listOf("极速下载", "50 GB 离线", "4K 投屏"),
         ),
         wallpaper = Wallpaper(
             enabled = false,
