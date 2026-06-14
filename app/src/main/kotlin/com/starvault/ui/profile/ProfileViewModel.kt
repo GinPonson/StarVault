@@ -44,7 +44,7 @@ class ProfileViewModel : ViewModel() {
         )
         val commonRows = listOf(
             RowItem("↻", iconAccent = true,  label = "我的分享", rightText = "12 个进行中"),
-            RowItem("🗑", iconAccent = false, label = "回收站",   rightText = "2.1 GB"),
+            RowItem("⌫", iconAccent = false, label = "回收站",   rightText = "2.1 GB"),
             RowItem("▭", iconAccent = false, label = "设备管理", rightText = "3 台"),
         )
         val settingRows = listOf(

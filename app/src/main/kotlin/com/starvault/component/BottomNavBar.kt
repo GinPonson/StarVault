@@ -47,14 +47,14 @@ fun BottomNavBar(
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
-    // icon 字形选择：
+    // icon 字形选择（全部单色，避免 emoji 彩色渲染污染视觉一致性）：
     //   ⌂  U+2302  house               → Home
-    //   ⌹  U+2339  quad vertical bars  → Files（4 条像文档行）
+    //   ☰  U+2630  trigram for heaven  → Files（3 横线像文档/列表）
     //   ⧉  U+29C9  two joined squares  → Album（像相册网格）
     //   ◉  U+25C9  fish-eye            → Profile（头像圆形）
     val tabs = listOf(
         TabSpec("首页", "⌂", Route.Home)    { it.hasRoute<Route.Home>() },
-        TabSpec("文件", "⌹", Route.Files()) { it.hasRoute<Route.Files>() },
+        TabSpec("文件", "☰", Route.Files()) { it.hasRoute<Route.Files>() },
         TabSpec("相册", "⧉", Route.Album)   { it.hasRoute<Route.Album>() },
         TabSpec("我的", "◉", Route.Profile) { it.hasRoute<Route.Profile>() },
     )

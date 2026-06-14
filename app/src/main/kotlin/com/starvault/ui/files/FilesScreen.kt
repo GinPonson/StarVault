@@ -184,7 +184,7 @@ private fun FilesAppBar(
                 .padding(start = 4.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(glyph = "⌕", onClick = onSearch,        contentDescription = "搜索")
+            IconBtn(glyph = "⊙", onClick = onSearch,        contentDescription = "搜索")
             IconBtn(glyph = "↑", onClick = onTransfers,     contentDescription = "传输中心")
             IconBtn(glyph = "⋯", onClick = onMore,          contentDescription = "更多")
             IconBtn(glyph = "+", onClick = onNewFolder,     contentDescription = "新建文件夹")

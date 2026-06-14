@@ -45,7 +45,7 @@ internal fun profilePreviewSuccess(): ProfileUiState.Success = ProfileUiState.Su
     wallpaper = Wallpaper(enabled = false, subText = "让相册成为会动的壁纸"),
     commonRows = listOf(
         RowItem("↻", iconAccent = true,  label = "我的分享", rightText = "12 个进行中"),
-        RowItem("🗑", iconAccent = false, label = "回收站",   rightText = "2.1 GB"),
+        RowItem("⌫", iconAccent = false, label = "回收站",   rightText = "2.1 GB"),
         RowItem("▭", iconAccent = false, label = "设备管理", rightText = "3 台"),
     ),
     settingRows = listOf(

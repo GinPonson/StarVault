@@ -162,7 +162,7 @@ private fun AppBar(
                 .padding(start = 4.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            IconBtn(glyph = "⌕", onClick = onSearch,  contentDescription = "搜索")
+            IconBtn(glyph = "⊙", onClick = onSearch,  contentDescription = "搜索")
             IconBtn(glyph = "◉", onClick = onCamera,  contentDescription = "相机")
             IconBtn(glyph = "⋯", onClick = onMore,    contentDescription = "更多")
         }

@@ -151,8 +151,8 @@ private fun AppBar(activeCount: Int, onSearch: () -> Unit, onClear: () -> Unit) 
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(glyph = "⌕", onClick = onSearch, contentDescription = "搜索")
-            IconBtn(glyph = "🗑", onClick = onClear, contentDescription = "清空已完成")
+            IconBtn(glyph = "⊙", onClick = onSearch, contentDescription = "搜索")
+            IconBtn(glyph = "⌫", onClick = onClear, contentDescription = "清空已完成")
         }
     }
 }
