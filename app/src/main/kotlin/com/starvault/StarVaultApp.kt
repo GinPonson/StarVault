@@ -18,7 +18,7 @@ import com.starvault.theme.StarVaultTheme
  *
  *  - 单一 [NavHostController] 由顶层 [rememberNavController] 持有，保证整个 App 生命期共享同一栈
  *  - 通过 [currentBackStackEntryAsState] 订阅栈顶变化，重组本 Composable 时 [destination] 自动刷新
- *  - 仅当栈顶属于 4 个 Tab 之一（Home/Files/Transfers/Profile）时才显示 [BottomNavBar]，
+ *  - 仅当栈顶属于 5 个 Tab 之一（Home/Files/Album/Transfers/Profile）时才显示 [BottomNavBar]，
  *    Login/Player/Share/Wallpaper 等全屏页隐藏底栏（与 design HTML mockup 一致）
  *  - 用 [Route] sealed 类型 + `hasRoute<T>()` 判定，避免比对字符串导致的拼写错误
  */
@@ -35,6 +35,7 @@ fun StarVaultApp() {
     val showBottomBar = destination?.let { d ->
         d.hasRoute<Route.Home>()      ||
         d.hasRoute<Route.Files>()     ||
+        d.hasRoute<Route.Album>()     ||
         d.hasRoute<Route.Transfers>() ||
         d.hasRoute<Route.Profile>()
     } ?: false
