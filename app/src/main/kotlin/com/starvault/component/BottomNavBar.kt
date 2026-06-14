@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,10 +29,12 @@ import com.starvault.theme.StarVaultTheme
  *  - 高度 64dp + 底部 46dp 设备区留白（navigationBarsPadding）
  *  - 选中态：accent 色图标 + 标题；未选：muted 色
  *  - 通过 hasRoute<T>() 判定，不依赖字符串
+ *  - 图标用 unicode 字形（与 HomeScreen AppBar 同模式）—— 避开了 ImageVector path DSL 的
+ *    老坑，等 Valkyrie 图形上线后用真 SVG 替换。
  */
 private data class TabSpec(
     val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val icon: String,                          // unicode glyph 占位
     val route: Route,
     val isSelected: (NavDestination) -> Boolean,
 )
@@ -45,11 +47,16 @@ fun BottomNavBar(
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
+    // icon 字形选择：
+    //   ⌂  U+2302  house               → Home
+    //   ⌹  U+2339  quad vertical bars  → Files（4 条像文档行）
+    //   ⧉  U+29C9  two joined squares  → Album（像相册网格）
+    //   ◉  U+25C9  fish-eye            → Profile（头像圆形）
     val tabs = listOf(
-        TabSpec("首页", Icons.Home,    Route.Home)    { it.hasRoute<Route.Home>() },
-        TabSpec("文件", Icons.Files,   Route.Files()) { it.hasRoute<Route.Files>() },
-        TabSpec("相册", Icons.Album,   Route.Album)   { it.hasRoute<Route.Album>() },
-        TabSpec("我的", Icons.Profile, Route.Profile) { it.hasRoute<Route.Profile>() },
+        TabSpec("首页", "⌂", Route.Home)    { it.hasRoute<Route.Home>() },
+        TabSpec("文件", "⌹", Route.Files()) { it.hasRoute<Route.Files>() },
+        TabSpec("相册", "⧉", Route.Album)   { it.hasRoute<Route.Album>() },
+        TabSpec("我的", "◉", Route.Profile) { it.hasRoute<Route.Profile>() },
     )
     Column(
         modifier = modifier
@@ -86,11 +93,12 @@ fun BottomNavBar(
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = tab.icon,
-                            contentDescription = tab.label,
-                            tint = tint,
+                        Text(
+                            text = tab.icon,
+                            style = t.subtitle,        // 16sp glyph
+                            color = tint,
                             modifier = Modifier.size(22.dp),
+                            textAlign = TextAlign.Center,
                         )
                         Spacer(Modifier.size(3.dp))
                         Text(
