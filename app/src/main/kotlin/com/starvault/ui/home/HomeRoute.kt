@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.starvault.data.model.FileItem
 
 /**
@@ -22,6 +23,7 @@ import com.starvault.data.model.FileItem
  */
 @Composable
 fun HomeRoute(
+    nav: NavHostController,
     onFileClick: (FileItem) -> Unit = {},
     onFileMore: (FileItem) -> Unit = {},
     vm: HomeViewModel = viewModel(),
