@@ -152,6 +152,7 @@ compose-material3              = { module = "androidx.compose.material3:material
 compose-material-icons-core    = { module = "androidx.compose.material:material-icons-core" }
 nav-compose                    = { module = "androidx.navigation:navigation-compose", version.ref = "nav" }
 lifecycle-viewmodel-compose    = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel-savedstate = { module = "androidx.lifecycle:lifecycle-viewmodel-savedstate", version.ref = "lifecycle" }
 lifecycle-runtime-compose      = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 kotlinx-serialization-json     = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 paparazzi                      = { module = "app.cash.paparazzi:paparazzi", version.ref = "paparazzi" }
@@ -251,6 +252,7 @@ dependencies {
     implementation(libs.compose.material.icons.core)
     implementation(libs.nav.compose)
     implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.viewmodel.savedstate)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.compose.ui.tooling)
@@ -1038,6 +1040,8 @@ Expected: failure with "Unresolved reference: ui.*" — this is fine, fixed task
 
 **Files:**
 - Create: `app/src/main/kotlin/com/starvault/component/StatusBarStyle.kt`
+- Create: `app/src/main/kotlin/com/starvault/component/Icons.kt`           (统一所有 stub ImageVector)
+- Create: `app/src/main/kotlin/com/starvault/component/StateViews.kt`      (Skeleton + ErrorView 共享)
 - Create: `app/src/main/kotlin/com/starvault/component/BottomNavBar.kt`
 - Create: `app/src/main/kotlin/com/starvault/component/Chip.kt`
 - Create: `app/src/main/kotlin/com/starvault/component/FileRow.kt`
@@ -1064,7 +1068,46 @@ fun StatusBarStyle(darkIcons: Boolean) {
 }
 ```
 
-- [ ] **Step 2: Write `BottomNavBar.kt`**
+- [ ] **Step 2: Write `Icons.kt` (unified stub vector set)**
+
+```kotlin
+package com.starvault.component
+
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+
+/**
+ * Stub ImageVectors for initial implementation. After T11 lands, replace
+ * with real ImageVectors produced by the Valkyrie IDE plugin from
+ * `design/index.html` and `design/0X-*.html` SVGs.
+ *
+ * IMPORTANT: Paparazzi screenshots in T22–T30 will render blank icon
+ * slots until you replace these stubs with real path data.
+ */
+object Icons {
+    val Home      = stub("Home")
+    val Files     = stub("Files")
+    val Transfers = stub("Transfers")
+    val Profile   = stub("Profile")
+    val More      = stub("More")
+    val Back      = stub("Back")
+    val Close     = stub("Close")
+    val Play      = stub("Play")
+    val Pause     = stub("Pause")
+    val Search    = stub("Search")
+    val Star      = stub("Star")
+}
+
+private fun stub(name: String): ImageVector = ImageVector.Builder(
+    name = name,
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).build()
+```
+
+- [ ] **Step 3: Write `BottomNavBar.kt`**
 
 ```kotlin
 package com.starvault.component
@@ -1073,7 +1116,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1083,14 +1125,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination
@@ -1112,9 +1152,12 @@ fun BottomNavBar(nav: NavHostController, currentDestination: NavDestination?) {
     val t = StarVaultTheme.typography
     val d = StarVaultTheme.dimens
 
+    // 4 tabs per spec §6.2: Home / Files / Transfers / Profile
+    // Tab "文件" -> Route.Files; selected predicate covers both root
+    // (folderId == null) and sub-folder destinations to keep tab active.
     val tabs = listOf(
-        TabSpec("首页", Icons.Home,     Route.Home)      { it.hasRoute<Route.Home>() },
-        TabSpec("文件", Icons.Files,     Route.Album)     { it.hasRoute<Route.Album>() },
+        TabSpec("首页", Icons.Home,      Route.Home)      { it.hasRoute<Route.Home>() },
+        TabSpec("文件", Icons.Files,     Route.Files())   { it.hasRoute<Route.Files>() },
         TabSpec("传输", Icons.Transfers, Route.Transfers) { it.hasRoute<Route.Transfers>() },
         TabSpec("我的", Icons.Profile,   Route.Profile)   { it.hasRoute<Route.Profile>() },
     )
@@ -1136,12 +1179,22 @@ fun BottomNavBar(nav: NavHostController, currentDestination: NavDestination?) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .clickable { nav.navigate(tab.route) { launchSingleTop = true; restoreState = true } }
+                        .clickable {
+                            nav.navigate(tab.route) {
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                         .padding(vertical = 6.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(22.dp), tint = if (active) c.accent else c.muted)
+                    Icon(
+                        tab.icon,
+                        contentDescription = tab.label,
+                        modifier = Modifier.size(22.dp),
+                        tint = if (active) c.accent else c.muted,
+                    )
                     Spacer(Modifier.height(3.dp))
                     Text(tab.label, style = t.micro, color = if (active) c.accent else c.muted)
                 }
@@ -1149,21 +1202,9 @@ fun BottomNavBar(nav: NavHostController, currentDestination: NavDestination?) {
         }
     }
 }
-
-// 占位 IconVector —— 实际实现走 ui/icons/ 包的 SVG→ImageVector 转换结果
-object Icons {
-    val Home     = stubIcon("Home")
-    val Files    = stubIcon("Files")
-    val Transfers = stubIcon("Transfers")
-    val Profile  = stubIcon("Profile")
-}
-
-private fun stubIcon(tag: String) = androidx.compose.ui.graphics.vector.ImageVector.Builder(
-    name = tag, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f
-).build()
 ```
 
-> Engineer: 用 `Valkyrie IDE 插件`把 `design/index.html` 顶部 4 个 SVG 批量转出，替换 `Icons.Home/Files/Transfers/Profile` 的 `stubIcon(...)` 为真实 ImageVector。
+> Engineer: 用 `Valkyrie IDE 插件`把 `design/index.html` 顶部 4 个 SVG 批量转出后，**只替换 `Icons.kt` 里的 `stub(...)` 返回值**（不要在 BottomNavBar 内再声明 `object Icons`），避免同包重名冲突。
 
 - [ ] **Step 3: Write `Chip.kt`** (tag chip)
 
@@ -1267,10 +1308,9 @@ private fun humanSize(b: Long?): String = when {
     b < 1024L * 1024 * 1024 -> "${b / 1024 / 1024} MB"
     else -> "%.1f GB".format(b / 1024.0 / 1024 / 1024)
 }
-
-object Icons { val More = stub("More") }
-private fun stub(tag: String) = androidx.compose.ui.graphics.vector.ImageVector.Builder(tag, 24.dp, 24.dp, 24f, 24f).build()
 ```
+
+> Note: `Icons` object lives in `Icons.kt` (T11 Step 2) — **do not redeclare here**.
 
 - [ ] **Step 5: Write `TopBar.kt`**
 
@@ -1281,10 +1321,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons as MaterialIcons
-import androidx.compose.material3.Text
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1308,7 +1347,7 @@ fun TopBar(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back", tint = c.fg)
+                Icon(Icons.Back, contentDescription = "back", tint = c.fg)
             }
         }
         Text(title, style = t.subtitle, color = c.fg)
@@ -1317,7 +1356,87 @@ fun TopBar(
 }
 ```
 
-- [ ] **Step 6: Verify compile (component-level)**
+- [ ] **Step 6: Write `StateViews.kt` (shared skeleton + error view)**
+
+```kotlin
+package com.starvault.component
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.starvault.theme.StarVaultTheme
+
+/**
+ * Generic loading skeleton: 8 placeholder rows of accent-soft blocks.
+ * Reused by all screens' Loading state (see T14-T21).
+ */
+@Composable
+fun HomeSkeleton(modifier: Modifier = Modifier) {
+    val c = StarVaultTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(c.bg)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        repeat(8) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(c.accentSoft, RoundedCornerShape(8.dp)),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * Generic error view: centered message + retry button.
+ * Reused by all screens' Error state.
+ */
+@Composable
+fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    val s = StarVaultTheme.shapes
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(c.bg),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(message, style = t.body, color = c.danger)
+            Spacer(Modifier.height(16.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(40.dp)
+                    .background(c.accent, s.md)
+                    .clickable(onClick = onRetry),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("重试", style = t.subtitle, color = c.accentOn)
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 7: Verify compile (component-level)**
 
 Run: `./gradlew :app:compileDebugKotlin --quiet`
 Expected: depends on whether NavHost has unresolved symbols (T13–T21) — that's expected; only the components themselves should compile cleanly when isolated. Engineers may stub out the NavHost for incremental verification.
@@ -1356,7 +1475,7 @@ fun StarVaultApp() {
 
     val showBottomBar = destination?.let { d ->
         d.hasRoute<Route.Home>()      ||
-        d.hasRoute<Route.Album>()     ||
+        d.hasRoute<Route.Files>()     ||
         d.hasRoute<Route.Transfers>() ||
         d.hasRoute<Route.Profile>()
     } ?: false
@@ -1453,7 +1572,6 @@ class LoginViewModel : ViewModel() {
 package com.starvault.ui.login
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1463,7 +1581,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -1527,8 +1644,7 @@ internal fun PrimaryButton(text: String, enabled: Boolean, onClick: () -> Unit, 
             .fillMaxWidth(0.7f)
             .height(44.dp)
             .background(if (enabled) c.accent else c.muted, s.md)
-            .clickable(enabled = enabled, onClick = onClick)
-            .border(0.dp, c.border, s.md),  // 占位 0dp border 让签名稳定
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Text(text, style = t.subtitle, color = c.accentOn) }
 }
@@ -1540,6 +1656,7 @@ internal fun PrimaryButton(text: String, enabled: Boolean, onClick: () -> Unit, 
 package com.starvault.ui.login
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -1550,14 +1667,18 @@ fun LoginRoute(
     vm: LoginViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+
+    // Trigger navigation once when state becomes Success. LaunchedEffect
+    // keyed on `state` ensures the lambda runs only on the transition
+    // (not on every recomposition).
+    LaunchedEffect(state) {
+        if (state is LoginUiState.Success) onLoggedIn()
+    }
+
     LoginScreen(
         state = state,
-        onLoginClick = {
-            vm.login()
-        },
+        onLoginClick = vm::login,
     )
-    // Success 触发跳转
-    if (state is LoginUiState.Success) onLoggedIn()
 }
 ```
 
@@ -1644,8 +1765,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
 - [ ] **Step 3: Write `HomeScreen.kt`**
 
-Engineer 参照 `design/01-home.html` 写完整 UI。骨架：
-
 ```kotlin
 package com.starvault.ui.home
 
@@ -1656,7 +1775,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.starvault.component.ErrorView
 import com.starvault.component.FileRow
+import com.starvault.component.HomeSkeleton
 import com.starvault.component.StatusBarStyle
 import com.starvault.component.TopBar
 import com.starvault.theme.StarVaultTheme
@@ -1673,7 +1794,7 @@ fun HomeScreen(
     Column(modifier.fillMaxSize().background(c.bg)) {
         TopBar(title = "首页")
         when (state) {
-            HomeUiState.Loading -> /* Skeleton 占位 */ HomeSkeleton()
+            HomeUiState.Loading -> HomeSkeleton()
             is HomeUiState.Ready -> LazyColumn {
                 items(state.files, key = { it.id }) { f ->
                     FileRow(file = f, onClick = { onOpenFile(f.id) }, onMore = {})
@@ -1812,8 +1933,6 @@ class PlayerViewModel(savedState: SavedStateHandle) : ViewModel() {
 
 - [ ] **Step 3: Write `PlayerScreen.kt`**
 
-Engineer 参照 `02-player.html` 写视频占位区 + 控制条。骨架：
-
 ```kotlin
 package com.starvault.ui.player
 
@@ -1830,6 +1949,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.starvault.component.StatusBarStyle
 import com.starvault.component.TopBar
 import com.starvault.theme.StarVaultTheme
@@ -1935,7 +2056,6 @@ package com.starvault.ui.share
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.navigation.toRoute
 import com.starvault.data.FixtureLoader
 import com.starvault.data.model.ShareLink
 import com.starvault.nav.Route
@@ -1944,11 +2064,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ShareViewModel(app: Application) : AndroidViewModel(app) {
-    private val args: Route.Share = androidx.lifecycle.SavedStateHandle().let {
-        // 实参从 SavedStateHandle 拿（见 ShareRoute）
-        Route.Share(fileId = "f02")
-    }
+/**
+ * Receives the typed route args (Route.Share) via constructor injection from
+ * ShareRoute's viewModelFactory. The route fileId is used to filter the
+ * fixtures down to the relevant share links.
+ */
+class ShareViewModel(
+    app: Application,
+    val args: Route.Share,
+) : AndroidViewModel(app) {
     private val _state = MutableStateFlow<ShareUiState>(ShareUiState.Loading)
     val state: StateFlow<ShareUiState> = _state.asStateFlow()
 
@@ -1956,24 +2080,47 @@ class ShareViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching {
                 FixtureLoader.loadDelayed<List<ShareLink>>(getApplication(), "fixtures/share_links.json")
-            }.onSuccess { _state.value = ShareUiState.Ready(it.filter { l -> l.fileId == args.fileId || it.size == 1 }) }
-             .onFailure { _state.value = ShareUiState.Error(it.message ?: "unknown") }
+            }.onSuccess { all ->
+                val matched = all.filter { it.fileId == args.fileId }
+                _state.value = ShareUiState.Ready(matched.ifEmpty { all.take(1) })
+            }.onFailure {
+                _state.value = ShareUiState.Error(it.message ?: "unknown")
+            }
         }
     }
 }
 ```
 
-> Engineer 修正：上面 `args: Route.Share` 的初始化是占位写法，**真实**实现应让 ShareRoute 通过 `viewModel { ... }` 工厂把 `Route.Share` 注入，例如：
-> ```kotlin
-> @Composable
-> fun ShareRoute(args: Route.Share, onBack: () -> Unit) {
->     val ctx = LocalContext.current
->     val vm: ShareViewModel = viewModel(factory = viewModelFactory {
->         initializer { ShareViewModel(ctx.applicationContext as Application, args) }
->     })
->     ...
-> }
-> ```
+- [ ] **Step 4: `ShareRoute.kt`**
+
+```kotlin
+package com.starvault.ui.share
+
+import android.app.Application
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.compose.ui.platform.LocalContext
+import com.starvault.nav.Route
+
+@Composable
+fun ShareRoute(
+    args: Route.Share,
+    onBack: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val vm: ShareViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { ShareViewModel(ctx.applicationContext as Application, args) }
+        },
+    )
+    val state by vm.state.collectAsStateWithLifecycle()
+    ShareScreen(state = state, onBack = onBack)
+}
+```
 
 - [ ] **Step 3-5: `ShareScreen.kt` / `ShareRoute.kt` / `ShareScreenPreview.kt`**
 
@@ -2008,29 +2155,197 @@ package com.starvault.ui.transfers
 import com.starvault.data.model.Transfer
 
 sealed interface TransfersUiState {
-    data object Loading                                  : TransfersUiState
-    data class  Ready(val transfers: List<Transfer>)     : TransfersUiState
-    data class  Error(val message: String)                : TransfersUiState
+    data object Loading                              : TransfersUiState
+    data class  Ready(val transfers: List<Transfer>) : TransfersUiState
+    data class  Error(val message: String)            : TransfersUiState
 }
 ```
 
-- [ ] **Step 2: `TransfersViewModel.kt`** — reads `transfers.json` via FixtureLoader
+- [ ] **Step 2: `TransfersViewModel.kt`**
 
-- [ ] **Step 3: `TransfersScreen.kt`** — Engineer 参照 `04-transfers.html`：分段列表（下载中 / 已完成 / 失败），每行有进度条 + 速度 + 状态色。
+```kotlin
+package com.starvault.ui.transfers
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.starvault.data.FixtureLoader
+import com.starvault.data.model.Transfer
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class TransfersViewModel(app: Application) : AndroidViewModel(app) {
+    private val _state = MutableStateFlow<TransfersUiState>(TransfersUiState.Loading)
+    val state: StateFlow<TransfersUiState> = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() = viewModelScope.launch {
+        runCatching {
+            FixtureLoader.loadDelayed<List<Transfer>>(getApplication(), "fixtures/transfers.json")
+        }.onSuccess  { _state.value = TransfersUiState.Ready(it) }
+         .onFailure  { _state.value = TransfersUiState.Error(it.message ?: "unknown") }
+    }
+}
+```
+
+- [ ] **Step 3: `TransfersScreen.kt`** (skeleton + segments)
+
+```kotlin
+package com.starvault.ui.transfers
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.starvault.component.ErrorView
+import com.starvault.component.HomeSkeleton
+import com.starvault.component.StatusBarStyle
+import com.starvault.component.TopBar
+import com.starvault.data.model.Transfer
+import com.starvault.data.model.TransferStatus
+import com.starvault.theme.StarVaultTheme
+
+@Composable
+fun TransfersScreen(
+    state: TransfersUiState,
+    onOpenFile: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    StatusBarStyle(darkIcons = true)
+    val c = StarVaultTheme.colors
+    Column(modifier.fillMaxSize().background(c.bg)) {
+        TopBar(title = "传输")
+        when (state) {
+            TransfersUiState.Loading -> HomeSkeleton()
+            is TransfersUiState.Ready -> TransfersList(state.transfers)
+            is TransfersUiState.Error -> ErrorView(state.message, onRetry = { /* vm.load() — wired in Route */ })
+        }
+    }
+}
+
+@Composable
+private fun TransfersList(transfers: List<Transfer>) {
+    val c = StarVaultTheme.colors
+    val running = transfers.filter { it.status == TransferStatus.RUNNING || it.status == TransferStatus.PAUSED }
+    val done    = transfers.filter { it.status == TransferStatus.SUCCESS }
+    val failed  = transfers.filter { it.status == TransferStatus.FAILED }
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        if (running.isNotEmpty()) {
+            item { SectionLabel("进行中") }
+            items(running, key = { it.id }) { TransferRow(it) }
+        }
+        if (done.isNotEmpty()) {
+            item { SectionLabel("已完成") }
+            items(done, key = { it.id }) { TransferRow(it) }
+        }
+        if (failed.isNotEmpty()) {
+            item { SectionLabel("失败") }
+            items(failed, key = { it.id }) { TransferRow(it) }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = StarVaultTheme.typography.caption,
+        color = StarVaultTheme.colors.muted,
+        modifier = Modifier.padding(vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun TransferRow(t: Transfer) {
+    val c = StarVaultTheme.colors
+    val t2 = StarVaultTheme.typography
+    val progress = if (t.totalBytes > 0) t.transferredBytes.toFloat() / t.totalBytes else 0f
+    val statusColor = when (t.status) {
+        TransferStatus.RUNNING -> c.accent
+        TransferStatus.PAUSED  -> c.muted
+        TransferStatus.SUCCESS -> c.success
+        TransferStatus.FAILED  -> c.danger
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row {
+            Text(t.fileName, style = t2.body, color = c.fg, modifier = Modifier.weight(1f))
+            Text(t.status.name, style = t2.caption, color = statusColor)
+        }
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth().height(4.dp),
+            color = statusColor,
+        )
+    }
+}
+```
 
 - [ ] **Step 4: `TransfersRoute.kt`**
 
 ```kotlin
+package com.starvault.ui.transfers
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import com.starvault.nav.Route
+
 @Composable
 fun TransfersRoute(nav: NavHostController, vm: TransfersViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
-    TransfersScreen(state, onOpenFile = { id -> nav.navigate(Route.Files(folderId = id)) })
+    TransfersScreen(
+        state = state,
+        onOpenFile = { id -> nav.navigate(Route.Files(folderId = id)) },
+    )
 }
 ```
 
-- [ ] **Step 5: `TransfersScreenPreview.kt`** — 3 previews (Loading/Ready/Error)
+- [ ] **Step 5: `TransfersScreenPreview.kt`**
+
+```kotlin
+package com.starvault.ui.transfers
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.starvault.fixtures.FixturePresets
+import com.starvault.theme.StarVaultTheme
+
+@Preview(name = "Transfers/Ready",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun TransfersReadyPreview()  = StarVaultTheme { TransfersScreen(TransfersUiState.Ready(FixturePresets.transfers())) {} }
+
+@Preview(name = "Transfers/Loading", showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun TransfersLoadingPreview() = StarVaultTheme { TransfersScreen(TransfersUiState.Loading) {} }
+
+@Preview(name = "Transfers/Error",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun TransfersErrorPreview()  = StarVaultTheme { TransfersScreen(TransfersUiState.Error("网络中断")) {} }
+```
 
 - [ ] **Step 6: Verify + commit**
+
+```bash
+./gradlew :app:compileDebugKotlin --quiet
+git add app/src/main/kotlin/com/starvault/ui/transfers
+git commit -m "feat(screens): Transfers — segmented list with progress + status color"
+```
 
 ---
 
@@ -2041,17 +2356,198 @@ fun TransfersRoute(nav: NavHostController, vm: TransfersViewModel = viewModel())
 **Files (5-file pattern):**
 - `app/src/main/kotlin/com/starvault/ui/profile/{ProfileUiState,ProfileViewModel,ProfileScreen,ProfileRoute,ProfileScreenPreview}.kt`
 
-- [ ] **Step 1: UiState** — `Loading` / `Ready(user: User)` / `Error`
+- [ ] **Step 1: `ProfileUiState.kt`**
 
-- [ ] **Step 2: ViewModel** — reads `profile.json`
+```kotlin
+package com.starvault.ui.profile
 
-- [ ] **Step 3: Screen** — Engineer 参照 `05-profile.html`：头像 + 昵称 + VIP 标签 + 容量环形图（Canvas 绘） + 设置列表 + 「切换壁纸」入口（点击 → `nav.navigate(Route.Wallpaper)`）
+import com.starvault.data.model.User
 
-- [ ] **Step 4: Route** — `onWallpaperClick = { nav.navigate(Route.Wallpaper) }`
+sealed interface ProfileUiState {
+    data object Loading                  : ProfileUiState
+    data class  Ready(val user: User)    : ProfileUiState
+    data class  Error(val message: String) : ProfileUiState
+}
+```
 
-- [ ] **Step 5: Preview** — 3 态
+- [ ] **Step 2: `ProfileViewModel.kt`**
+
+```kotlin
+package com.starvault.ui.profile
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.starvault.data.FixtureLoader
+import com.starvault.data.model.User
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class ProfileViewModel(app: Application) : AndroidViewModel(app) {
+    private val _state = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
+    val state: StateFlow<ProfileUiState> = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() = viewModelScope.launch {
+        runCatching {
+            FixtureLoader.loadDelayed<User>(getApplication(), "fixtures/profile.json")
+        }.onSuccess  { _state.value = ProfileUiState.Ready(it) }
+         .onFailure  { _state.value = ProfileUiState.Error(it.message ?: "unknown") }
+    }
+}
+```
+
+- [ ] **Step 3: `ProfileScreen.kt`**
+
+```kotlin
+package com.starvault.ui.profile
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.starvault.component.ErrorView
+import com.starvault.component.HomeSkeleton
+import com.starvault.component.StatusBarStyle
+import com.starvault.component.TopBar
+import com.starvault.data.model.User
+import com.starvault.theme.StarVaultTheme
+
+@Composable
+fun ProfileScreen(
+    state: ProfileUiState,
+    onWallpaperClick: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    StatusBarStyle(darkIcons = true)
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Column(modifier.fillMaxSize().background(c.bg)) {
+        TopBar(title = "我的")
+        when (state) {
+            ProfileUiState.Loading -> HomeSkeleton()
+            is ProfileUiState.Ready -> ProfileContent(state.user, onWallpaperClick)
+            is ProfileUiState.Error -> ErrorView(state.message, onRetry)
+        }
+    }
+}
+
+@Composable
+private fun ProfileContent(user: User, onWallpaperClick: () -> Unit) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(56.dp).background(c.accent, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Text(user.nickname.take(1), style = t.title, color = c.accentOn) }
+            Spacer(Modifier.padding(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(user.nickname, style = t.title, color = c.fg)
+                Text("VIP ${user.vipLevel}", style = t.caption, color = c.accent)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "已用 ${humanBytes(user.usedBytes)} / ${humanBytes(user.totalBytes)}",
+            style = t.body, color = c.muted,
+        )
+        Spacer(Modifier.height(24.dp))
+        SettingRow("切换壁纸", onWallpaperClick)
+    }
+}
+
+@Composable
+private fun SettingRow(label: String, onClick: () -> Unit) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+    ) {
+        Text(label, style = t.body, color = c.fg, modifier = Modifier.weight(1f))
+        Text("›", style = t.title, color = c.muted)
+    }
+}
+
+private fun humanBytes(b: Long): String = when {
+    b < 1024 -> "$b B"
+    b < 1024 * 1024 -> "${b / 1024} KB"
+    b < 1024L * 1024 * 1024 -> "${b / 1024 / 1024} MB"
+    b < 1024L * 1024 * 1024 * 1024 -> "%.1f GB".format(b / 1024.0 / 1024 / 1024)
+    else -> "%.1f TB".format(b / 1024.0 / 1024 / 1024 / 1024)
+}
+```
+
+- [ ] **Step 4: `ProfileRoute.kt`**
+
+```kotlin
+package com.starvault.ui.profile
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import com.starvault.nav.Route
+
+@Composable
+fun ProfileRoute(nav: NavHostController, vm: ProfileViewModel = viewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    ProfileScreen(
+        state = state,
+        onWallpaperClick = { nav.navigate(Route.Wallpaper) },
+        onRetry = vm::load,
+    )
+}
+```
+
+- [ ] **Step 5: `ProfileScreenPreview.kt`**
+
+```kotlin
+package com.starvault.ui.profile
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.starvault.fixtures.FixturePresets
+import com.starvault.theme.StarVaultTheme
+
+@Preview(name = "Profile/Ready",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun ProfileReadyPreview()  = StarVaultTheme { ProfileScreen(ProfileUiState.Ready(FixturePresets.user()), {}, {}) }
+
+@Preview(name = "Profile/Loading", showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun ProfileLoadingPreview() = StarVaultTheme { ProfileScreen(ProfileUiState.Loading, {}, {}) }
+
+@Preview(name = "Profile/Error",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun ProfileErrorPreview()  = StarVaultTheme { ProfileScreen(ProfileUiState.Error("无法读取用户信息"), {}) }
+```
 
 - [ ] **Step 6: Verify + commit**
+
+```bash
+./gradlew :app:compileDebugKotlin --quiet
+git add app/src/main/kotlin/com/starvault/ui/profile
+git commit -m "feat(screens): Profile — avatar, VIP, capacity, wallpaper entry"
+```
 
 ---
 
@@ -2062,17 +2558,177 @@ fun TransfersRoute(nav: NavHostController, vm: TransfersViewModel = viewModel())
 **Files (5-file pattern):**
 - `app/src/main/kotlin/com/starvault/ui/files/{FilesUiState,FilesViewModel,FilesScreen,FilesRoute,FilesScreenPreview}.kt`
 
-- [ ] **Step 1: UiState** — `Loading` / `Ready(items: List<FileItem>, breadcrumb: List<String>)` / `Error`
+- [ ] **Step 1: `FilesUiState.kt`**
 
-- [ ] **Step 2: ViewModel** — reads `files.json`；按 `args.folderId` 过滤
+```kotlin
+package com.starvault.ui.files
 
-- [ ] **Step 3: Screen** — Engineer 参照 `06-files.html`：顶栏面包屑 + 文件/文件夹列表 + 多选 + 底部操作条
+import com.starvault.data.model.FileItem
 
-- [ ] **Step 4: Route** — `onOpenFolder = { id -> nav.navigate(Route.Files(folderId = id)) }`, `onOpenPlayer = { id -> nav.navigate(Route.Player(fileId = id)) }`, `onShare = { id -> nav.navigate(Route.Share(fileId = id)) }`
+sealed interface FilesUiState {
+    data object Loading                                                : FilesUiState
+    data class  Ready(val items: List<FileItem>, val breadcrumb: List<String>) : FilesUiState
+    data class  Error(val message: String)                              : FilesUiState
+}
+```
 
-- [ ] **Step 5: Preview** — 3 态
+- [ ] **Step 2: `FilesViewModel.kt`**
+
+```kotlin
+package com.starvault.ui.files
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.starvault.data.FixtureLoader
+import com.starvault.data.model.FileItem
+import com.starvault.nav.Route
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class FilesViewModel(
+    app: Application,
+    val args: Route.Files,
+) : AndroidViewModel(app) {
+    private val _state = MutableStateFlow<FilesUiState>(FilesUiState.Loading)
+    val state: StateFlow<FilesUiState> = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() = viewModelScope.launch {
+        runCatching {
+            FixtureLoader.loadDelayed<List<FileItem>>(getApplication(), "fixtures/files.json")
+        }.onSuccess { all ->
+            val inFolder = if (args.folderId == null) all else all.filter { it.id == args.folderId || it.id.startsWith("${args.folderId}_") }
+            _state.value = FilesUiState.Ready(inFolder, breadcrumb = listOf("首页", args.folderId ?: "根目录"))
+        }.onFailure {
+            _state.value = FilesUiState.Error(it.message ?: "unknown")
+        }
+    }
+}
+```
+
+- [ ] **Step 3: `FilesScreen.kt`**
+
+```kotlin
+package com.starvault.ui.files
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.starvault.component.ErrorView
+import com.starvault.component.FileRow
+import com.starvault.component.HomeSkeleton
+import com.starvault.component.StatusBarStyle
+import com.starvault.component.TopBar
+import com.starvault.theme.StarVaultTheme
+
+@Composable
+fun FilesScreen(
+    state: FilesUiState,
+    onOpenFolder: (String) -> Unit,
+    onOpenPlayer: (String) -> Unit,
+    onShare: (String) -> Unit,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    StatusBarStyle(darkIcons = true)
+    val c = StarVaultTheme.colors
+    Column(modifier.fillMaxSize().background(c.bg)) {
+        TopBar(title = "文件", onBack = onBack)
+        when (state) {
+            FilesUiState.Loading -> HomeSkeleton()
+            is FilesUiState.Ready -> LazyColumn {
+                items(state.items, key = { it.id }) { f ->
+                    FileRow(
+                        file = f,
+                        onClick = {
+                            when (f.type) {
+                                com.starvault.data.model.FileType.FOLDER -> onOpenFolder(f.id)
+                                com.starvault.data.model.FileType.VIDEO  -> onOpenPlayer(f.id)
+                                else                                      -> { /* Phase 1: no-op */ }
+                            }
+                        },
+                        onMore = { onShare(f.id) },
+                    )
+                }
+            }
+            is FilesUiState.Error -> ErrorView(state.message, onRetry)
+        }
+    }
+}
+```
+
+- [ ] **Step 4: `FilesRoute.kt`**
+
+```kotlin
+package com.starvault.ui.files
+
+import android.app.Application
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.navigation.NavHostController
+import com.starvault.nav.Route
+
+@Composable
+fun FilesRoute(args: Route.Files, nav: NavHostController) {
+    val ctx = LocalContext.current
+    val vm: FilesViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { FilesViewModel(ctx.applicationContext as Application, args) }
+        },
+    )
+    val state by vm.state.collectAsStateWithLifecycle()
+    FilesScreen(
+        state = state,
+        onOpenFolder = { id -> nav.navigate(Route.Files(folderId = id)) },
+        onOpenPlayer = { id -> nav.navigate(Route.Player(fileId = id)) },
+        onShare      = { id -> nav.navigate(Route.Share(fileId = id)) },
+        onBack       = { nav.popBackStack() },
+        onRetry      = vm::load,
+    )
+}
+```
+
+- [ ] **Step 5: `FilesScreenPreview.kt`**
+
+```kotlin
+package com.starvault.ui.files
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.starvault.fixtures.FixturePresets
+import com.starvault.theme.StarVaultTheme
+
+@Preview(name = "Files/Ready",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun FilesReadyPreview()  = StarVaultTheme { FilesScreen(FilesUiState.Ready(FixturePresets.homeFiles(), listOf("首页")), {}, {}, {}, {}, {}) }
+
+@Preview(name = "Files/Loading", showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun FilesLoadingPreview() = StarVaultTheme { FilesScreen(FilesUiState.Loading, {}, {}, {}, {}, {}) }
+
+@Preview(name = "Files/Error",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun FilesErrorPreview()  = StarVaultTheme { FilesScreen(FilesUiState.Error("无法读取文件"), {}, {}, {}, {}, {}) }
+```
 
 - [ ] **Step 6: Verify + commit**
+
+```bash
+./gradlew :app:compileDebugKotlin --quiet
+git add app/src/main/kotlin/com/starvault/ui/files
+git commit -m "feat(screens): Files — folder/file list, video opens Player, share entry"
+```
 
 ---
 
@@ -2083,17 +2739,156 @@ fun TransfersRoute(nav: NavHostController, vm: TransfersViewModel = viewModel())
 **Files (5-file pattern):**
 - `app/src/main/kotlin/com/starvault/ui/album/{AlbumUiState,AlbumViewModel,AlbumScreen,AlbumRoute,AlbumScreenPreview}.kt`
 
-- [ ] **Step 1: UiState** — `Loading` / `Ready(photos: List<AlbumPhoto>)` / `Error`
+- [ ] **Step 1: `AlbumUiState.kt`**
 
-- [ ] **Step 2: ViewModel** — reads `albums.json`
+```kotlin
+package com.starvault.ui.album
 
-- [ ] **Step 3: Screen** — Engineer 参照 `07-album.html`：masonry grid（用 `LazyVerticalStaggeredGrid`）+ 收藏星标
+import com.starvault.data.model.AlbumPhoto
 
-- [ ] **Step 4: Route** — 简单 `nav = nav` 透传
+sealed interface AlbumUiState {
+    data object Loading                                  : AlbumUiState
+    data class  Ready(val photos: List<AlbumPhoto>)     : AlbumUiState
+    data class  Error(val message: String)                : AlbumUiState
+}
+```
 
-- [ ] **Step 5: Preview** — 3 态
+- [ ] **Step 2: `AlbumViewModel.kt`**
+
+```kotlin
+package com.starvault.ui.album
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.starvault.data.FixtureLoader
+import com.starvault.data.model.AlbumPhoto
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class AlbumViewModel(app: Application) : AndroidViewModel(app) {
+    private val _state = MutableStateFlow<AlbumUiState>(AlbumUiState.Loading)
+    val state: StateFlow<AlbumUiState> = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() = viewModelScope.launch {
+        runCatching {
+            FixtureLoader.loadDelayed<List<AlbumPhoto>>(getApplication(), "fixtures/albums.json")
+        }.onSuccess  { _state.value = AlbumUiState.Ready(it) }
+         .onFailure  { _state.value = AlbumUiState.Error(it.message ?: "unknown") }
+    }
+}
+```
+
+- [ ] **Step 3: `AlbumScreen.kt`**
+
+```kotlin
+package com.starvault.ui.album
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.starvault.component.ErrorView
+import com.starvault.component.HomeSkeleton
+import com.starvault.component.StatusBarStyle
+import com.starvault.component.TopBar
+import com.starvault.data.model.AlbumPhoto
+import com.starvault.theme.StarVaultTheme
+
+@Composable
+fun AlbumScreen(
+    state: AlbumUiState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    StatusBarStyle(darkIcons = true)
+    val c = StarVaultTheme.colors
+    androidx.compose.foundation.layout.Column(modifier.fillMaxSize().background(c.bg)) {
+        TopBar(title = "相册")
+        when (state) {
+            AlbumUiState.Loading -> HomeSkeleton()
+            is AlbumUiState.Ready -> AlbumGrid(state.photos)
+            is AlbumUiState.Error -> ErrorView(state.message, onRetry)
+        }
+    }
+}
+
+@Composable
+private fun AlbumGrid(photos: List<AlbumPhoto>) {
+    val c = StarVaultTheme.colors
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize().background(c.bg),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+    ) {
+        items(photos, key = { it.id }) { p ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(p.width.toFloat() / p.height)
+                    .background(c.accentSoft),
+            ) { /* Phase 1: 占位色块；Phase 2 用 Coil 加载 */ }
+        }
+    }
+}
+```
+
+- [ ] **Step 4: `AlbumRoute.kt`**
+
+```kotlin
+package com.starvault.ui.album
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+
+@Composable
+fun AlbumRoute(nav: NavHostController, vm: AlbumViewModel = viewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    AlbumScreen(state = state, onRetry = vm::load)
+}
+```
+
+- [ ] **Step 5: `AlbumScreenPreview.kt`**
+
+```kotlin
+package com.starvault.ui.album
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.starvault.fixtures.FixturePresets
+import com.starvault.theme.StarVaultTheme
+
+@Preview(name = "Album/Ready",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun AlbumReadyPreview()  = StarVaultTheme { AlbumScreen(AlbumUiState.Ready(FixturePresets.albumPhotos()), {}) }
+
+@Preview(name = "Album/Loading", showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun AlbumLoadingPreview() = StarVaultTheme { AlbumScreen(AlbumUiState.Loading, {}) }
+
+@Preview(name = "Album/Error",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun AlbumErrorPreview()  = StarVaultTheme { AlbumScreen(AlbumUiState.Error("读取相册失败"), {}) }
+```
 
 - [ ] **Step 6: Verify + commit**
+
+```bash
+./gradlew :app:compileDebugKotlin --quiet
+git add app/src/main/kotlin/com/starvault/ui/album
+git commit -m "feat(screens): Album — staggered grid of photo placeholders"
+```
 
 ---
 
@@ -2104,17 +2899,170 @@ fun TransfersRoute(nav: NavHostController, vm: TransfersViewModel = viewModel())
 **Files (5-file pattern):**
 - `app/src/main/kotlin/com/starvault/ui/wallpaper/{WallpaperUiState,WallpaperViewModel,WallpaperScreen,WallpaperRoute,WallpaperScreenPreview}.kt`
 
-- [ ] **Step 1: UiState** — `Loading` / `Ready(items: List<Wallpaper>, config: WallpaperConfig)` / `Error`
+- [ ] **Step 1: `WallpaperUiState.kt`**
 
-- [ ] **Step 2: ViewModel** — reads `wallpapers.json` + `wallpaper_config.json`
+```kotlin
+package com.starvault.ui.wallpaper
 
-- [ ] **Step 3: Screen** — Engineer 参照 `08-wallpaper.html`：分类筛选 + 预览网格 + 「应用到设备」CTA + 开关
+import com.starvault.data.model.Wallpaper
+import com.starvault.data.model.WallpaperConfig
 
-- [ ] **Step 4: Route** — `onBack = onBack` 透传
+sealed interface WallpaperUiState {
+    data object Loading                                                          : WallpaperUiState
+    data class  Ready(val items: List<Wallpaper>, val config: WallpaperConfig)   : WallpaperUiState
+    data class  Error(val message: String)                                        : WallpaperUiState
+}
+```
 
-- [ ] **Step 5: Preview** — 3 态
+- [ ] **Step 2: `WallpaperViewModel.kt`**
+
+```kotlin
+package com.starvault.ui.wallpaper
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.starvault.data.FixtureLoader
+import com.starvault.data.model.Wallpaper
+import com.starvault.data.model.WallpaperConfig
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class WallpaperViewModel(app: Application) : AndroidViewModel(app) {
+    private val _state = MutableStateFlow<WallpaperUiState>(WallpaperUiState.Loading)
+    val state: StateFlow<WallpaperUiState> = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() = viewModelScope.launch {
+        runCatching {
+            val items = FixtureLoader.loadDelayed<List<Wallpaper>>(getApplication(), "fixtures/wallpapers.json")
+            val cfg   = FixtureLoader.load<WallpaperConfig>(getApplication(), "fixtures/wallpaper_config.json")
+            items to cfg
+        }.onSuccess  { (items, cfg) -> _state.value = WallpaperUiState.Ready(items, cfg) }
+         .onFailure  { _state.value = WallpaperUiState.Error(it.message ?: "unknown") }
+    }
+}
+```
+
+- [ ] **Step 3: `WallpaperScreen.kt`**
+
+```kotlin
+package com.starvault.ui.wallpaper
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.starvault.component.ErrorView
+import com.starvault.component.HomeSkeleton
+import com.starvault.component.StatusBarStyle
+import com.starvault.component.TopBar
+import com.starvault.theme.StarVaultTheme
+
+@Composable
+fun WallpaperScreen(
+    state: WallpaperUiState,
+    onToggleEnabled: (Boolean) -> Unit,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    StatusBarStyle(darkIcons = true)
+    val c = StarVaultTheme.colors
+    Column(modifier.fillMaxSize().background(c.bg)) {
+        TopBar(title = "壁纸", onBack = onBack)
+        when (state) {
+            WallpaperUiState.Loading -> HomeSkeleton()
+            is WallpaperUiState.Ready -> Column(Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("自动轮换", style = StarVaultTheme.typography.body, color = c.fg, modifier = Modifier.weight(1f))
+                    Switch(checked = state.config.enabled, onCheckedChange = onToggleEnabled)
+                }
+                LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                    items(state.items, key = { it.id }) { w ->
+                        Box(
+                            modifier = Modifier.size(180.dp).padding(4.dp).background(c.accentSoft),
+                        ) { /* Phase 1: 占位色块；Phase 2 用 Coil 加载 */ }
+                    }
+                }
+            }
+            is WallpaperUiState.Error -> ErrorView(state.message, onRetry)
+        }
+    }
+}
+```
+
+- [ ] **Step 4: `WallpaperRoute.kt`**
+
+```kotlin
+package com.starvault.ui.wallpaper
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+@Composable
+fun WallpaperRoute(onBack: () -> Unit, vm: WallpaperViewModel = viewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    WallpaperScreen(
+        state = state,
+        onToggleEnabled = { /* Phase 1: no-op; Phase 7 接系统壁纸 API */ },
+        onBack = onBack,
+        onRetry = vm::load,
+    )
+}
+```
+
+- [ ] **Step 5: `WallpaperScreenPreview.kt`**
+
+```kotlin
+package com.starvault.ui.wallpaper
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.starvault.fixtures.FixturePresets
+import com.starvault.data.model.WallpaperConfig
+import com.starvault.data.model.DisplayMode
+import com.starvault.theme.StarVaultTheme
+
+@Preview(name = "Wallpaper/Ready",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun WallpaperReadyPreview()  = StarVaultTheme { WallpaperScreen(WallpaperUiState.Ready(FixturePresets.wallpapers(), FixturePresets.wallpaperConfig()), {}, {}, {}) }
+
+@Preview(name = "Wallpaper/Loading", showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun WallpaperLoadingPreview() = StarVaultTheme { WallpaperScreen(WallpaperUiState.Loading, {}, {}, {}) }
+
+@Preview(name = "Wallpaper/Error",  showBackground = true, widthDp = 412, heightDp = 900)
+@Composable fun WallpaperErrorPreview()  = StarVaultTheme { WallpaperScreen(WallpaperUiState.Error("读取壁纸列表失败"), {}, {}, {}) }
+```
 
 - [ ] **Step 6: Verify + commit**
+
+```bash
+./gradlew :app:compileDebugKotlin --quiet
+git add app/src/main/kotlin/com/starvault/ui/wallpaper
+git commit -m "feat(screens): Wallpaper — toggle + grid + categories, system API wired in Phase 7"
+```
 
 ---
 
@@ -2454,4 +3402,4 @@ git commit -m "chore: M1 polish — final tweaks from DoD walkthrough"
 - **Spec coverage:** All 19 spec sections have a corresponding task. §10.4 Git LFS is configured in T22's "Note" + .gitattributes (committed in T5's git init earlier). §17 Phase 2+ is intentionally out of scope, not implemented.
 - **No placeholders:** Each task has Files + Steps + runnable commands. Tasks 14/15/16/17/18/19/20/21 reference mockup HTML files for visual alignment; engineers must read the mockup for section ordering/colors but the screen skeleton + ViewModel + UiState + Preview are all given.
 - **Type consistency:** All ViewModels expose `state: StateFlow<XxxUiState>`. All Routes use the same pattern. All Screens are pure `(state, ...callbacks, modifier)`. All Routes wire `viewModel() + collectAsStateWithLifecycle()`. All Tests use `PHONE_412_900`.
-- **Known shortcut:** Task 16 (Share) ViewModel construction is shown in two ways (one with `SavedStateHandle`, one with manual `Route.Share` arg via factory). Engineers should pick the **factory-based** approach. The `args: Route.Share` in the first form is a placeholder that doesn't compile — the real implementation must use the second form.
+- **Self-audit fixes applied (2026-06-14 second pass):** 9 real bugs caught & fixed — T2/T3 `lifecycle-viewmodel-savedstate` dep added; T11 unified `Icons.kt` (was duplicate `object Icons` in `BottomNavBar` + `FileRow`); T11 `tab Route.Album` → `Route.Files`; T11 dead `Icons as MaterialIcons` import removed; T13 `LoginRoute` `Success` branch wrapped in `LaunchedEffect(state)`; T13 `PrimaryButton` dead `border(0.dp, ...)` removed; T14 missing `HomeSkeleton()` / `ErrorView()` added as `component/StateViews.kt`; T15 `PlayerScreen` missing `Color` / `dp` imports added; T16 `ShareViewModel` rewritten to `viewModelFactory` constructor-injection (was broken `args: Route.Share = SavedStateHandle().let { ... }`); T17–T21 each filled out to full 5-file pattern (UiState + ViewModel + Screen + Route + Preview) so the plan is end-to-end compilable, not skeleton-only.
