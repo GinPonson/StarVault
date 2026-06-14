@@ -1,0 +1,52 @@
+[versions]
+# Build tools
+agp = "9.1.0"
+kotlin = "2.3.21"
+
+# AndroidX / Compose
+compose-bom = "2026.05.00"
+nav = "2.8.5"
+activity-compose = "1.13.0"
+lifecycle = "2.10.0"
+
+# Kotlin libs
+kotlinx-serialization = "1.7.3"
+
+# Testing
+paparazzi = "2.0.0-alpha04"
+junit = "4.13.2"
+turbine = "1.2.0"
+
+[libraries]
+# Activity / Compose entry
+androidx-activity-compose      = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
+compose-bom                    = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui                     = { module = "androidx.compose.ui:ui" }
+compose-ui-graphics            = { module = "androidx.compose.ui:ui-graphics" }
+compose-ui-tooling-preview     = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-ui-tooling             = { module = "androidx.compose.ui:ui-tooling" }
+compose-foundation             = { module = "androidx.compose.foundation:foundation" }
+compose-material3              = { module = "androidx.compose.material3:material3" }
+compose-material-icons-core    = { module = "androidx.compose.material:material-icons-core" }
+
+# Navigation (type-safe @Serializable routes)
+nav-compose                    = { module = "androidx.navigation:navigation-compose", version.ref = "nav" }
+
+# Lifecycle (ViewModel + StateFlow + SavedStateHandle for typed route args)
+lifecycle-viewmodel-compose    = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel-savedstate = { module = "androidx.lifecycle:lifecycle-viewmodel-savedstate", version.ref = "lifecycle" }
+lifecycle-runtime-compose      = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+
+# JSON serialization for fixtures
+kotlinx-serialization-json     = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+# Testing
+paparazzi                      = { module = "app.cash.paparazzi:paparazzi", version.ref = "paparazzi" }
+junit                          = { module = "junit:junit", version.ref = "junit" }
+turbine                        = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+
+[plugins]
+android-application            = { id = "com.android.application", version.ref = "agp" }
+kotlin-android                 = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+compose-compiler               = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization           = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
