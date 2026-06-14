@@ -19,6 +19,8 @@ data class StarVaultColors(
     val tag4:       Color = Color(0xFF16A34A),
     val tag5:       Color = Color(0xFFDB2777),
     val success:    Color = Color(0xFF17A34A),
+    // success @ 8% — 与 design --success-soft: rgba(23,163,74,0.08) 对齐
+    val successSoft:Color = Color(0x1417A34A),
     val warn:       Color = Color(0xFFEAB308),
     val danger:     Color = Color(0xFFDC2626),
 )
