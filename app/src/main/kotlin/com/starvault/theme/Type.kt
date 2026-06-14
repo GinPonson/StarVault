@@ -15,7 +15,6 @@ val Inter: FontFamily = FontFamily(
     Font(
         resId        = R.font.inter_variable,
         weight       = FontWeight.Medium,
-        variationSettings = FontVariation.Settings(FontVariation.weight(500)),
     ),
 )
 

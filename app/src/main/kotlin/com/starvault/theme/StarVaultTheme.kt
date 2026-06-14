@@ -1,11 +1,8 @@
 package com.starvault.theme
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
 
 /**
  * 4 个 CompositionLocal 持有自定义 token。Composable 通过 `StarVaultTheme.colors` 访问。
@@ -28,10 +25,11 @@ object StarVaultTheme {
 }
 
 /**
- * 入口 Composable：包 CompositionLocalProvider + MaterialTheme。
+ * 入口 Composable：仅 CompositionLocalProvider。
  *
- * M3 colorScheme 只透出 4 个最常用的色：primary/onPrimary/background/surface，
- * 其余用 surfaceTint=Transparent 避免 M3 在 elevation > 0 时自动叠加 tint。
+ * 注：故意不挂 M3 [androidx.compose.material3.MaterialTheme]。M3 2026.05.00 BOM 在
+ * Paparazzi 2.0.0-alpha04 渲染下会引入 layout 回归（fillMaxWidth 在其内置 Surface wrapper
+ * 中被错误约束为内容最小宽度）。我们用自定义 typography / shapes，不依赖 M3 的 token。
  */
 @Composable
 fun StarVaultTheme(content: @Composable () -> Unit) {
@@ -41,16 +39,6 @@ fun StarVaultTheme(content: @Composable () -> Unit) {
         LocalStarVaultShapes     provides StarVaultShapes(),
         LocalStarVaultDimens     provides StarVaultDimens(),
     ) {
-        MaterialTheme(
-            colorScheme = lightColorScheme(
-                primary     = StarVaultColors().accent,
-                onPrimary   = StarVaultColors().accentOn,
-                background  = StarVaultColors().bg,
-                surface     = StarVaultColors().surface,
-                onSurface   = StarVaultColors().fg,
-                surfaceTint = Color.Transparent,
-            ),
-            content = content,
-        )
+        content()
     }
 }
