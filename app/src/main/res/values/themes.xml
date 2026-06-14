@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Phase 1: 极简底色 + 透明状态栏，配合 enableEdgeToEdge() 走 compose 控制 insets -->
+    <!--
+      T31 主题：极简底色 + 透明状态栏 + Splash Screen attrs。
+      - windowBackground: app 进程启动时（pre-Compose）的兜底背景，避免白闪
+      - windowSplashScreenBackground: Android 12+ SplashScreen 背景（与 launcher 同色 #2F6FEB）
+      - windowSplashScreenAnimatedIcon: SplashScreen 中心图标（取自 mipmap foreground）
+      - statusBarColor/navigationBarColor: 透明 + light status bar，配合 MainActivity 的
+        enableEdgeToEdge() 实现沉浸式（与 Login 屏的 48dp S mark 顶部留白一致）
+    -->
     <style name="Theme.StarVault" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>

@@ -2,6 +2,6 @@
 <resources>
     <!-- 与 StarVaultTheme.colors.bg 对齐 (#FAFAFA)，window 启动背景避免白闪 -->
     <color name="bg">#FAFAFA</color>
-    <!-- T3 占位 launcher 背景色（与品牌 accent #2F6FEB 对齐）。T31 会替换。 -->
-    <color name="ic_launcher_background">#FAFAFA</color>
+    <!-- T31 正式 launcher 背景色：品牌 accent #2F6FEB（与 StarVaultTheme.colors.accent 一致） -->
+    <color name="ic_launcher_background">#2F6FEB</color>
 </resources>

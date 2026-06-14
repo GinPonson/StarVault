@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- T3 占位 launcher 前景色：纯色星形。T31 会替换为正式 logo -->
+<!--
+  T31 StarVault 正式 launcher 前景 — 白底描边五角星，居中于 108x108 viewport。
+  中心在 (54,54)，外接圆半径 30dp，5 个外顶点 + 5 个内顶点交替，旋转 18° 让顶点朝上。
+  与 brand 语义对齐："Star" + "Vault"，星形是品牌最直接的视觉符号。
+  配色：fillColor=#FFFFFF（与 adaptive icon 背景 #2F6FEB 形成高对比，与 design/00-login.html 的 S mark 黑白对比一致）。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#2F6FEB"
-        android:pathData="M54,30 L60,48 L78,48 L64,60 L70,78 L54,68 L38,78 L44,60 L30,48 L48,48 Z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 L60.65,45.20 L82.84,45.20 L65.10,58.30 L71.75,79.50 L54,66.40 L36.25,79.50 L42.90,58.30 L25.16,45.20 L47.35,45.20 Z" />
 </vector>
