@@ -1,0 +1,5 @@
+# Paparazzi golden 截图与 design-baseline 进 git LFS
+# 避免 PNG 撑大仓库 diff（spec §10.4）
+*.png filter=lfs diff=lfs merge=lfs -text
+*.webp filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text

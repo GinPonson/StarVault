@@ -1,0 +1,40 @@
+# 设计稿由外部应用（Open Design）管理，软链指向用户私有数据目录
+# 不入库，避免污染仓库
+design
+
+# 应用密钥（CLAUDE.md 红线）
+application-gin.yml
+
+# IDE / 编辑器
+.idea/
+*.iml
+*.iws
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Gradle / Android 构建产物
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK / 调试产物
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Paparazzi 截图（spec §10.4：golden 进 LFS，但本仓库尚未生成截图）
+# 注：未来若提交 golden，需配 .gitattributes 用 LFS；spec §10.4 已有规划
+# app/src/test/snapshots/images/
+
+# 临时文件
+*.log
+*.swp
+*~
+
+# OS
+.DS_Store
