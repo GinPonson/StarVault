@@ -1,0 +1,10 @@
+[
+  {"id":"t01","fileName":"project-final.zip","direction":"UP","totalBytes":524288000,"transferredBytes":524288000,"speedBps":0,"status":"SUCCESS","startedAt":1718000000},
+  {"id":"t02","fileName":"new-movie.mp4","direction":"DOWN","totalBytes":2147483648,"transferredBytes":1073741824,"speedBps":5242880,"status":"RUNNING","startedAt":1718100000},
+  {"id":"t03","fileName":"vacation-photos.tar","direction":"UP","totalBytes":1073741824,"transferredBytes":536870912,"speedBps":2097152,"status":"RUNNING","startedAt":1718200000},
+  {"id":"t04","fileName":"document.pdf","direction":"DOWN","totalBytes":5242880,"transferredBytes":2621440,"speedBps":0,"status":"PAUSED","startedAt":1718300000},
+  {"id":"t05","fileName":"backup-2024.zip","direction":"UP","totalBytes":10737418240,"transferredBytes":10737418240,"speedBps":0,"status":"SUCCESS","startedAt":1718400000},
+  {"id":"t06","fileName":"corrupted-file.mp4","direction":"DOWN","totalBytes":209715200,"transferredBytes":52428800,"speedBps":0,"status":"FAILED","startedAt":1718500000},
+  {"id":"t07","fileName":"music-collection.flac","direction":"DOWN","totalBytes":3221225472,"transferredBytes":1610612736,"speedBps":10485760,"status":"RUNNING","startedAt":1718600000},
+  {"id":"t08","fileName":"presentation.pptx","direction":"UP","totalBytes":8388608,"transferredBytes":4194304,"speedBps":0,"status":"PAUSED","startedAt":1718700000}
+]
