@@ -4,20 +4,27 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.starvault.theme.StarVaultTheme
 
 /**
  * Phase 1 入口 Activity。
  *
- * 当前的 `setContent` 是占位（T12 会装上 `StarVaultTheme { StarVaultApp() }`），
- * 暂时只验证：
- *  - `enableEdgeToEdge()` 正常（透明状态栏/导航栏）
- *  - 编译链路通：Kotlin → Compose → Material3 → AGP 9.1 → Gradle 9
- *  - 安装到设备后能看到 #FAFAFA 底色（themes.xml windowBackground）
+ *  - [enableEdgeToEdge]：开启 edge-to-edge，状态栏/导航栏与内容融为一体（与 design HTML 一致）
+ *  - [StarVaultTheme]：提供 4 个 [androidx.compose.runtime.CompositionLocal]
+ *    （colors / typography / shapes / dimens）并装上 [androidx.compose.material3.MaterialTheme]
+ *  - [StarVaultApp]：根 Composable，内含 Scaffold + BottomNavBar + NavHost，
+ *    所有 9 个 Phase-1 屏由其 NavHost 内的 `composable<Route.X>` 装载
+ *
+ * 这里不再做任何业务逻辑——所有 UI 入口都收敛到 [StarVaultApp]。
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { /* StarVaultTheme { StarVaultApp() } — added in T12 */ }
+        setContent {
+            StarVaultTheme {
+                StarVaultApp()
+            }
+        }
     }
 }
