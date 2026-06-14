@@ -23,6 +23,7 @@ fun FilesRoute(
     val state by vm.state.collectAsStateWithLifecycle()
     FilesScreen(
         state = state,
+        onBack = { nav.popBackStack() },
         onSearch = { /* TODO: 弹搜索 */ },
         onTransfers = { nav.navigate(Route.Transfers) },
         onMore = { /* TODO: 弹文件更多菜单 */ },

@@ -54,6 +54,7 @@ import com.starvault.theme.StarVaultTheme
 @Composable
 fun AlbumScreen(
     state: AlbumUiState,
+    onBack: () -> Unit = {},
     onSearch: () -> Unit = {},
     onCamera: () -> Unit = {},
     onMore: () -> Unit = {},
@@ -85,7 +86,12 @@ fun AlbumScreen(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    AppBar(onSearch, onCamera, onMore)
+                    AppBar(
+                        onBack = onBack,
+                        onSearch = onSearch,
+                        onCamera = onCamera,
+                        onMore = onMore,
+                    )
                     FolderPicker(
                         album = state.currentAlbum,
                         onClick = onOpenSheet,
@@ -131,18 +137,30 @@ fun AlbumScreen(
 /* ───────────────────── AppBar ───────────────────── */
 
 @Composable
-private fun AppBar(onSearch: () -> Unit, onCamera: () -> Unit, onMore: () -> Unit) {
+private fun AppBar(
+    onBack: () -> Unit,
+    onSearch: () -> Unit,
+    onCamera: () -> Unit,
+    onMore: () -> Unit,
+) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 6.dp, bottom = 14.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(top = 2.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = "相册", style = t.large, color = c.fg)
+        IconBtn(glyph = "‹", onClick = onBack, contentDescription = "返回")
+        Text(
+            text = "相册",
+            style = t.large,
+            color = c.fg,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 4.dp),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             IconBtn(glyph = "⌕", onClick = onSearch,  contentDescription = "搜索")
             IconBtn(glyph = "◉", onClick = onCamera,  contentDescription = "相机")

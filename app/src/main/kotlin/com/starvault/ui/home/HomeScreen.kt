@@ -99,10 +99,10 @@ fun HomeScreen(
 /**
  * 顶部 AppBar：左侧 22sp bold "首页"，右侧 3 个 40dp 圆形 icon-btn。
  *
- *  icon 占位：Phase 1 用 unicode glyph 近似（Valkyrie 上线后替换为真实 SVG）：
- *   - 扫描  ⌖    (U+2316 position indicator)
- *   - 通知  ◉    (U+25C9 fisheye, 类通知铃)
- *   - 更多  ⋯    (与 FileRow 一致)
+ *  icon 占位（与 HTML .icon-btn 一一对应；Valkyrie 上线后用真实 SVG 替换）：
+ *   - 扫描  ⌖   (U+2316 position indicator, 类 viewfinder)
+ *   - 通知  ⌃   (U+2303 up arrowhead, 类钟形 / 通知)
+ *   - 更多  ⋯   (midline horizontal ellipsis)
  */
 @Composable
 private fun HomeAppBar() {
@@ -122,7 +122,7 @@ private fun HomeAppBar() {
         )
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             IconGlyph("⌖", "扫描")
-            IconGlyph("◉", "通知")
+            IconGlyph("⌃", "通知")
             IconGlyph("⋯", "更多")
         }
     }

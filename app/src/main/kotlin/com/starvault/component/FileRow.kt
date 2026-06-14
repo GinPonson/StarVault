@@ -109,15 +109,57 @@ private fun FileThumb(type: FileType, modifier: Modifier = Modifier) {
     }
 }
 
-/** 根据文件类型映射 design HTML 中对应的 135° 渐变与 stub 字母。 */
-private fun thumbBrushAndLetter(type: FileType): Pair<Brush, String> = when (type) {
-    FileType.FOLDER -> Brush.linearGradient(listOf(Color(0xFF6B7280), Color(0xFF4B5563))) to "F"
-    FileType.VIDEO  -> Brush.linearGradient(listOf(Color(0xFF2F6FEB), Color(0xFF1D4ED8))) to "V"
-    FileType.IMAGE  -> Brush.linearGradient(listOf(Color(0xFFEA580C), Color(0xFFC2410C))) to "I"
-    FileType.AUDIO  -> Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFF7E22CE))) to "A"
-    FileType.DOC    -> Brush.linearGradient(listOf(Color(0xFF16A34A), Color(0xFF15803D))) to "D"
-    FileType.ZIP    -> Brush.linearGradient(listOf(Color(0xFFDB2777), Color(0xFFBE185D))) to "Z"
-    FileType.OTHER  -> Brush.linearGradient(listOf(Color(0xFF9CA3AF), Color(0xFF6B7280))) to "?"
+/** 根据文件类型映射 design HTML 中对应的 135° 渐变与 stub 图标字符。
+ *  渐变方向 135° = 左上 → 右下，与 HTML `linear-gradient(135deg, …)` 一致。
+ *  icon 暂用 unicode 字符（F/V/I/A/D/Z）作为占位；Valkyrie 上线后用真实 SVG 替换。 */
+private fun thumbBrushAndLetter(type: FileType): Pair<Brush, String> {
+    val brush = when (type) {
+        FileType.FOLDER -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFF6B7280), 1f to Color(0xFF4B5563)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+        FileType.VIDEO -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFF2F6FEB), 1f to Color(0xFF1D4ED8)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+        FileType.IMAGE -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFFEA580C), 1f to Color(0xFFC2410C)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+        FileType.AUDIO -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFF9333EA), 1f to Color(0xFF7E22CE)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+        FileType.DOC -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFF16A34A), 1f to Color(0xFF15803D)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+        FileType.ZIP -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFFDB2777), 1f to Color(0xFFBE185D)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+        FileType.OTHER -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFF9CA3AF), 1f to Color(0xFF6B7280)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
+    }
+    val letter = when (type) {
+        FileType.FOLDER -> "F"
+        FileType.VIDEO  -> "▶"
+        FileType.IMAGE  -> "I"
+        FileType.AUDIO  -> "♪"
+        FileType.DOC    -> "D"
+        FileType.ZIP    -> "Z"
+        FileType.OTHER  -> "?"
+    }
+    return brush to letter
 }
 
 /**

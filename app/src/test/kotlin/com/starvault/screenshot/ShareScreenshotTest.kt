@@ -2,6 +2,7 @@ package com.starvault.screenshot
 
 import app.cash.paparazzi.Paparazzi
 import com.android.ide.common.rendering.api.SessionParams
+import com.starvault.data.model.ShareLink
 import com.starvault.theme.StarVaultTheme
 import com.starvault.ui.share.ShareScreen
 import com.starvault.ui.share.ShareTab
@@ -26,10 +27,21 @@ class ShareScreenshotTest {
         showSystemUi = false,
     )
 
+    private fun mockLink() = ShareLink(
+        fileId = "h-02",
+        url = "https://115.com/s/9f2c-7ab4-2026-…",
+        accessCode = "8K3F",
+        expiresAt = 1_780_000_000L,
+    )
+
     @Test fun share_link() = paparazzi.snapshot {
         StarVaultTheme {
             ShareScreen(
-                state = ShareUiState.Ready(file = mockShareFile(), activeTab = ShareTab.Link),
+                state = ShareUiState.Ready(
+                    file = mockShareFile(),
+                    activeTab = ShareTab.Link,
+                    link = mockLink(),
+                ),
                 onClose = {},
                 onTab = {},
                 onAccessType = {},
@@ -47,7 +59,11 @@ class ShareScreenshotTest {
     @Test fun share_save() = paparazzi.snapshot {
         StarVaultTheme {
             ShareScreen(
-                state = ShareUiState.Ready(file = mockShareFile(), activeTab = ShareTab.Save),
+                state = ShareUiState.Ready(
+                    file = mockShareFile(),
+                    activeTab = ShareTab.Save,
+                    link = mockLink(),
+                ),
                 onClose = {},
                 onTab = {},
                 onAccessType = {},

@@ -55,6 +55,7 @@ import com.starvault.theme.StarVaultTheme
 @Composable
 fun FilesScreen(
     state: FilesUiState,
+    onBack: () -> Unit = {},
     onSearch: () -> Unit = {},
     onTransfers: () -> Unit = {},
     onMore: () -> Unit = {},
@@ -92,6 +93,7 @@ fun FilesScreen(
             is FilesUiState.Success -> {
                 Column(modifier = Modifier.fillMaxSize()) {
                     FilesAppBar(
+                        onBack = onBack,
                         onSearch = onSearch,
                         onTransfers = onTransfers,
                         onMore = onMore,
@@ -157,6 +159,7 @@ private fun visible(s: FilesUiState.Success): List<FileEntry> =
 
 @Composable
 private fun FilesAppBar(
+    onBack: () -> Unit,
     onSearch: () -> Unit,
     onTransfers: () -> Unit,
     onMore: () -> Unit,
@@ -167,16 +170,18 @@ private fun FilesAppBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(top = 8.dp, bottom = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(top = 4.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        IconBtn(glyph = "‹", onClick = onBack, contentDescription = "返回")
         Text(
             text = "我的文件",
             style = t.large,
             color = c.fg,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 4.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             IconBtn(glyph = "⌕", onClick = onSearch,        contentDescription = "搜索")

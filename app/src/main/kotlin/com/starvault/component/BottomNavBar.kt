@@ -46,10 +46,10 @@ fun BottomNavBar(
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
     val tabs = listOf(
-        TabSpec("首页", Icons.Home,      Route.Home)      { it.hasRoute<Route.Home>() },
-        TabSpec("文件", Icons.Files,     Route.Files())   { it.hasRoute<Route.Files>() },
-        TabSpec("传输", Icons.Transfers, Route.Transfers) { it.hasRoute<Route.Transfers>() },
-        TabSpec("我的", Icons.Profile,   Route.Profile)   { it.hasRoute<Route.Profile>() },
+        TabSpec("首页", Icons.Home,    Route.Home)    { it.hasRoute<Route.Home>() },
+        TabSpec("文件", Icons.Files,   Route.Files()) { it.hasRoute<Route.Files>() },
+        TabSpec("相册", Icons.Album,   Route.Album)   { it.hasRoute<Route.Album>() },
+        TabSpec("我的", Icons.Profile, Route.Profile) { it.hasRoute<Route.Profile>() },
     )
     Column(
         modifier = modifier

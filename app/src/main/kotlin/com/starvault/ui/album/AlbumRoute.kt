@@ -20,6 +20,7 @@ fun AlbumRoute(
     val state by vm.state.collectAsStateWithLifecycle()
     AlbumScreen(
         state = state,
+        onBack = { nav.popBackStack() },
         onSearch = { /* TODO: 弹搜索 */ },
         onCamera = { /* TODO: 打开相机 */ },
         onMore = { /* TODO: 弹相册更多菜单 */ },
