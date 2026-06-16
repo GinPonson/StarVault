@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,10 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starvault.component.Icons
 import com.starvault.data.model.FileType
 import com.starvault.theme.StarVaultTheme
 
@@ -170,30 +173,27 @@ private fun FilesAppBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 20.dp, vertical = 4.dp)
             .padding(top = 4.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconBtn(glyph = "‹", onClick = onBack, contentDescription = "返回")
         Text(
             text = "我的文件",
             style = t.large,
             color = c.fg,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 4.dp),
+            modifier = Modifier.weight(1f),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(glyph = "⊙", onClick = onSearch,        contentDescription = "搜索")
-            IconBtn(glyph = "↑", onClick = onTransfers,     contentDescription = "传输中心")
-            IconBtn(glyph = "⋯", onClick = onMore,          contentDescription = "更多")
-            IconBtn(glyph = "+", onClick = onNewFolder,     contentDescription = "新建文件夹")
+            IconBtn(icon = Icons.Search,     onClick = onSearch,    contentDescription = "搜索")
+            IconBtn(icon = Icons.Transfers,  onClick = onTransfers, contentDescription = "传输中心")
+            IconBtn(icon = Icons.More,       onClick = onMore,      contentDescription = "更多")
+            IconBtn(icon = Icons.NewFolder,  onClick = onNewFolder, contentDescription = "新建文件夹")
         }
     }
 }
 
 @Composable
-private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: String) {
+private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -201,10 +201,11 @@ private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: Stri
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = glyph,
-            style = StarVaultTheme.typography.subtitle,
-            color = StarVaultTheme.colors.fg,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = StarVaultTheme.colors.fg,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -316,13 +317,13 @@ private fun ViewToggle(mode: ViewMode, onToggle: (ViewMode) -> Unit) {
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        ToggleBtn(active = mode == ViewMode.LIST, glyph = "≡", onClick = { onToggle(ViewMode.LIST) })
-        ToggleBtn(active = mode == ViewMode.GRID, glyph = "▦", onClick = { onToggle(ViewMode.GRID) })
+        ToggleBtn(active = mode == ViewMode.LIST, icon = Icons.ListView, onClick = { onToggle(ViewMode.LIST) })
+        ToggleBtn(active = mode == ViewMode.GRID, icon = Icons.GridView, onClick = { onToggle(ViewMode.GRID) })
     }
 }
 
 @Composable
-private fun ToggleBtn(active: Boolean, glyph: String, onClick: () -> Unit) {
+private fun ToggleBtn(active: Boolean, icon: ImageVector, onClick: () -> Unit) {
     val c = StarVaultTheme.colors
     Box(
         modifier = Modifier
@@ -332,7 +333,12 @@ private fun ToggleBtn(active: Boolean, glyph: String, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = glyph, style = StarVaultTheme.typography.body, color = if (active) c.surface else c.muted)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (active) c.surface else c.muted,
+            modifier = Modifier.size(14.dp),
+        )
     }
 }
 
@@ -352,11 +358,16 @@ private fun SectionHead(visibleCount: Int, sortLabel: String, onSort: () -> Unit
         Text(text = "共 $visibleCount 项", style = t.caption, color = c.muted)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.clickable(onClick = onSort),
         ) {
             Text(text = sortLabel, style = t.caption, color = c.fg)
-            Text(text = "▾", style = t.caption, color = c.fg)
+            Icon(
+                imageVector = Icons.ChevronDown,
+                contentDescription = "排序",
+                tint = c.fg,
+                modifier = Modifier.size(12.dp),
+            )
         }
     }
 }
@@ -426,14 +437,19 @@ private fun FileListRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = "⋯",
-            style = t.subtitle,
-            color = c.muted,
+        Box(
             modifier = Modifier
                 .clickable { /* TODO: 单条更多 */ }
                 .padding(8.dp),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.More,
+                contentDescription = "更多",
+                tint = c.muted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
@@ -484,7 +500,12 @@ private fun FileGrid(
                                     .background(c.accent),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("✓", style = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold))
+                                Icon(
+                                    imageVector = Icons.Check,
+                                    contentDescription = "已选",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp),
+                                )
                             }
                         }
                     }
@@ -525,14 +546,14 @@ private fun FileThumb(type: FileType, size: Int, fillMaxWidth: Boolean = false) 
         FileType.ZIP    -> Brush.linearGradient(listOf(Color(0xFFDB2777), Color(0xFFBE185D)))
         FileType.OTHER  -> Brush.linearGradient(listOf(Color(0xFF9CA3AF), Color(0xFF6B7280)))
     }
-    val glyph = when (type) {
-        FileType.FOLDER -> "▢"
-        FileType.VIDEO  -> "▶"
-        FileType.IMAGE  -> "▣"
-        FileType.AUDIO  -> "♪"
-        FileType.DOC    -> "▤"
-        FileType.ZIP    -> "▥"
-        FileType.OTHER  -> "▦"
+    val icon = when (type) {
+        FileType.FOLDER -> Icons.Folder
+        FileType.VIDEO  -> Icons.Play
+        FileType.IMAGE  -> Icons.Image
+        FileType.AUDIO  -> Icons.Music
+        FileType.DOC    -> Icons.Doc
+        FileType.ZIP    -> Icons.Archive
+        FileType.OTHER  -> Icons.Folder
     }
     val shape = if (fillMaxWidth) RoundedCornerShape(8.dp) else RoundedCornerShape(9.dp)
     val mod = if (fillMaxWidth) {
@@ -548,13 +569,11 @@ private fun FileThumb(type: FileType, size: Int, fillMaxWidth: Boolean = false) 
             .background(brush)
     }
     Box(modifier = mod, contentAlignment = Alignment.Center) {
-        Text(
-            text = glyph,
-            style = androidx.compose.ui.text.TextStyle(
-                fontSize = if (fillMaxWidth) 20.sp else 16.sp,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-            ),
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
         )
     }
 }
@@ -612,7 +631,12 @@ private fun BulkBar(
                 .clickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) {
-            Text("×", style = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f)))
+            Icon(
+                imageVector = Icons.Close,
+                contentDescription = "取消",
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(14.dp),
+            )
         }
         Spacer(Modifier.width(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -632,16 +656,16 @@ private fun BulkBar(
             )
         }
         Spacer(modifier = Modifier.weight(1f))
-        BulkActBtn("↓", onClick = { onAction(BulkAction.DOWNLOAD) })
-        BulkActBtn("⇆", onClick = { onAction(BulkAction.SHARE) })
-        BulkActBtn("▢", onClick = { onAction(BulkAction.MOVE) })
-        BulkActBtn("✎", onClick = { onAction(BulkAction.RENAME) })
-        BulkActBtn("🗑", danger = true, onClick = { onAction(BulkAction.DELETE) })
+        BulkActBtn(icon = Icons.Download, onClick = { onAction(BulkAction.DOWNLOAD) })
+        BulkActBtn(icon = Icons.Share,    onClick = { onAction(BulkAction.SHARE) })
+        BulkActBtn(icon = Icons.Move,     onClick = { onAction(BulkAction.MOVE) })
+        BulkActBtn(icon = Icons.Rename,   onClick = { onAction(BulkAction.RENAME) })
+        BulkActBtn(icon = Icons.Trash,    danger = true, onClick = { onAction(BulkAction.DELETE) })
     }
 }
 
 @Composable
-private fun BulkActBtn(glyph: String, danger: Boolean = false, onClick: () -> Unit) {
+private fun BulkActBtn(icon: ImageVector, danger: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -649,12 +673,11 @@ private fun BulkActBtn(glyph: String, danger: Boolean = false, onClick: () -> Un
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = glyph,
-            style = androidx.compose.ui.text.TextStyle(
-                fontSize = 16.sp,
-                color = if (danger) Color(0xFFFF8A8A) else Color.White.copy(alpha = 0.85f),
-            ),
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (danger) Color(0xFFFF8A8A) else Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(18.dp),
         )
     }
 }
@@ -671,6 +694,11 @@ private fun Fab(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text("+", style = androidx.compose.ui.text.TextStyle(fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.SemiBold))
+        Icon(
+            imageVector = Icons.Plus,
+            contentDescription = "新建",
+            tint = Color.White,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }

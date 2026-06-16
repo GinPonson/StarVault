@@ -1,6 +1,7 @@
 package com.starvault.ui.profile
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Profile 屏 UiState（严格对应 design/05-profile.html 的 body 段）。
@@ -64,7 +65,7 @@ data class Wallpaper(
 
 /** 通用 row：图标 + 标题 + 右侧文本 + 角标。 */
 data class RowItem(
-    val iconGlyph: String,         // unicode 字符
+    val icon: ImageVector,         // 来自 design 的 SVG icon
     val iconAccent: Boolean,       // true → accent-10% 背景的图标
     val label: String,             // "我的分享"
     val rightText: String? = null, // "12 个进行中"

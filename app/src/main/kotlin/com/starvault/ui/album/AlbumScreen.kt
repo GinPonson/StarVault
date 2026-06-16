@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,10 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starvault.component.Icons
 import com.starvault.theme.StarVaultTheme
 
 /**
@@ -152,7 +155,7 @@ private fun AppBar(
             .padding(top = 2.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconBtn(glyph = "‹", onClick = onBack, contentDescription = "返回")
+        IconBtn(icon = Icons.Back, onClick = onBack, contentDescription = "返回")
         Text(
             text = "相册",
             style = t.large,
@@ -162,15 +165,15 @@ private fun AppBar(
                 .padding(start = 4.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            IconBtn(glyph = "⊙", onClick = onSearch,  contentDescription = "搜索")
-            IconBtn(glyph = "◉", onClick = onCamera,  contentDescription = "相机")
-            IconBtn(glyph = "⋯", onClick = onMore,    contentDescription = "更多")
+            IconBtn(icon = Icons.Search, onClick = onSearch, contentDescription = "搜索")
+            IconBtn(icon = Icons.Camera, onClick = onCamera, contentDescription = "相机")
+            IconBtn(icon = Icons.More,   onClick = onMore,   contentDescription = "更多")
         }
     }
 }
 
 @Composable
-private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: String) {
+private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -178,7 +181,12 @@ private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: Stri
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = glyph, style = StarVaultTheme.typography.subtitle, color = StarVaultTheme.colors.fg)
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = StarVaultTheme.colors.fg,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -207,9 +215,19 @@ private fun FolderPicker(album: AlbumFolder, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("▢", style = t.caption, color = c.accent)
+            Icon(
+                imageVector = Icons.Album,
+                contentDescription = null,
+                tint = c.accent,
+                modifier = Modifier.size(12.dp),
+            )
             Text(album.name, style = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold), color = c.fg)
-            Text("▾", style = TextStyle(fontSize = 12.sp), color = c.muted)
+            Icon(
+                imageVector = Icons.ChevronDown,
+                contentDescription = null,
+                tint = c.muted,
+                modifier = Modifier.size(12.dp),
+            )
         }
         Spacer(modifier = Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -292,7 +310,12 @@ private fun RecentSection(
                 modifier = Modifier.clickable(onClick = onSeeAll),
             ) {
                 Text(text = "查看全部", style = t.caption, color = c.muted)
-                Text("›", style = t.caption, color = c.muted)
+                Icon(
+                    imageVector = Icons.ChevronRight,
+                    contentDescription = null,
+                    tint = c.muted,
+                    modifier = Modifier.size(12.dp),
+                )
             }
         }
         groups.forEach { g ->
@@ -356,7 +379,12 @@ private fun PhotoCell(photo: PhotoEntry, onClick: () -> Unit) {
                         .background(Color.Black.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("▶", style = TextStyle(fontSize = 28.sp, color = Color.White))
+                    Icon(
+                        imageVector = Icons.Play,
+                        contentDescription = "播放",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
+                    )
                 }
             }
             PhotoKind.SCREENSHOT -> {
@@ -565,7 +593,12 @@ private fun FolderSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("+", style = TextStyle(fontSize = 16.sp, color = c.accent, fontWeight = FontWeight.SemiBold))
+                Icon(
+                    imageVector = Icons.Plus,
+                    contentDescription = "新建相册",
+                    tint = c.accent,
+                    modifier = Modifier.size(16.dp),
+                )
                 Text("新建相册", style = t.body, color = c.accent)
             }
         }
@@ -616,7 +649,12 @@ private fun FolderRow(
                 .background(color),
             contentAlignment = Alignment.Center,
         ) {
-            Text("▢", style = TextStyle(fontSize = 14.sp, color = Color.White))
+            Icon(
+                imageVector = Icons.Folder,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp),
+            )
         }
         Text(
             text = name,
@@ -624,7 +662,17 @@ private fun FolderRow(
             color = c.fg,
             modifier = Modifier.weight(1f),
         )
-        if (showChev) Text("›", style = t.subtitle, color = c.muted)
-        if (showCheck) Text("✓", style = t.subtitle, color = c.accent, fontWeight = FontWeight.SemiBold)
+        if (showChev) Icon(
+            imageVector = Icons.ChevronRight,
+            contentDescription = null,
+            tint = c.muted,
+            modifier = Modifier.size(14.dp),
+        )
+        if (showCheck) Icon(
+            imageVector = Icons.Check,
+            contentDescription = null,
+            tint = c.accent,
+            modifier = Modifier.size(14.dp),
+        )
     }
 }

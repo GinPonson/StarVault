@@ -153,7 +153,6 @@ fun WallpaperScreen(
                             onClose = onCloseSheet,
                             modifier = Modifier.align(Alignment.BottomCenter),
                         )
-                        else -> Unit
                     }
                 }
             }

@@ -3,6 +3,7 @@ package com.starvault.screenshot
 import androidx.compose.ui.graphics.Color
 import app.cash.paparazzi.Paparazzi
 import com.android.ide.common.rendering.api.SessionParams
+import com.starvault.component.Icons
 import com.starvault.theme.StarVaultTheme
 import com.starvault.ui.profile.Breakdown
 import com.starvault.ui.profile.ProfileScreen
@@ -48,14 +49,14 @@ class ProfileScreenshotTest {
             subText = "让相册成为会动的壁纸",
         ),
         commonRows = listOf(
-            RowItem("↻", iconAccent = true, label = "我的分享", rightText = "12 个进行中"),
-            RowItem("⌫", iconAccent = false, label = "回收站", rightText = "2.1 GB"),
-            RowItem("▭", iconAccent = false, label = "设备管理", rightText = "3 台"),
+            RowItem(Icons.Refresh,  iconAccent = true,  label = "我的分享", rightText = "12 个进行中"),
+            RowItem(Icons.Trash,    iconAccent = false, label = "回收站",   rightText = "2.1 GB"),
+            RowItem(Icons.Device,   iconAccent = false, label = "设备管理", rightText = "3 台"),
         ),
         settingRows = listOf(
-            RowItem("⛨", iconAccent = false, label = "隐私与安全"),
-            RowItem("◫", iconAccent = false, label = "外观与主题", rightText = "跟随系统"),
-            RowItem("?", iconAccent = false, label = "帮助与反馈", rightBadge = "v6.2.1"),
+            RowItem(Icons.Privacy,    iconAccent = false, label = "隐私与安全"),
+            RowItem(Icons.Appearance, iconAccent = false, label = "外观与主题", rightText = "跟随系统"),
+            RowItem(Icons.Help,       iconAccent = false, label = "帮助与反馈", rightBadge = "v6.2.1"),
         ),
     )
 

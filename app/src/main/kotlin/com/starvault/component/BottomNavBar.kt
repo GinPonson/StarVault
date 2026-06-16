@@ -5,14 +5,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,16 +24,15 @@ import com.starvault.nav.Route
 import com.starvault.theme.StarVaultTheme
 
 /**
- * 4-tab 全局底栏。
+ * 4-tab 全局底栏（与 design 的 bottom nav 1:1 对齐）。
  *  - 高度 64dp + 底部 46dp 设备区留白（navigationBarsPadding）
  *  - 选中态：accent 色图标 + 标题；未选：muted 色
  *  - 通过 hasRoute<T>() 判定，不依赖字符串
- *  - 图标用 unicode 字形（与 HomeScreen AppBar 同模式）—— 避开了 ImageVector path DSL 的
- *    老坑，等 Valkyrie 图形上线后用真 SVG 替换。
+ *  - 图标来自 [Icons] 中对应的 Material 风格 SVG（Home / Files / Album / Profile）
  */
 private data class TabSpec(
     val label: String,
-    val icon: String,                          // unicode glyph 占位
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val route: Route,
     val isSelected: (NavDestination) -> Boolean,
 )
@@ -47,16 +45,11 @@ fun BottomNavBar(
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
-    // icon 字形选择（全部单色，避免 emoji 彩色渲染污染视觉一致性）：
-    //   ⌂  U+2302  house               → Home
-    //   ☰  U+2630  trigram for heaven  → Files（3 横线像文档/列表）
-    //   ⧉  U+29C9  two joined squares  → Album（像相册网格）
-    //   ◉  U+25C9  fish-eye            → Profile（头像圆形）
     val tabs = listOf(
-        TabSpec("首页", "⌂", Route.Home)    { it.hasRoute<Route.Home>() },
-        TabSpec("文件", "☰", Route.Files()) { it.hasRoute<Route.Files>() },
-        TabSpec("相册", "⧉", Route.Album)   { it.hasRoute<Route.Album>() },
-        TabSpec("我的", "◉", Route.Profile) { it.hasRoute<Route.Profile>() },
+        TabSpec("首页", Icons.Home,    Route.Home)    { it.hasRoute<Route.Home>() },
+        TabSpec("文件", Icons.Files,   Route.Files()) { it.hasRoute<Route.Files>() },
+        TabSpec("相册", Icons.Album,   Route.Album)   { it.hasRoute<Route.Album>() },
+        TabSpec("我的", Icons.Profile, Route.Profile) { it.hasRoute<Route.Profile>() },
     )
     Column(
         modifier = modifier
@@ -83,6 +76,7 @@ fun BottomNavBar(
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .fillMaxHeight()
                         .clickable {
                             nav.navigate(tab.route) {
                                 launchSingleTop = true
@@ -93,15 +87,14 @@ fun BottomNavBar(
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = tab.icon,
-                            style = t.subtitle,        // 16sp glyph
-                            color = tint,
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = tab.label,
+                            tint = tint,
                             modifier = Modifier.size(22.dp),
-                            textAlign = TextAlign.Center,
                         )
-                        Spacer(Modifier.size(3.dp))
-                        Text(
+                        androidx.compose.foundation.layout.Spacer(Modifier.size(3.dp))
+                        androidx.compose.material3.Text(
                             text = tab.label,
                             style = t.micro,
                             color = tint,

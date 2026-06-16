@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -26,8 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.starvault.component.Icons
 import com.starvault.data.model.Direction
 import com.starvault.data.model.Transfer
 import com.starvault.data.model.TransferStatus
@@ -151,14 +154,14 @@ private fun AppBar(activeCount: Int, onSearch: () -> Unit, onClear: () -> Unit) 
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(glyph = "⊙", onClick = onSearch, contentDescription = "搜索")
-            IconBtn(glyph = "⌫", onClick = onClear, contentDescription = "清空已完成")
+            IconBtn(icon = Icons.Search, onClick = onSearch, contentDescription = "搜索")
+            IconBtn(icon = Icons.Trash,  onClick = onClear,  contentDescription = "清空已完成")
         }
     }
 }
 
 @Composable
-private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: String) {
+private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -166,7 +169,12 @@ private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: Stri
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = glyph, style = StarVaultTheme.typography.subtitle, color = StarVaultTheme.colors.fg)
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = StarVaultTheme.colors.fg,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -354,7 +362,12 @@ private fun OpRow(onPauseAll: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.clickable(onClick = onPauseAll),
         ) {
-            Text(text = "❚❚", style = t.caption, color = c.fg)
+            Icon(
+                imageVector = Icons.Pause,
+                contentDescription = "全部暂停",
+                tint = c.fg,
+                modifier = Modifier.size(12.dp),
+            )
             Text(text = "全部暂停", style = t.micro, color = c.fg)
         }
     }
@@ -450,12 +463,12 @@ private fun TransferThumb(direction: Direction, status: TransferStatus) {
             Direction.DOWN -> Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFF7E22CE)))   // purple
         }
     }
-    val glyph = when (status) {
-        TransferStatus.FAILED -> "✕"
-        TransferStatus.SUCCESS -> "✓"
+    val icon = when (status) {
+        TransferStatus.FAILED  -> Icons.Close
+        TransferStatus.SUCCESS -> Icons.Check
         else -> when (direction) {
-            Direction.UP   -> "↑"
-            Direction.DOWN -> "↓"
+            Direction.UP   -> Icons.Transfers
+            Direction.DOWN -> Icons.Transfers
         }
     }
     Box(
@@ -465,17 +478,22 @@ private fun TransferThumb(direction: Direction, status: TransferStatus) {
             .background(brush),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = glyph, style = StarVaultTheme.typography.micro, color = Color.White)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
 @Composable
 private fun PauseBtn(status: TransferStatus, onClick: () -> Unit) {
     val c = StarVaultTheme.colors
-    val glyph = when (status) {
-        TransferStatus.RUNNING -> "❚❚"
-        TransferStatus.PAUSED  -> "▶"
-        else -> "↻"   // SUCCESS / FAILED 用重试/查看
+    val icon = when (status) {
+        TransferStatus.RUNNING -> Icons.Pause
+        TransferStatus.PAUSED  -> Icons.Play
+        else -> Icons.Retry
     }
     Box(
         modifier = Modifier
@@ -484,7 +502,12 @@ private fun PauseBtn(status: TransferStatus, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = glyph, style = StarVaultTheme.typography.caption, color = c.muted)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = c.muted,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
@@ -498,10 +521,11 @@ private fun MoreBtn(onClick: () -> Unit, failed: Boolean, onRetry: () -> Unit) {
             .clickable(onClick = if (failed) onRetry else onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = if (failed) "↻" else "⋯",
-            style = StarVaultTheme.typography.caption,
-            color = if (failed) c.accent else c.muted,
+        Icon(
+            imageVector = if (failed) Icons.Retry else Icons.More,
+            contentDescription = null,
+            tint = if (failed) c.accent else c.muted,
+            modifier = Modifier.size(16.dp),
         )
     }
 }

@@ -344,7 +344,12 @@ private fun QrOverlay(state: LoginUiState) {
                             .background(c.successSoft),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(text = "✓", style = t.subtitle, color = c.success)
+                        androidx.compose.material3.Icon(
+                            imageVector = com.starvault.component.Icons.CheckBold,
+                            contentDescription = null,
+                            tint = c.success,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                     Spacer(Modifier.height(10.dp))
                     Text(text = "登录成功", style = t.body, color = c.success)
@@ -418,12 +423,19 @@ private fun QrMeta(expireSeconds: Int, onRefresh: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "↻  刷新二维码",
-            style = t.caption,
-            color = c.accent,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.clickable(onClick = onRefresh),
-        )
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = com.starvault.component.Icons.Refresh,
+                contentDescription = "刷新二维码",
+                tint = c.accent,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(text = "刷新二维码", style = t.caption, color = c.accent)
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = "二维码 ", style = t.micro, color = c.muted)
             Text(text = formatExpire(expireSeconds), style = t.caption, color = c.fg)

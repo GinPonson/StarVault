@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,10 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import com.starvault.component.Icons
 import com.starvault.data.model.FileItem
 import com.starvault.data.model.FileTag
 import com.starvault.data.model.TagColor
@@ -154,17 +157,17 @@ private fun PlayerTopBar(onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        PlayerIconBtn(glyph = "‹", onClick = onBack, contentDescription = "返回")
+        PlayerIconBtn(icon = Icons.Back,       onClick = onBack, contentDescription = "返回")
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            PlayerIconBtn(glyph = "字", onClick = {}, contentDescription = "字幕")
-            PlayerIconBtn(glyph = "投", onClick = {}, contentDescription = "投屏")
-            PlayerIconBtn(glyph = "⋯", onClick = {}, contentDescription = "更多")
+            PlayerIconBtn(icon = Icons.Subtitle, onClick = {}, contentDescription = "字幕")
+            PlayerIconBtn(icon = Icons.Cast,     onClick = {}, contentDescription = "投屏")
+            PlayerIconBtn(icon = Icons.More,     onClick = {}, contentDescription = "更多")
         }
     }
 }
 
 @Composable
-private fun PlayerIconBtn(glyph: String, onClick: () -> Unit, contentDescription: String) {
+private fun PlayerIconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -172,11 +175,11 @@ private fun PlayerIconBtn(glyph: String, onClick: () -> Unit, contentDescription
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = glyph,
-            style = StarVaultTheme.typography.subtitle,
-            color = Color.White,
-            textAlign = TextAlign.Center,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -269,10 +272,11 @@ private fun PlayerCanvas(state: PlayerUiState, onTogglePlay: () -> Unit) {
                         .clickable(onClick = onTogglePlay),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = if (state.isPlaying) "❚❚" else "▶",  // 字符模拟 pause/play
-                        style = t.title,
-                        color = Color(0xFF111111),
+                    Icon(
+                        imageVector = if (state.isPlaying) Icons.Pause else Icons.Play,
+                        contentDescription = if (state.isPlaying) "暂停" else "播放",
+                        tint = Color(0xFF111111),
+                        modifier = Modifier.size(32.dp),
                     )
                 }
             }
@@ -386,20 +390,20 @@ private fun PlayerControls(
         ) {
             // 左侧：上一集 / 播放 / 下一集
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CtrlBtn(glyph = "❮", contentDescription = "上一集", onClick = {})
+                CtrlBtn(icon = Icons.Prev, contentDescription = "上一集", onClick = {})
                 CtrlBtn(
-                    glyph = if (state.isPlaying) "❚❚" else "▶",
+                    icon = if (state.isPlaying) Icons.Pause else Icons.Play,
                     contentDescription = "播放",
                     onClick = onTogglePlay,
                     isPrimary = true,
                 )
-                CtrlBtn(glyph = "❯", contentDescription = "下一集", onClick = {})
+                CtrlBtn(icon = Icons.Next, contentDescription = "下一集", onClick = {})
             }
             // 右侧：倍速 / 下载 / 全屏
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CtrlBtn(glyph = "速", contentDescription = "倍速", onClick = onSpeed)
-                CtrlBtn(glyph = "↓", contentDescription = "下载", onClick = {})
-                CtrlBtn(glyph = "⛶", contentDescription = "全屏", onClick = {})
+                CtrlBtn(icon = Icons.Clock,        contentDescription = "倍速", onClick = onSpeed)
+                CtrlBtn(icon = Icons.DownloadInto, contentDescription = "下载", onClick = {})
+                CtrlBtn(icon = Icons.Fullscreen,   contentDescription = "全屏", onClick = {})
             }
         }
     }
@@ -452,7 +456,7 @@ private fun Progress(progress: Float, position: String, duration: String, onSeek
 
 @Composable
 private fun CtrlBtn(
-    glyph: String,
+    icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     isPrimary: Boolean = false,
@@ -466,10 +470,11 @@ private fun CtrlBtn(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = glyph,
-            style = StarVaultTheme.typography.subtitle,
-            color = if (isPrimary) Color(0xFF111111) else Color.White,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (isPrimary) Color(0xFF111111) else Color.White,
+            modifier = Modifier.size(if (isPrimary) 22.dp else 20.dp),
         )
     }
 }
@@ -745,7 +750,12 @@ private fun RelatedRow(video: RelatedVideo, onClick: () -> Unit) {
                 .background(Color(video.thumbColorHex)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "▶", style = t.caption, color = Color.White)
+            Icon(
+                imageVector = Icons.Play,
+                contentDescription = "播放",
+                tint = Color.White,
+                modifier = Modifier.size(14.dp),
+            )
             // duration 角标
             Box(
                 modifier = Modifier

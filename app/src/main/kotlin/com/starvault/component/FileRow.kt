@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.starvault.data.model.FileItem
@@ -80,7 +82,12 @@ fun FileRow(
                     .clickable(onClick = onMore),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "⋯", style = t.body, color = c.muted)
+                Icon(
+                    imageVector = Icons.More,
+                    contentDescription = "更多",
+                    tint = c.muted,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
     }
@@ -88,12 +95,11 @@ fun FileRow(
 
 /**
  * 40dp gradient thumbnail。颜色与 design HTML `.file-thumb.{folder|video|image|...}` 一一对应。
- * 中央渲染一行类型缩写（"F"/"V"/"I"/"A"/"D"/"Z"）作为 stub icon，
- * 等 Valkyrie 上线后用真 SVG 替换。
+ * 中央 icon 来自 [Icons]（Folder / Play / Image / Music / Doc / Archive）。
  */
 @Composable
 private fun FileThumb(type: FileType, modifier: Modifier = Modifier) {
-    val (brush, letter) = thumbBrushAndLetter(type)
+    val (brush, icon) = thumbBrushAndIcon(type)
     Box(
         modifier = modifier
             .size(40.dp)
@@ -101,18 +107,18 @@ private fun FileThumb(type: FileType, modifier: Modifier = Modifier) {
             .background(brush),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = letter,
-            style = StarVaultTheme.typography.micro,
-            color = Color.White,
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
 
-/** 根据文件类型映射 design HTML 中对应的 135° 渐变与 stub 图标字符。
- *  渐变方向 135° = 左上 → 右下，与 HTML `linear-gradient(135deg, …)` 一致。
- *  icon 暂用 unicode 字符（F/V/I/A/D/Z）作为占位；Valkyrie 上线后用真实 SVG 替换。 */
-private fun thumbBrushAndLetter(type: FileType): Pair<Brush, String> {
+/** 根据文件类型映射 design HTML 中对应的 135° 渐变与 SVG 图标。
+ *  渐变方向 135° = 左上 → 右下，与 HTML `linear-gradient(135deg, …)` 一致。*/
+private fun thumbBrushAndIcon(type: FileType): Pair<Brush, ImageVector> {
     val brush = when (type) {
         FileType.FOLDER -> Brush.linearGradient(
             colorStops = arrayOf(0f to Color(0xFF6B7280), 1f to Color(0xFF4B5563)),
@@ -150,16 +156,16 @@ private fun thumbBrushAndLetter(type: FileType): Pair<Brush, String> {
             end   = androidx.compose.ui.geometry.Offset(40f, 40f),
         )
     }
-    val letter = when (type) {
-        FileType.FOLDER -> "F"
-        FileType.VIDEO  -> "▶"
-        FileType.IMAGE  -> "I"
-        FileType.AUDIO  -> "♪"
-        FileType.DOC    -> "D"
-        FileType.ZIP    -> "Z"
-        FileType.OTHER  -> "?"
+    val icon = when (type) {
+        FileType.FOLDER -> Icons.Folder
+        FileType.VIDEO  -> Icons.Play
+        FileType.IMAGE  -> Icons.Image
+        FileType.AUDIO  -> Icons.Music
+        FileType.DOC    -> Icons.Doc
+        FileType.ZIP    -> Icons.Archive
+        FileType.OTHER  -> Icons.Folder
     }
-    return brush to letter
+    return brush to icon
 }
 
 /**

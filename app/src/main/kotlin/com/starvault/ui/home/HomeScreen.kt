@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -26,10 +27,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.starvault.component.FileRow
+import com.starvault.component.Icons
 import com.starvault.data.model.FileItem
 import com.starvault.data.model.FileTag
 import com.starvault.data.model.TagColor
@@ -99,10 +101,10 @@ fun HomeScreen(
 /**
  * 顶部 AppBar：左侧 22sp bold "首页"，右侧 3 个 40dp 圆形 icon-btn。
  *
- *  icon 占位（与 HTML .icon-btn 一一对应；Valkyrie 上线后用真实 SVG 替换）：
- *   - 扫描  ⌖   (U+2316 position indicator, 类 viewfinder)
- *   - 通知  ⌃   (U+2303 up arrowhead, 类钟形 / 通知)
- *   - 更多  ⋯   (midline horizontal ellipsis)
+ *  icon 来源（与 design HTML .icon-btn 一一对应，全部来自 [Icons]）：
+ *   - 扫描  [Icons.Scan]  — 4 角括号 + 中心横线
+ *   - 通知  [Icons.Bell]  — 钟形
+ *   - 更多  [Icons.More]  — 3 实心点
  */
 @Composable
 private fun HomeAppBar() {
@@ -121,18 +123,17 @@ private fun HomeAppBar() {
             color = c.fg,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconGlyph("⌖", "扫描")
-            IconGlyph("⌃", "通知")
-            IconGlyph("⋯", "更多")
+            IconBtn(icon = Icons.Scan, contentDescription = "扫描")
+            IconBtn(icon = Icons.Bell, contentDescription = "通知")
+            IconBtn(icon = Icons.More, contentDescription = "更多")
         }
     }
 }
 
-/** 40dp 圆形可点 icon 占位（hover bg 在 Phase 1 静态截图里不需要）。*/
+/** 40dp 圆形可点 icon 按钮（统一封装，AppBar / 顶部图标通用）。*/
 @Composable
-private fun IconGlyph(glyph: String, contentDescription: String) {
+private fun IconBtn(icon: ImageVector, contentDescription: String) {
     val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -140,11 +141,10 @@ private fun IconGlyph(glyph: String, contentDescription: String) {
             .clickable { /* stub */ },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = glyph,
-            style = t.subtitle,        // 16sp
-            color = c.fg,
-            textAlign = TextAlign.Center,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = c.fg,
             modifier = Modifier.size(20.dp),
         )
     }
@@ -153,11 +153,15 @@ private fun IconGlyph(glyph: String, contentDescription: String) {
 /* ───────────────────────────── Quick Grid ───────────────────────────── */
 
 /** 4 个快捷入口：最近/收藏/传输（带红点）/回收站。*/
-enum class HomeQuick(val label: String, val glyph: String, val showRecordDot: Boolean = false) {
-    RECENT("最近",  "◴"),                          // 时钟
-    STAR("收藏",   "★"),                          // 星
-    TRANSFERS("传输", "↑", showRecordDot = true),  // 上箭头 + 红点（与 HTML 一致）
-    TRASH("回收站", "↻"),                          // 顺时针回转
+enum class HomeQuick(
+    val label: String,
+    val icon: ImageVector,
+    val showRecordDot: Boolean = false,
+) {
+    RECENT("最近",   Icons.Clock),                         // 时钟
+    STAR("收藏",    Icons.Favorites),                     // 双 chevron
+    TRANSFERS("传输", Icons.Upload, showRecordDot = true), // 箭头入盒 + 红点
+    TRASH("回收站", Icons.Recycle),                       // 圆箭头
 }
 
 @Composable
@@ -199,10 +203,11 @@ private fun QuickCell(quick: HomeQuick, modifier: Modifier = Modifier, onClick: 
                 .border(1.dp, c.border, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = quick.glyph,
-                style = t.subtitle,    // 16sp
-                color = c.fg,
+            Icon(
+                imageVector = quick.icon,
+                contentDescription = quick.label,
+                tint = c.fg,
+                modifier = Modifier.size(20.dp),
             )
             // 传输入口：右上角 8dp 红点（HTML `.dot-rec::after`）
             if (quick.showRecordDot) {
@@ -283,7 +288,12 @@ private fun AllChip(isActive: Boolean, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (isActive) {
-            Text(text = "✓", style = t.caption, color = c.accentOn)
+            Icon(
+                imageVector = Icons.Check,
+                contentDescription = "已选",
+                tint = c.accentOn,
+                modifier = Modifier.size(10.dp),
+            )
         }
         Text(
             text = "全部",
@@ -343,7 +353,12 @@ private fun NewTagChip(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = "+", style = t.caption, color = c.fg)
+        Icon(
+            imageVector = Icons.Plus,
+            contentDescription = "新建",
+            tint = c.fg,
+            modifier = Modifier.size(12.dp),
+        )
         Text(text = "新建", style = t.caption, color = c.fg)
     }
 }
@@ -379,12 +394,19 @@ private fun SectionHead(onSortClick: () -> Unit) {
             style = t.caption.copy(letterSpacing = 0.04.em),
             color = c.muted,
         )
-        Text(
-            text = "排序：最近 ▾",
-            style = t.caption,
-            color = c.muted,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.clickable(onClick = onSortClick),
-        )
+        ) {
+            Text(text = "排序：最近", style = t.caption, color = c.muted)
+            Icon(
+                imageVector = Icons.ChevronDown,
+                contentDescription = "排序",
+                tint = c.muted,
+                modifier = Modifier.size(10.dp),
+            )
+        }
     }
 }
 
@@ -486,7 +508,12 @@ private fun HomeFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "+", style = t.title, color = c.accentOn)   // 20sp
+            Icon(
+                imageVector = Icons.Plus,
+                contentDescription = "新建",
+                tint = c.accentOn,
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 }

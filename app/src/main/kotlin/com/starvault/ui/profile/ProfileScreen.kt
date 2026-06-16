@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,10 +32,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starvault.component.Icons
 import com.starvault.theme.StarVaultTheme
 
 /**
@@ -109,14 +112,15 @@ private fun ProfileHeader(onWallet: () -> Unit, onSettings: () -> Unit) {
     ) {
         Text(text = "我的", style = t.large, color = c.fg)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(glyph = "◈", onClick = onWallet, contentDescription = "钱包")
-            IconBtn(glyph = "⚙", onClick = onSettings, contentDescription = "设置")
+            IconBtn(icon = Icons.Wallet, onClick = onWallet, contentDescription = "钱包")
+            IconBtn(icon = Icons.Settings, onClick = onSettings, contentDescription = "设置")
         }
     }
 }
 
 @Composable
-private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: String) {
+private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
+    val c = StarVaultTheme.colors
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -124,10 +128,11 @@ private fun IconBtn(glyph: String, onClick: () -> Unit, contentDescription: Stri
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = glyph,
-            style = StarVaultTheme.typography.subtitle,
-            color = StarVaultTheme.colors.fg,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = c.fg,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -280,10 +285,15 @@ private fun WallpaperCard(wallpaper: Wallpaper, onClick: () -> Unit) {
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(c.accent.copy(alpha = 0.10f)),
+                .background(c.bg),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "▣", style = t.subtitle, color = c.accent)
+            Icon(
+                imageVector = Icons.Storage,
+                contentDescription = null,
+                tint = c.fg,
+                modifier = Modifier.size(20.dp),
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,7 +318,12 @@ private fun WallpaperCard(wallpaper: Wallpaper, onClick: () -> Unit) {
             Spacer(Modifier.height(2.dp))
             Text(text = wallpaper.subText, style = t.caption, color = c.muted)
         }
-        Text(text = "›", style = t.body, color = c.muted)
+        Icon(
+            imageVector = Icons.ChevronRight,
+            contentDescription = null,
+            tint = c.muted,
+            modifier = Modifier.size(14.dp),
+        )
     }
 }
 
@@ -350,10 +365,11 @@ private fun SectionBox(rows: List<RowItem>, onRow: (RowItem) -> Unit) {
                         .background(if (r.iconAccent) c.accent.copy(alpha = 0.10f) else c.bg),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = r.iconGlyph,
-                        style = t.subtitle,
-                        color = if (r.iconAccent) c.accent else c.fg,
+                    Icon(
+                        imageVector = r.icon,
+                        contentDescription = null,
+                        tint = if (r.iconAccent) c.accent else c.fg,
+                        modifier = Modifier.size(16.dp),
                     )
                 }
                 Text(
@@ -374,7 +390,12 @@ private fun SectionBox(rows: List<RowItem>, onRow: (RowItem) -> Unit) {
                 } else if (r.rightText != null) {
                     Text(text = r.rightText, style = t.caption, color = c.muted)
                 }
-                Text(text = "›", style = t.body, color = c.muted)
+                Icon(
+                    imageVector = Icons.ChevronRight,
+                    contentDescription = null,
+                    tint = c.muted,
+                    modifier = Modifier.size(14.dp),
+                )
             }
         }
     }

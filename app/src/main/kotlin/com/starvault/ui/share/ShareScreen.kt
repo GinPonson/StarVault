@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.starvault.component.Icons
 import com.starvault.data.model.FileItem
 import com.starvault.theme.StarVaultTheme
 
@@ -130,7 +132,12 @@ fun ShareScreen(
                         .clickable(onClick = onClose),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(text = "✕", style = t.body, color = c.muted)
+                    Icon(
+                        imageVector = Icons.Close,
+                        contentDescription = "关闭",
+                        tint = c.muted,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -231,7 +238,12 @@ private fun FileCard(file: FileItem?) {
                 .background(Brush.linearGradient(listOf(Color(0xFF2F6FEB), Color(0xFF1D4ED8)))),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "▶", style = t.caption, color = Color.White)
+            Icon(
+                imageVector = Icons.Play,
+                contentDescription = "播放",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp),
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
