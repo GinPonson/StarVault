@@ -36,5 +36,10 @@ captures/
 *.swp
 *~
 
+# 一次性调试 / 工具输出
+.playwright-mcp/
+design_icons_baseline.png
+platform-*.zip
+
 # OS
 .DS_Store
