@@ -24,6 +24,8 @@ datastore = "1.1.1"
 paparazzi = "2.0.0-alpha04"
 junit = "4.13.2"
 turbine = "1.2.0"
+mockk = "1.13.13"
+kotlinx-coroutines-test = "1.9.0"
 
 [libraries]
 # Activity / Compose entry
@@ -59,6 +61,8 @@ datastore-preferences      = { module = "androidx.datastore:datastore-preference
 paparazzi                      = { module = "app.cash.paparazzi:paparazzi", version.ref = "paparazzi" }
 junit                          = { module = "junit:junit", version.ref = "junit" }
 turbine                        = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+mockk                          = { module = "io.mockk:mockk", version.ref = "mockk" }
+kotlinx-coroutines-test        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines-test" }
 
 [plugins]
 android-application            = { id = "com.android.application", version.ref = "agp" }

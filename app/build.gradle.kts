@@ -87,6 +87,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.turbine)
     testImplementation(libs.paparazzi)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 // Gradle 9 + Paparazzi 2.0.0-alpha04 兼容性：禁用 HTML test reports

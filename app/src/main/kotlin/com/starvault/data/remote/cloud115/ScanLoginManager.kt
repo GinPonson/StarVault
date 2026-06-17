@@ -82,7 +82,9 @@ class ScanLoginManager(
 
             Log.i(TAG, "QR ready, uid=${token.uid.take(8)}...")
             Result.success(QRCodeData(token.uid, token.time, token.sign, bitmap))
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // catch Throwable 而非 Exception：BitmapFactory.decodeByteArray 在无 Android runtime 时
+            // 抛 UnsatisfiedLinkError（Error 子类），也需要兜成 Result.failure
             Log.e(TAG, "getQRCode failed", e)
             Result.failure(e)
         }

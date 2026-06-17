@@ -29,7 +29,6 @@ class LoginScreenshotTest {
         StarVaultTheme {
             LoginScreen(
                 state = LoginUiState.Waiting(expireSeconds = 120),
-                onScanClick = {},
                 onRefresh = {},
             )
         }
@@ -43,7 +42,6 @@ class LoginScreenshotTest {
                     deviceName = "MacBook Pro 14",
                     expireSeconds = 87,
                 ),
-                onScanClick = {},
                 onRefresh = {},
             )
         }
@@ -53,7 +51,6 @@ class LoginScreenshotTest {
         StarVaultTheme {
             LoginScreen(
                 state = LoginUiState.LoggedIn(nickname = "何湘湘"),
-                onScanClick = {},
                 onRefresh = {},
             )
         }
@@ -63,7 +60,6 @@ class LoginScreenshotTest {
         StarVaultTheme {
             LoginScreen(
                 state = LoginUiState.Error(message = "扫码超时，请刷新二维码"),
-                onScanClick = {},
                 onRefresh = {},
             )
         }
