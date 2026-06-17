@@ -46,7 +46,13 @@ sealed interface AuthState {
  *  形式反映（map 时 uid/userName 暂用 EMPTY 占位，由 VM 收到 Success 触发 persistLogin 后
  *  stateIn 自动重发新值）。
  */
-class AuthRepository(
+/**
+ * 认证仓库：聚合 [Cloud115AuthStore]（持久态）+ [ScanLoginManager]（一次性登录流程）。
+ *
+ *  标 [open] 是为了 ProfileViewModelTest 可以继承 + 覆盖 [signOut] 注入失败行为。
+ *  生产代码不会继承此类，仅 ServiceLocator 直接 new。
+ */
+open class AuthRepository(
     private val authStore: Cloud115AuthStore,
     private val scanManager: ScanLoginManager,
     appScope: CoroutineScope,
@@ -80,7 +86,7 @@ class AuthRepository(
         )
     }
 
-    suspend fun signOut() {
+    open suspend fun signOut() {
         authStore.clear()
     }
 }

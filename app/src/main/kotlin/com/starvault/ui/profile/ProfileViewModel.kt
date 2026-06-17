@@ -1,27 +1,68 @@
 package com.starvault.ui.profile
 
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.starvault.component.Icons
+import com.starvault.core.ServiceLocator
+import com.starvault.data.repository.AuthRepository
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 
 /**
- * Profile 屏 ViewModel — Phase 1 mock。
+ * Profile 屏 ViewModel — Phase 1 mock + 115 signOut 接入。
  *
- * 真实接入 115 后：
- *  - storage        ← /user/space
- *  - wallpaper      ← 读 SharedPreferences 同步
- *  - commonRows / settingRows ← 静态配置
+ *  - storage / wallpaper / rows 仍是 mock（等 webapi 接入再做真数据）
+ *  - [onSignOut] 真接 [AuthRepository.signOut] → DataStore 清 cookies →
+ *    authState 切 Unauthenticated → NavHost 自动跳回 Login（无需手动 nav.popUp）
  *
- * design body 里没有 user / vip 段，所以也不在 state 里。
+ *  signOut 错误（极少见 — DataStore.clear 在磁盘满时可能抛 IOException）
+ *  通过 [effect] 发 [Effect.Error]，让 Route 端用 Snackbar 展示。
  */
-class ProfileViewModel : ViewModel() {
+class ProfileViewModel(
+    private val authRepository: AuthRepository = ServiceLocator.authRepository,
+) : ViewModel() {
+
+    companion object { private const val TAG = "ProfileViewModel" }
 
     private val _state = MutableStateFlow<ProfileUiState>(mockState())
     val state: StateFlow<ProfileUiState> = _state.asStateFlow()
+
+    /** 一次性事件（Snackbar / Toast）。
+     *  用 Channel(UNLIMITED) 而非 SharedFlow：UNLIMITED capacity + trySend 永不挂起；
+     *  且 Channel 是 queue 语义，subscriber 启动后从 queue 头取，不会像 SharedFlow replay=0 那样丢值。 */
+    private val _effect = Channel<Effect>(capacity = Int.MAX_VALUE, onBufferOverflow = BufferOverflow.SUSPEND)
+    val effect: Flow<Effect> = _effect.receiveAsFlow()
+
+    /** 退出登录：调 [AuthRepository.signOut] 清 cookies。NavHost 监听到 authState 切 Unauthenticated 会自动跳 Login。
+     *
+     *  实现为 suspend → 由 Route 端用 rememberCoroutineScope().launch 触发，UI 不阻塞。
+     */
+    suspend fun onSignOut() {
+        try {
+            authRepository.signOut()
+            // 成功：什么都不做，NavHost 自动跳
+        } catch (e: Throwable) {
+            // catch Throwable 而非 Exception：android.util.Log 在 JVM unit test 下会抛
+            // UnsatisfiedLinkError（Error 子类），绕过 Exception catch 导致测试 fail
+            // 这里用 println 兜底：生产靠 logcat，测试靠 stdout
+            println("[$TAG] signOut failed: ${e.message}")
+            _effect.trySend(Effect.Error(e.message ?: "退出登录失败"))
+        }
+    }
+
+    /** 一次性 UI 事件。 */
+    sealed interface Effect {
+        data class Error(val message: String) : Effect
+    }
 
     /* ─────────────────── mock state ─────────────────── */
 
