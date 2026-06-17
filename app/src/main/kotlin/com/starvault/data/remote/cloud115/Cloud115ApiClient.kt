@@ -66,6 +66,10 @@ object Cloud115ApiClient {
     fun userApiService(cookieProvider: () -> String?): UserApiService =
         webRetrofit(buildOkHttpClient(cookieProvider)).create(UserApiService::class.java)
 
+    /** webapi 域 [FileApiService] 工厂（文件列表 /files）。共用同一个 OkHttpClient。 */
+    fun fileApiService(cookieProvider: () -> String?): FileApiService =
+        webRetrofit(buildOkHttpClient(cookieProvider)).create(FileApiService::class.java)
+
     /**
      * 浏览器伪装头：Referer/Origin/User-Agent 全用 115 域名，
      * 否则 115 部分端点返回 state=false + 跨域拦截。

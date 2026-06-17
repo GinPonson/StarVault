@@ -3,10 +3,12 @@ package com.starvault.core
 import android.content.Context
 import com.starvault.data.local.auth.Cloud115AuthStore
 import com.starvault.data.remote.cloud115.Cloud115ApiClient
+import com.starvault.data.remote.cloud115.FileApiService
 import com.starvault.data.remote.cloud115.ScanApiService
 import com.starvault.data.remote.cloud115.ScanLoginManager
 import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.repository.AuthRepository
+import com.starvault.data.repository.FilesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 
@@ -29,6 +31,9 @@ object ServiceLocator {
     lateinit var userApi: UserApiService
         private set
 
+    lateinit var filesApi: FileApiService
+        private set
+
     lateinit var scanManager: ScanLoginManager
         private set
 
@@ -42,12 +47,16 @@ object ServiceLocator {
     lateinit var authRepository: AuthRepository
         private set
 
+    lateinit var filesRepository: FilesRepository
+        private set
+
     fun init(context: Context) {
         val appContext = context.applicationContext
         authStore = Cloud115AuthStore(appContext)
         val cookieProvider = authStore::cookiesBlocking
         scanApi = Cloud115ApiClient.scanApiService(cookieProvider = cookieProvider)
         userApi = Cloud115ApiClient.userApiService(cookieProvider = cookieProvider)
+        filesApi = Cloud115ApiClient.fileApiService(cookieProvider = cookieProvider)
         scanManager = ScanLoginManager(api = scanApi, authStore = authStore)
         authRepository = AuthRepository(
             authStore = authStore,
@@ -55,5 +64,6 @@ object ServiceLocator {
             userApi = userApi,
             appScope = appScope,
         )
+        filesRepository = FilesRepository(api = filesApi)
     }
 }
