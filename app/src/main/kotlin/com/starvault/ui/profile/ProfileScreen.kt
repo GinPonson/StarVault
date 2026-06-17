@@ -44,8 +44,8 @@ import com.starvault.theme.StarVaultTheme
  * Profile 屏（严格 1:1 对应 design/05-profile.html 的 body 段）。
  *
  * 整体结构（垂直滚动，6 段）：
- *   ┌─ Header       "我的" + 钱包/设置 icon-btn
- *   ├─ StorageCard  132dp 环 + 71% + 5 行 breakdown + 剩余/扩容
+ *   ┌─ Header       "我的" + 设置 icon-btn
+ *   ├─ StorageCard  132dp 环 + 71% + 5 行 breakdown + 剩余/回收站
  *   ├─ WpCard       壁纸引擎 + off 徽 + 单行 sub
  *   ├─ Section      3 row（我的分享 / 回收站 / 设备管理）
  *   ├─ Section      3 row（隐私 / 外观 / 帮助）
@@ -53,13 +53,13 @@ import com.starvault.theme.StarVaultTheme
  *
  * 设计历史：早期版本错误地把头像 UserCard 和 VIP 卡加进来了，但 design body 里没有
  * 那两段（CSS 定义了但未引用）。当前 6 段是 design 真有的。
+ *
+ * 钱包入口、扩容入口已删除（design 不展示，也不在 scope 内）。
  */
 @Composable
 fun ProfileScreen(
     state: ProfileUiState,
-    onWallet: () -> Unit = {},
     onSettings: () -> Unit = {},
-    onUpgrade: () -> Unit = {},
     onRow: (RowItem) -> Unit = {},
     onWallpaper: () -> Unit = {},
     onLogout: () -> Unit = {},
@@ -84,8 +84,8 @@ fun ProfileScreen(
                     .background(c.bg)
                     .verticalScroll(rememberScrollState()),
             ) {
-                ProfileHeader(onWallet = onWallet, onSettings = onSettings)
-                StorageCard(storage = state.storage, onUpgrade = onUpgrade)
+                ProfileHeader(onSettings = onSettings)
+                StorageCard(storage = state.storage)
                 WallpaperCard(wallpaper = state.wallpaper, onClick = onWallpaper)
                 SectionBox(rows = state.commonRows, onRow = onRow)
                 SectionBox(rows = state.settingRows, onRow = onRow)
@@ -99,7 +99,7 @@ fun ProfileScreen(
 /* ───────────────────── Header ───────────────────── */
 
 @Composable
-private fun ProfileHeader(onWallet: () -> Unit, onSettings: () -> Unit) {
+private fun ProfileHeader(onSettings: () -> Unit) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
     Row(
@@ -111,10 +111,7 @@ private fun ProfileHeader(onWallet: () -> Unit, onSettings: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = "我的", style = t.large, color = c.fg)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(icon = Icons.Wallet, onClick = onWallet, contentDescription = "钱包")
-            IconBtn(icon = Icons.Settings, onClick = onSettings, contentDescription = "设置")
-        }
+        IconBtn(icon = Icons.Settings, onClick = onSettings, contentDescription = "设置")
     }
 }
 
@@ -142,7 +139,7 @@ private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: 
 /* ───────────────────── StorageCard ───────────────────── */
 
 @Composable
-private fun StorageCard(storage: Storage, onUpgrade: () -> Unit) {
+private fun StorageCard(storage: Storage) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
     Column(
@@ -203,14 +200,6 @@ private fun StorageCard(storage: Storage, onUpgrade: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 Text(text = "回收站 ", style = t.caption, color = c.muted)
                 Text(text = storage.trashGb, style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = c.fg)
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.clickable(onClick = onUpgrade),
-            ) {
-                Text(text = "扩容", style = t.body, color = c.accent)
-                Text(text = "→", style = t.body, color = c.accent)
             }
         }
     }

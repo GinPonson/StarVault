@@ -49,9 +49,7 @@ fun ProfileRoute(
     Box(modifier = Modifier.fillMaxSize()) {
         ProfileScreen(
             state = state,
-            onWallet = { /* TODO: 弹钱包面板 */ },
             onSettings = { /* TODO: 跳设置 */ },
-            onUpgrade = { /* TODO: 跳扩容 */ },
             onRow = { /* TODO: 按 row.label 决定 */ },
             onWallpaper = { nav.navigate(com.starvault.nav.Route.Wallpaper) },
             onLogout = { scope.launch { vm.onSignOut() } },
