@@ -78,6 +78,10 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.savedstate)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.datastore.preferences)
+    implementation(libs.okhttp)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.ser)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

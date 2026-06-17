@@ -12,6 +12,14 @@ lifecycle = "2.10.0"
 # Kotlin libs
 kotlinx-serialization = "1.7.3"
 
+# Network
+okhttp = "4.12.0"
+retrofit = "2.11.0"
+retrofit-kotlinx-serialization-converter = "1.0.0"
+
+# Local storage
+datastore = "1.1.1"
+
 # Testing
 paparazzi = "2.0.0-alpha04"
 junit = "4.13.2"
@@ -40,6 +48,12 @@ lifecycle-runtime-compose      = { module = "androidx.lifecycle:lifecycle-runtim
 
 # JSON serialization for fixtures
 kotlinx-serialization-json     = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+# Network
+okhttp                     = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+retrofit                   = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+retrofit-kotlinx-ser       = { module = "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter", version.ref = "retrofit-kotlinx-serialization-converter" }
+datastore-preferences      = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
 # Testing
 paparazzi                      = { module = "app.cash.paparazzi:paparazzi", version.ref = "paparazzi" }
