@@ -65,16 +65,24 @@ class ProfileViewModel(
 
     private fun applyUserInfo(userInfo: UserInfo) {
         val current = _state.value as? ProfileUiState.Success ?: return
-        val space = userInfo.space
-        val totalBytes = space.allSpace
-        val usedPct = if (totalBytes > 0L) ((space.usedSpace * 100L) / totalBytes).toInt().coerceIn(0, 100) else 0
+        val ss = userInfo.space.spaceSummury
+        // 115 返回 size 是 Double（可能含小数）；usedPct 用 percent 字段更准（115 已算好）
+        val totalBytes = ss.allTotal.size.toLong()
+        val usedBytes = ss.files.size.toLong()      // 用户已用 = files
+        val remainBytes = ss.allRemain.size.toLong()
+        val trashBytes = ss.rb.size.toLong()
+        val usedPct = if (ss.allTotal.percent > 0) {
+            // 115 percent=1 表示「总容量」基数；files.percent 是 files 占 all_total 的比例
+            // 直接用 files.percent * 100（files.percent 是 0~1 的小数）更准
+            (ss.files.percent * 100).toInt().coerceIn(0, 100)
+        } else if (totalBytes > 0L) ((usedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100) else 0
         _state.value = current.copy(
             storage = current.storage.copy(
                 userName = userInfo.base.userName.orEmpty(),
                 usedPct = usedPct,
                 totalLabel = formatBytes(totalBytes),
-                remainingGb = formatBytes(space.remainSpace),
-                trashGb = formatBytes(space.trashSize),
+                remainingGb = formatBytes(remainBytes),
+                trashGb = formatBytes(trashBytes),
                 // breakdowns 不变，breakdownsIsMock 保持 true
             ),
         )

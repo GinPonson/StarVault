@@ -81,7 +81,7 @@ class ScanLoginManager(
             if (!tokenResp.isSuccessful) return@withContext Result.failure(
                 IllegalStateException("GET /qrcode HTTP ${tokenResp.code()}")
             )
-            val token = tokenResp.body()?.takeIf { it.state == 1 }?.data
+            val token = tokenResp.body()?.takeIf { it.isOk }?.data
                 ?: return@withContext Result.failure(IllegalStateException("GET /qrcode 业务失败"))
 
             val bitmap = downloadQrBitmap(token.uid)
@@ -133,7 +133,7 @@ class ScanLoginManager(
                     emit(ScanStatus.Error("HTTP ${resp.code()}"))
                     delay(POLLING_INTERVAL_MS); continue
                 }
-                val data = resp.body()?.takeIf { it.state == 1 }?.data
+                val data = resp.body()?.takeIf { it.isOk }?.data
                 if (data == null) {
                     emit(ScanStatus.Error(resp.body()?.message ?: "查询失败"))
                     delay(POLLING_INTERVAL_MS); continue
@@ -195,7 +195,7 @@ class ScanLoginManager(
             Log.w(TAG, "getLoginResult HTTP ${resp.code()}")
             return null
         }
-        val data = resp.body()?.takeIf { it.state == 1 }?.data
+        val data = resp.body()?.takeIf { it.isOk }?.data
             ?: return null
         val cookieMap = data.cookie?.takeIf { it.isNotEmpty() } ?: return null
         val cookies = cookieMap.entries.joinToString("; ") { (k, v) -> "$k=$v" }

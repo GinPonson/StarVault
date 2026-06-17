@@ -118,14 +118,14 @@ private fun fakeUserApi(): UserApiService = mockk(relaxed = true) {
     // applyUserInfo 用全 0 数据更新 state（不影响 signOut 行为断言）。
     coEvery { getUserBaseInfo() } returns retrofit2.Response.success(
         com.starvault.data.remote.cloud115.ApiEnvelope(
-            state = 1,
+            state = kotlinx.serialization.json.JsonPrimitive(1),
             data = com.starvault.data.remote.cloud115.UserBaseInfoData(userId = 0L, userName = null, userFace = null),
         )
     )
     coEvery { getSpaceSummury() } returns retrofit2.Response.success(
-        com.starvault.data.remote.cloud115.ApiEnvelope(
-            state = 1,
-            data = com.starvault.data.remote.cloud115.SpaceSummuryData(),
+        com.starvault.data.remote.cloud115.SpaceSummuryResponse(
+            state = kotlinx.serialization.json.JsonPrimitive(1),
+            spaceSummury = com.starvault.data.remote.cloud115.SpaceSummuryInner(),
         )
     )
 }

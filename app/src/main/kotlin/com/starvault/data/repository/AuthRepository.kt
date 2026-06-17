@@ -5,6 +5,7 @@ import com.starvault.data.remote.cloud115.ScanLoginManager
 import com.starvault.data.remote.cloud115.SpaceSummuryData
 import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.remote.cloud115.UserBaseInfoData
+import com.starvault.data.remote.cloud115.isOk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -128,16 +129,16 @@ open class AuthRepository(
         val resp = userApi.getUserBaseInfo()
         if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
         val env = resp.body() ?: throw IllegalStateException("empty body")
-        if (env.state != 1) throw IllegalStateException(env.message ?: "state=${env.state}")
+        if (!env.isOk) throw IllegalStateException(env.error ?: env.message ?: "state=${env.state} errno=${env.errno}")
         return env.data ?: throw IllegalStateException("data is null")
     }
 
     private suspend fun fetchSpaceSummury(): SpaceSummuryData {
         val resp = userApi.getSpaceSummury()
         if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-        val env = resp.body() ?: throw IllegalStateException("empty body")
-        if (env.state != 1) throw IllegalStateException(env.message ?: "state=${env.state}")
-        return env.data ?: throw IllegalStateException("data is null")
+        val r = resp.body() ?: throw IllegalStateException("empty body")
+        if (!r.isOk) throw IllegalStateException(r.error ?: "state=${r.state} errno=${r.errno}")
+        return SpaceSummuryData(spaceSummury = r.spaceSummury, typeSummury = r.typeSummury)
     }
 }
 

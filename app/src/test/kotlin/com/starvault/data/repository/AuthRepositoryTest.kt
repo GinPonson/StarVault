@@ -5,6 +5,9 @@ import com.starvault.data.local.auth.Cloud115AuthStore
 import com.starvault.data.remote.cloud115.ApiEnvelope
 import com.starvault.data.remote.cloud115.ScanLoginManager
 import com.starvault.data.remote.cloud115.SpaceSummuryData
+import com.starvault.data.remote.cloud115.SpaceSummuryInner
+import com.starvault.data.remote.cloud115.SpaceSummuryResponse
+import com.starvault.data.remote.cloud115.SizeInfo
 import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.remote.cloud115.UserBaseInfoData
 import io.mockk.coEvery
@@ -18,6 +21,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.JsonPrimitive
 import retrofit2.Response
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -56,16 +60,16 @@ class AuthRepositoryTest {
         val mgr = mockk<ScanLoginManager>(relaxed = true)
         val userApi = mockk<UserApiService>(relaxed = true)
         coEvery { userApi.getUserBaseInfo() } returns Response.success(
-            ApiEnvelope(state = 1, data = UserBaseInfoData(userId = 12345L, userName = "alice", userFace = null))
+            ApiEnvelope(state = JsonPrimitive(1), data = UserBaseInfoData(userId = 12345L, userName = "alice", userFace = null))
         )
         coEvery { userApi.getSpaceSummury() } returns Response.success(
-            ApiEnvelope(
-                state = 1,
-                data = SpaceSummuryData(
-                    allSpace = 1_099_511_627_776L,   // 1 TB
-                    usedSpace = 780_437_421_056L,    // 71%
-                    remainSpace = 319_074_206_720L,  // 29%
-                    trashSize = 2_254_857_216L,      // 2.1 GB
+            SpaceSummuryResponse(
+                state = JsonPrimitive(true),
+                spaceSummury = SpaceSummuryInner(
+                    allTotal = SizeInfo(size = 1_099_511_627_776.0, sizeFormat = "1.0 TB", percent = 1.0),    // 1 TB
+                    allRemain = SizeInfo(size = 319_074_206_720.0, sizeFormat = "297.0 GB", percent = 0.29),  // 29%
+                    files = SizeInfo(size = 780_437_421_056.0, sizeFormat = "726.3 GB", percent = 0.71),       // 71%
+                    rb = SizeInfo(size = 2_254_857_216.0, sizeFormat = "2.1 GB", percent = 0.0),               // 2.1 GB
                 ),
             )
         )
@@ -77,8 +81,8 @@ class AuthRepositoryTest {
         val info = r.getOrThrow()
         assertEquals(12345L, info.base.userId)
         assertEquals("alice", info.base.userName)
-        assertEquals(1_099_511_627_776L, info.space.allSpace)
-        assertEquals(780_437_421_056L, info.space.usedSpace)
+        assertEquals(1_099_511_627_776L, info.space.spaceSummury.allTotal.size.toLong())
+        assertEquals(780_437_421_056L, info.space.spaceSummury.files.size.toLong())
     }
 
     @Test
@@ -88,7 +92,13 @@ class AuthRepositoryTest {
         val userApi = mockk<UserApiService>(relaxed = true)
         coEvery { userApi.getUserBaseInfo() } throws RuntimeException("network down")
         coEvery { userApi.getSpaceSummury() } returns Response.success(
-            ApiEnvelope(state = 1, data = SpaceSummuryData(allSpace = 1024L, usedSpace = 512L))
+            SpaceSummuryResponse(
+                state = JsonPrimitive(true),
+                spaceSummury = SpaceSummuryInner(
+                    allTotal = SizeInfo(size = 1024.0, sizeFormat = "1.0 KB", percent = 1.0),
+                    files = SizeInfo(size = 512.0, sizeFormat = "512 B", percent = 0.5),
+                ),
+            )
         )
 
         val repo = AuthRepository(store, mgr, userApi, TestScope(UnconfinedTestDispatcher()))
@@ -96,8 +106,8 @@ class AuthRepositoryTest {
 
         assertTrue(r.isSuccess)
         val info = r.getOrThrow()
-        assertEquals(0L, info.base.userId)              // base 全 0 / null
-        assertEquals(1024L, info.space.allSpace)         // space 正常
+        assertEquals(0L, info.base.userId)                              // base 全 0 / null
+        assertEquals(1024L, info.space.spaceSummury.allTotal.size.toLong())  // space 正常
     }
 
     @Test

@@ -7,6 +7,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,7 +23,7 @@ class ScanLoginManagerTest {
     fun `getQRCode returns failure when token business-state is false`() = runTest {
         // 走 "state=false 业务失败" 快速路径，避免触发 Log.e（android.util.Log 静态初始化需要 Android runtime）
         coEvery { api.getScanToken() } returns Response.success(
-            ApiEnvelope(state = 0, code = 10001, message = "rate limited", data = null)
+            ApiEnvelope(state = JsonPrimitive(0), code = 10001, message = "rate limited", data = null)
         )
         val r = manager.getQRCode()
         assertTrue(r.isFailure)
@@ -31,7 +32,7 @@ class ScanLoginManagerTest {
     @Test
     fun `signIn emits Cancelled when status=-1`() = runTest {
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = 1, data = QrStatusData(status = -1))
+            ApiEnvelope(state = JsonPrimitive(1), data = QrStatusData(status = -1))
         )
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
         val events = manager.signIn(qr, deadline = System.currentTimeMillis() + 5_000).toList()
@@ -41,7 +42,7 @@ class ScanLoginManagerTest {
     @Test
     fun `signIn emits Timeout when deadline passed`() = runTest {
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = 1, data = QrStatusData(status = 0))
+            ApiEnvelope(state = JsonPrimitive(1), data = QrStatusData(status = 0))
         )
         // 设 deadline=now → 立即超时
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
@@ -52,7 +53,7 @@ class ScanLoginManagerTest {
     @Test
     fun `signIn emits Scanned without calling getLoginResult when status=1`() = runTest {
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = 1, data = QrStatusData(status = 1))
+            ApiEnvelope(state = JsonPrimitive(1), data = QrStatusData(status = 1))
         )
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
         // 短 deadline 强制让 flow 在几次 poll 后超时退出（status=1 不会自己终止 loop）
@@ -67,12 +68,12 @@ class ScanLoginManagerTest {
     fun `signIn emits Success with cookies from data-cookie when status=2`() = runTest {
         // /get/status/ 第一次回 status=1，第二次回 status=2 → 触发 POST 拿 cookies
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returnsMany listOf(
-            Response.success(ApiEnvelope(state = 1, data = QrStatusData(status = 1))),
-            Response.success(ApiEnvelope(state = 1, data = QrStatusData(status = 2))),
+            Response.success(ApiEnvelope(state = JsonPrimitive(1), data = QrStatusData(status = 1))),
+            Response.success(ApiEnvelope(state = JsonPrimitive(1), data = QrStatusData(status = 2))),
         )
         coEvery { api.getLoginResult("qandroid", "qandroid", "u1") } returns Response.success(
             ApiEnvelope(
-                state = 1,
+                state = JsonPrimitive(1),
                 data = LoginResultData(
                     cookie = mapOf(
                         "UID" to "16757789_M1_1781700682",
@@ -104,10 +105,10 @@ class ScanLoginManagerTest {
     fun `signIn emits Error when status=2 but cookie is missing`() = runTest {
         // status=2 时 115 返回但 cookies 字段空（极少见，IP 异常等场景）→ 应当 Error 不 Success
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returnsMany listOf(
-            Response.success(ApiEnvelope(state = 1, data = QrStatusData(status = 2))),
+            Response.success(ApiEnvelope(state = JsonPrimitive(1), data = QrStatusData(status = 2))),
         )
         coEvery { api.getLoginResult("qandroid", "qandroid", "u1") } returns Response.success(
-            ApiEnvelope(state = 1, data = LoginResultData(cookie = null))
+            ApiEnvelope(state = JsonPrimitive(1), data = LoginResultData(cookie = null))
         )
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
         val events = manager.signIn(qr, deadline = System.currentTimeMillis() + 5_000).toList()
