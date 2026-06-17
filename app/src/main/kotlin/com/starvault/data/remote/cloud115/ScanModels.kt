@@ -67,3 +67,44 @@ data class LoginResultData(
     @SerialName("user_name") val userName: String? = null,
     val device: String? = null,
 )
+
+/* ─────────────────── Profile / Storage webapi DTO ─────────────────── */
+
+/**
+ * GET /users/userinfo 响应 data（115 网页端「我的」页同源接口）。
+ *
+ *  关键字段：
+ *    - userId   : Long     115 user_id（与扫码落 DataStore 的 uid 一致，用于交叉校验）
+ *    - userName : String?  昵称（StorageCard 标题用）
+ *    - userFace : String?  头像 URL（中等尺寸；Profile 屏暂不展示，先存）
+ *
+ *  115 实际回包可能还有 vip_info / rt_space_info 等冗余字段，
+ *  [Json.ignoreUnknownKeys] 配在 [Cloud115ApiClient] 里会安全忽略。
+ */
+@Serializable
+data class UserBaseInfoData(
+    @SerialName("user_id") val userId: Long = 0L,
+    @SerialName("user_name") val userName: String? = null,
+    @SerialName("user_face") val userFace: String? = null,
+)
+
+/**
+ * GET /user/space_summury 响应 data（**注意 115 端点路径带拼写错误 summury**）。
+ *
+ *  字段（全部字节数，调用方按 1 GB = 1024^3 bytes 换算成可读字符串）：
+ *    - allSpace   : Long  总容量
+ *    - usedSpace  : Long  已用
+ *    - remainSpace: Long  剩余
+ *    - trashSize  : Long  回收站
+ *
+ *  注：115 不返回 5 类 breakdown（视频/图片/文档/音频/其他）——design HTML 的 breakdown
+ *  是 mock。Profile 屏切真数据时 breakdown 区块要么隐藏，要么继续展示 mock 并打标。
+ *  当前 ProfileUiState.Storage 保留 breakdowns 字段，前端根据 isMock 决定渲染。
+ */
+@Serializable
+data class SpaceSummuryData(
+    @SerialName("all_space") val allSpace: Long = 0L,
+    @SerialName("used_space") val usedSpace: Long = 0L,
+    @SerialName("remain_space") val remainSpace: Long = 0L,
+    @SerialName("trash_size") val trashSize: Long = 0L,
+)

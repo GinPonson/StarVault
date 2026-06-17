@@ -5,6 +5,7 @@ import com.starvault.data.local.auth.Cloud115AuthStore
 import com.starvault.data.remote.cloud115.Cloud115ApiClient
 import com.starvault.data.remote.cloud115.ScanApiService
 import com.starvault.data.remote.cloud115.ScanLoginManager
+import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.repository.AuthRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +26,9 @@ object ServiceLocator {
     lateinit var scanApi: ScanApiService
         private set
 
+    lateinit var userApi: UserApiService
+        private set
+
     lateinit var scanManager: ScanLoginManager
         private set
 
@@ -41,11 +45,14 @@ object ServiceLocator {
     fun init(context: Context) {
         val appContext = context.applicationContext
         authStore = Cloud115AuthStore(appContext)
-        scanApi = Cloud115ApiClient.scanApiService(cookieProvider = authStore::cookiesBlocking)
+        val cookieProvider = authStore::cookiesBlocking
+        scanApi = Cloud115ApiClient.scanApiService(cookieProvider = cookieProvider)
+        userApi = Cloud115ApiClient.userApiService(cookieProvider = cookieProvider)
         scanManager = ScanLoginManager(api = scanApi, authStore = authStore)
         authRepository = AuthRepository(
             authStore = authStore,
             scanManager = scanManager,
+            userApi = userApi,
             appScope = appScope,
         )
     }

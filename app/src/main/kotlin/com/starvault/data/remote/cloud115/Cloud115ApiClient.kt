@@ -11,13 +11,15 @@ import java.util.concurrent.TimeUnit
 /**
  * 115 网盘 HTTP 客户端工厂。
  *
- *  1 个 base URL（扫码三件套）：
- *  - scanBaseUrl : qrcodeapi.115.com/  (扫码 + 后续 OpenAPI 留扩展位)
+ *  2 个 base URL（按用途分）：
+ *  - SCAN_BASE_URL : qrcodeapi.115.com/  (扫码 + 后续 OpenAPI)
+ *  - WEB_BASE_URL  : webapi.115.com/     (用户信息 / 空间 / 文件列表等)
  *
  *  共用一个 OkHttpClient：30s 超时 + 浏览器伪装 UA/Referer/Origin + Cookie 注入。
  *  Cookie 由 [CookieInterceptor] 在请求时从 [com.starvault.data.local.auth.Cloud115AuthStore] 实时读。
  *
- *  webapi（文件列表等）留 [WEB_BASE_URL] 常量，Phase 3+ 接 WebApiService 时复用。
+ *  使用方式：每个 base URL 一个 [Retrofit] 实例，但 [OkHttpClient] 复用
+ *  （拦截器 / 连接池 / 线程池共享）。
  */
 object Cloud115ApiClient {
 
@@ -47,6 +49,22 @@ object Cloud115ApiClient {
 
     fun scanApiService(cookieProvider: () -> String?): ScanApiService =
         scanRetrofit(buildOkHttpClient(cookieProvider)).create(ScanApiService::class.java)
+
+    /**
+     * webapi 域 Retrofit 工厂（用户信息 / 空间 / 后续文件列表）。
+     *
+     * 共用同一个 [OkHttpClient]（浏览器伪装头 + Cookie 注入），仅替换 baseUrl。
+     *  [UserApiService] 由 [webApiService] 在创建接口实例时调用。
+     */
+    fun webRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl(WEB_BASE_URL)
+        .client(client)
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
+
+    /** webapi 域 [UserApiService] 工厂（用户信息 / 空间概要）。 */
+    fun userApiService(cookieProvider: () -> String?): UserApiService =
+        webRetrofit(buildOkHttpClient(cookieProvider)).create(UserApiService::class.java)
 
     /**
      * 浏览器伪装头：Referer/Origin/User-Agent 全用 115 域名，

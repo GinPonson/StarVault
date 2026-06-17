@@ -2,6 +2,7 @@ package com.starvault.ui.profile
 
 import com.starvault.data.local.auth.Cloud115AuthStore
 import com.starvault.data.remote.cloud115.ScanLoginManager
+import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.repository.AuthRepository
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -95,6 +96,7 @@ private class FakeAuthRepository(
 ) : AuthRepository(
     authStore = fakeAuthStore(),
     scanManager = fakeScanManager(),
+    userApi = fakeUserApi(),
     appScope = TestScope(),
 ) {
     val signOutCalls = AtomicInteger(0)
@@ -109,3 +111,21 @@ private fun fakeAuthStore(): Cloud115AuthStore = mockk(relaxed = true) {
 }
 
 private fun fakeScanManager(): ScanLoginManager = mockk(relaxed = true)
+
+private fun fakeUserApi(): UserApiService = mockk(relaxed = true) {
+    // VM init { loadUserInfo() } 触发；为避免 tests 收到意外的 Effect.Error 噪声，
+    // 让两个端点返回空 envelope（state=1 + data=全 0/null），runCatching 不会抛，
+    // applyUserInfo 用全 0 数据更新 state（不影响 signOut 行为断言）。
+    coEvery { getUserBaseInfo() } returns retrofit2.Response.success(
+        com.starvault.data.remote.cloud115.ApiEnvelope(
+            state = 1,
+            data = com.starvault.data.remote.cloud115.UserBaseInfoData(userId = 0L, userName = null, userFace = null),
+        )
+    )
+    coEvery { getSpaceSummury() } returns retrofit2.Response.success(
+        com.starvault.data.remote.cloud115.ApiEnvelope(
+            state = 1,
+            data = com.starvault.data.remote.cloud115.SpaceSummuryData(),
+        )
+    )
+}

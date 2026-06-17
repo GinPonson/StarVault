@@ -1,6 +1,5 @@
 package com.starvault.ui.profile
 
-import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
@@ -8,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.starvault.component.Icons
 import com.starvault.core.ServiceLocator
 import com.starvault.data.repository.AuthRepository
+import com.starvault.data.repository.UserInfo
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -18,13 +18,18 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
- * Profile 屏 ViewModel — Phase 1 mock + 115 signOut 接入。
+ * Profile 屏 ViewModel — mock + webapi /users/userinfo + /user/space_summury 接入。
  *
- *  - storage / wallpaper / rows 仍是 mock（等 webapi 接入再做真数据）
+ *  - storage.usedPct / totalLabel / remainingGb / trashGb 来自 webapi（真）
+ *  - storage.userName 来自 webapi（真）→ StorageCard 标题展示
+ *  - storage.breakdowns 仍是 mock（115 不返回 5 类分布；breakdownsIsMock=true 标识）
+ *  - storage.releaseDate 仍是写死字符串（115 不返回「释放日」）
+ *  - wallpaper / commonRows / settingRows 仍是 mock
+ *
  *  - [onSignOut] 真接 [AuthRepository.signOut] → DataStore 清 cookies →
  *    authState 切 Unauthenticated → NavHost 自动跳回 Login（无需手动 nav.popUp）
  *
- *  signOut 错误（极少见 — DataStore.clear 在磁盘满时可能抛 IOException）
+ *  signOut / fetchUserInfo 错误（极少见 — DataStore.clear 抛 IOException / webapi 失败）
  *  通过 [effect] 发 [Effect.Error]，让 Route 端用 Snackbar 展示。
  */
 class ProfileViewModel(
@@ -41,6 +46,55 @@ class ProfileViewModel(
      *  且 Channel 是 queue 语义，subscriber 启动后从 queue 头取，不会像 SharedFlow replay=0 那样丢值。 */
     private val _effect = Channel<Effect>(capacity = Int.MAX_VALUE, onBufferOverflow = BufferOverflow.SUSPEND)
     val effect: Flow<Effect> = _effect.receiveAsFlow()
+
+    init {
+        loadUserInfo()
+    }
+
+    /** 从 webapi 拉 user info + space summury，merge 进 mock state。失败 fallback mock + Snackbar。 */
+    private fun loadUserInfo() {
+        viewModelScope.launch {
+            authRepository.fetchUserInfo()
+                .onSuccess { userInfo -> applyUserInfo(userInfo) }
+                .onFailure { e ->
+                    println("[$TAG] fetchUserInfo failed: ${e.message}")
+                    _effect.trySend(Effect.Error(e.message ?: "用户信息加载失败"))
+                }
+        }
+    }
+
+    private fun applyUserInfo(userInfo: UserInfo) {
+        val current = _state.value as? ProfileUiState.Success ?: return
+        val space = userInfo.space
+        val totalBytes = space.allSpace
+        val usedPct = if (totalBytes > 0L) ((space.usedSpace * 100L) / totalBytes).toInt().coerceIn(0, 100) else 0
+        _state.value = current.copy(
+            storage = current.storage.copy(
+                userName = userInfo.base.userName.orEmpty(),
+                usedPct = usedPct,
+                totalLabel = formatBytes(totalBytes),
+                remainingGb = formatBytes(space.remainSpace),
+                trashGb = formatBytes(space.trashSize),
+                // breakdowns 不变，breakdownsIsMock 保持 true
+            ),
+        )
+    }
+
+    /** 字节数 → "1.2 GB" / "512.0 MB" 风格（1 位小数）。 */
+    private fun formatBytes(bytes: Long): String {
+        if (bytes <= 0L) return "0 B"
+        val kb = 1024L
+        val mb = kb * 1024
+        val gb = mb * 1024
+        val tb = gb * 1024
+        return when {
+            bytes >= tb -> "%.1f TB".format(bytes.toDouble() / tb)
+            bytes >= gb -> "%.1f GB".format(bytes.toDouble() / gb)
+            bytes >= mb -> "%.1f MB".format(bytes.toDouble() / mb)
+            bytes >= kb -> "%.1f KB".format(bytes.toDouble() / kb)
+            else -> "$bytes B"
+        }
+    }
 
     /** 退出登录：调 [AuthRepository.signOut] 清 cookies。NavHost 监听到 authState 切 Unauthenticated 会自动跳 Login。
      *
@@ -80,6 +134,8 @@ class ProfileViewModel(
             ),
             remainingGb = "761.6 GB",
             trashGb = "2.1 GB",
+            userName = "",
+            breakdownsIsMock = true,
         )
         val wallpaper = Wallpaper(
             enabled = false,

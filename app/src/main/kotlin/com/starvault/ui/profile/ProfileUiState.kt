@@ -38,7 +38,13 @@ sealed interface ProfileUiState {
 
 /* ───────────────────── 子模型 ───────────────────── */
 
-/** 存储大卡：环 + 5 条 breakdown + 剩余。 */
+/** 存储大卡：环 + 5 条 breakdown + 剩余。
+ *
+ *  - usedPct / totalLabel / remainingGb / trashGb 来自 webapi /user/space_summury（真）
+ *  - releaseDate 仍是写死字符串（115 不返回「释放日」）
+ *  - breakdowns 来自 design mock（115 不返回 5 类分布），用 [breakdownsIsMock] 标识
+ *  - userName 用于标题 "云端空间 — Alice"，为空时仅显示 "云端空间"
+ */
 data class Storage(
     val usedPct: Int,              // 71
     val totalLabel: String,        // "1 TB"
@@ -46,6 +52,8 @@ data class Storage(
     val breakdowns: List<Breakdown>,
     val remainingGb: String,       // "761.6 GB"
     val trashGb: String,           // "2.1 GB"
+    val userName: String = "",         // "" → StorageCard 标题仅显示 "云端空间"
+    val breakdownsIsMock: Boolean = true,  // true → 5 行 breakdown 是 mock 假数据
 )
 
 /** 5 行 breakdown 之一（视频 / 图片 / 文档 / 音频 / 其他）。 */
