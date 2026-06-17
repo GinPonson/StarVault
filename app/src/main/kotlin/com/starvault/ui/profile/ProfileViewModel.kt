@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.component.Icons
 import com.starvault.core.ServiceLocator
+import com.starvault.data.remote.cloud115.SizeInfo
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.UserInfo
 import kotlinx.coroutines.channels.BufferOverflow
@@ -16,14 +17,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 
 /**
  * Profile 屏 ViewModel — mock + webapi /users/userinfo + /user/space_summury 接入。
  *
  *  - storage.usedPct / totalLabel / remainingGb / trashGb 来自 webapi（真）
  *  - storage.userName 来自 webapi（真）→ StorageCard 标题展示
- *  - storage.breakdowns 仍是 mock（115 不返回 5 类分布；breakdownsIsMock=true 标识）
- *  - storage.releaseDate 仍是写死字符串（115 不返回「释放日」）
+ *  - storage.breakdowns 来自 webapi type_summury（真，8 类：PIC/AVI/MUS/DOC/BOOK/RAR/EXE/OTHER）
  *  - wallpaper / commonRows / settingRows 仍是 mock
  *
  *  - [onSignOut] 真接 [AuthRepository.signOut] → DataStore 清 cookies →
@@ -36,7 +39,45 @@ class ProfileViewModel(
     private val authRepository: AuthRepository = ServiceLocator.authRepository,
 ) : ViewModel() {
 
-    companion object { private const val TAG = "ProfileViewModel" }
+    companion object {
+        private const val TAG = "ProfileViewModel"
+
+        /**
+         * type_summury 8 类 → 中文标签 / 色 / 展示顺序。
+         *
+         *  - 必须放在 companion object（不是 instance val）：class 内 init { loadUserInfo() }
+         *    触发 applyUserInfo → parseBreakdowns 时，instance val 的初始化器在 init 之后
+         *    才执行，会拿到 null。companion object 静态初始化在类加载时完成，安全。
+         *  - 用 `OTHER` 兜底色：未识别 code 不展示（mapNotNull 会过滤 size=0）
+         */
+        private val TYPE_LABELS = mapOf(
+            "AVI" to "视频",
+            "PIC" to "图片",
+            "DOC" to "文档",
+            "MUS" to "音频",
+            "BOOK" to "电子书",
+            "RAR" to "压缩包",
+            "EXE" to "程序",
+            "OTHER" to "其他",
+        )
+        private val TYPE_COLORS = mapOf(
+            "AVI" to Color(0xFF2F6FEB),
+            "PIC" to Color(0xFF9333EA),
+            "DOC" to Color(0xFF16A34A),
+            "MUS" to Color(0xFFEA580C),
+            "BOOK" to Color(0xFF06B6D4),
+            "RAR" to Color(0xFFF59E0B),
+            "EXE" to Color(0xFFEF4444),
+            "OTHER" to Color(0xFFD4D4D4),
+        )
+        private val TYPE_ORDER = listOf("AVI", "PIC", "DOC", "MUS", "BOOK", "RAR", "EXE", "OTHER")
+
+        /** 解析 type_summury 子项用的 Json 实例（ignoreUnknownKeys 容错 work_count_times 等杂项）。 */
+        private val json = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+    }
 
     private val _state = MutableStateFlow<ProfileUiState>(mockState())
     val state: StateFlow<ProfileUiState> = _state.asStateFlow()
@@ -76,6 +117,15 @@ class ProfileViewModel(
             // 直接用 files.percent * 100（files.percent 是 0~1 的小数）更准
             (ss.files.percent * 100).toInt().coerceIn(0, 100)
         } else if (totalBytes > 0L) ((usedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100) else 0
+
+        // type_summury → 8 类 breakdown（真数据）。解析失败或全 0 时保持原 mock。
+        val realBreakdowns = parseBreakdowns(userInfo.space.typeSummury)
+        val (newBreakdowns, stillMock) = if (realBreakdowns.isNotEmpty()) {
+            realBreakdowns to false
+        } else {
+            current.storage.breakdowns to current.storage.breakdownsIsMock
+        }
+
         _state.value = current.copy(
             storage = current.storage.copy(
                 userName = userInfo.base.userName.orEmpty(),
@@ -83,9 +133,34 @@ class ProfileViewModel(
                 totalLabel = formatBytes(totalBytes),
                 remainingGb = formatBytes(remainBytes),
                 trashGb = formatBytes(trashBytes),
-                // breakdowns 不变，breakdownsIsMock 保持 true
+                breakdowns = newBreakdowns,
+                breakdownsIsMock = stillMock,
             ),
         )
+    }
+
+    /**
+     * 把 type_summury（Map<String, JsonElement>）解析成 8 类 [Breakdown]。
+     *
+     *  115 type_summury 是异构 Map：8 个文件类型（PIC/AVI/MUS/DOC/BOOK/RAR/EXE/OTHER）是
+     *  SizeInfo 对象，混着 `work_count_times: Long`、`type_nums: 嵌套 Map` 等元数据。
+     *  本函数只挑 SizeInfo，过滤 size<=0（零字节的类别不展示），按固定顺序返回。
+     *
+     *  - 字段缺失 / 解析失败 / 全 0 → 返回空 list（调用方决定保持 mock）
+     *  - sizeFormat 优先；空时本地 formatBytes 兜底
+     */
+    private fun parseBreakdowns(typeSummury: Map<String, JsonElement>): List<Breakdown> {
+        return TYPE_ORDER.mapNotNull { code ->
+            val element = typeSummury[code] ?: return@mapNotNull null
+            val size = runCatching { json.decodeFromJsonElement<SizeInfo>(element) }
+                .getOrNull() ?: return@mapNotNull null
+            if (size.size <= 0.0) return@mapNotNull null
+            Breakdown(
+                label = TYPE_LABELS[code] ?: code,
+                swatch = TYPE_COLORS[code] ?: Color(0xFFD4D4D4),
+                sizeText = size.sizeFormat.ifBlank { formatBytes(size.size.toLong()) },
+            )
+        }
     }
 
     /** 字节数 → "1.2 GB" / "512.0 MB" 风格（1 位小数）。 */
@@ -132,7 +207,6 @@ class ProfileViewModel(
         val storage = Storage(
             usedPct = 71,
             totalLabel = "1 TB",
-            releaseDate = "2026/06/07 释放",
             breakdowns = listOf(
                 Breakdown("视频",  Color(0xFF2F6FEB), "112.4 GB"),
                 Breakdown("图片",  Color(0xFF9333EA), "48.2 GB"),

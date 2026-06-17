@@ -160,7 +160,6 @@ private fun StorageCard(storage: Storage) {
             // 标题：userName 非空时拼 "云端空间 — Alice"（em dash + 空格）；空时仅 "云端空间"
             val title = if (storage.userName.isNotBlank()) "云端空间 — ${storage.userName}" else "云端空间"
             Text(text = title, style = t.micro, color = c.muted)
-            Text(text = storage.releaseDate, style = t.caption, color = c.muted)
         }
         Spacer(Modifier.height(18.dp))
         Row(

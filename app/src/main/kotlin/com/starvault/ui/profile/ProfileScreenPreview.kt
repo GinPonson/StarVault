@@ -32,7 +32,6 @@ internal fun profilePreviewSuccess(): ProfileUiState.Success = ProfileUiState.Su
     storage = Storage(
         usedPct = 71,
         totalLabel = "1 TB",
-        releaseDate = "2026/06/07 释放",
         breakdowns = listOf(
             Breakdown("视频", androidx.compose.ui.graphics.Color(0xFF2F6FEB), "112.4 GB"),
             Breakdown("图片", androidx.compose.ui.graphics.Color(0xFF9333EA), "48.2 GB"),

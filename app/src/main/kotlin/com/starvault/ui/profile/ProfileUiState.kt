@@ -38,29 +38,28 @@ sealed interface ProfileUiState {
 
 /* ───────────────────── 子模型 ───────────────────── */
 
-/** 存储大卡：环 + 5 条 breakdown + 剩余。
+/** 存储大卡：环 + 多条 breakdown + 剩余。
  *
  *  - usedPct / totalLabel / remainingGb / trashGb 来自 webapi /user/space_summury（真）
- *  - releaseDate 仍是写死字符串（115 不返回「释放日」）
- *  - breakdowns 来自 design mock（115 不返回 5 类分布），用 [breakdownsIsMock] 标识
+ *  - breakdowns 来自 webapi /user/space_summury 的 type_summury（真，8 类：PIC/AVI/MUS/DOC/BOOK/RAR/EXE/OTHER）
+ *  - breakdownsIsMock=false 表示接的是真接口；true 仅为 0 网络/无数据兜底
  *  - userName 用于标题 "云端空间 — Alice"，为空时仅显示 "云端空间"
  */
 data class Storage(
     val usedPct: Int,              // 71
     val totalLabel: String,        // "1 TB"
-    val releaseDate: String,       // "2026/06/07 释放"
     val breakdowns: List<Breakdown>,
     val remainingGb: String,       // "761.6 GB"
     val trashGb: String,           // "2.1 GB"
     val userName: String = "",         // "" → StorageCard 标题仅显示 "云端空间"
-    val breakdownsIsMock: Boolean = true,  // true → 5 行 breakdown 是 mock 假数据
+    val breakdownsIsMock: Boolean = true,  // true → fallback 状态（无网络/解析失败）
 )
 
-/** 5 行 breakdown 之一（视频 / 图片 / 文档 / 音频 / 其他）。 */
+/** 一行 breakdown（对应 115 type_summury 中的一种文件类型）。 */
 data class Breakdown(
-    val label: String,             // "视频"
+    val label: String,             // "图片"
     val swatch: Color,             // 8x8 色块
-    val sizeText: String,          // "112.4 GB"
+    val sizeText: String,          // "48.2 GB"
 )
 
 /** 壁纸引擎卡（5 个字段支持两态：off 单行 / on 双行详情）。 */
