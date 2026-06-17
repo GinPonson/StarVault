@@ -72,9 +72,11 @@ class LoginViewModel(
                     is ScanLoginManager.ScanStatus.Waiting -> _state.value   // 保持当前 Waiting(qrBitmap)
                     is ScanLoginManager.ScanStatus.Scanned -> {
                         val expire = (_state.value as? LoginUiState.Waiting)?.expireSeconds ?: 120
+                        // 115 status=1 不返回 userInfo（p115client/Lumen 都只在 status=2 才拿 userInfo）
+                        // UI 端固定提示「请在 115 App 确认登录」
                         LoginUiState.Scanned(
-                            nickname = status.nickname.ifBlank { "115 用户" },
-                            deviceName = status.deviceName.ifBlank { "已扫码" },
+                            nickname = "",
+                            deviceName = "请在 115 App 中点击「确认登录」",
                             expireSeconds = expire,
                         )
                     }

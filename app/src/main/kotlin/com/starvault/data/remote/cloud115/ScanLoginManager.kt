@@ -17,10 +17,11 @@ import java.util.concurrent.TimeUnit
  * 115 扫码登录编排器。
  *
  *  调用流程（参考 Lumen 模式 + p115client 端点）：
- *    1. [getQRCode]    → GET /api/1.0/web/1.0/qrcode/ 拿会话 → GET /api/1.0/web/1.0/qrcode?uid=... 下 PNG
+ *    1. [getQRCode]    → GET /api/1.0/web/1.0/token/ 拿会话 → GET /api/1.0/web/1.0/qrcode?uid=... 下 PNG
  *    2. [signIn]       → 2s 间隔 GET /get/status/；
- *                         status=1 时调 POST /app/1.0/qandroid/1.0/login/qrcode/ 拿 userInfo；
- *                         status=2 时再调同端点，从 Set-Cookie 头提 cookies。
+ *                        status=1 仅 emit Scanned（**不在此调 POST**，userInfo 拿不到）；
+ *                        status=2 调 POST /app/1.0/qandroid/1.0/login/qrcode/，
+ *                                  从响应 body `data.cookie` 拿 cookies（不是 Set-Cookie 头）。
  *
  *  状态机：
  *    Waiting → Scanned → Success(cookies + uid + userName + deviceName)
@@ -28,6 +29,12 @@ import java.util.concurrent.TimeUnit
  *
  *  5 分钟 QR 过期由调用方 [LoginViewModel] 的 expire countdown 决定，本类不重复计时；
  *  仅在 signIn 入参 deadline 到期时 emit Timeout。
+ *
+ *  userInfo 注意点：
+ *    115 端点上 /get/status/ 和 POST /app/1.0/.../login/qrcode/ 都不一定返回 user_name/device。
+ *    status=1 时拿不到 userInfo 是预期（Lumen/p115client 都不在此时拉），
+ *    status=2 时如果 data.user_name 为空，VM 端用"已登录"占位；uid 走 cookies 后的
+ *    后续 webapi 调用（Phase 3 接入）补齐。
  */
 class ScanLoginManager(
     private val api: ScanApiService,
@@ -134,25 +141,22 @@ class ScanLoginManager(
                 when (data.status) {
                     0 -> { /* 仍等待，不发新事件 */ }
                     1 -> {
-                        // Scanned：调 loginResult 拿 userInfo（仅读 body.data）
-                        val userInfo = fetchUserInfo(qr.uid)
-                        if (userInfo != null) {
-                            emit(ScanStatus.Scanned(userInfo.userName, userInfo.device))
-                        } else {
-                            emit(ScanStatus.Error("扫码用户信息拉取失败"))
-                        }
+                        // Scanned：115 在此状态不返回 userInfo，**不要**调 POST（那是确认登录的端点）。
+                        // Lumen/p115client 都只是单纯 emit Scanned 等用户点确认。
+                        // nickname/device 用默认值（VM 端会用「已扫码」/「请在手机确认」占位）。
+                        emit(ScanStatus.Scanned(nickname = "", deviceName = ""))
                     }
                     2 -> {
-                        // Confirmed：再调一次 loginResult，从 Set-Cookie 头提 cookies
+                        // Confirmed：调 POST /app/1.0/{app}/1.0/login/qrcode/，从 body `data.cookie` 拿 cookies
                         val result = fetchLoginResult(qr.uid)
                         if (result != null) {
                             val (userInfo, cookies) = result
                             emit(
                                 ScanStatus.Success(
                                     cookies = cookies,
-                                    uid = userInfo.userId,
-                                    userName = userInfo.userName,
-                                    deviceName = userInfo.device,
+                                    uid = userInfo?.userId ?: 0L,
+                                    userName = userInfo?.userName.orEmpty(),
+                                    deviceName = userInfo?.device.orEmpty(),
                                 )
                             )
                             return@flow
@@ -175,26 +179,26 @@ class ScanLoginManager(
         }
     }
 
-    /** 调 loginResult 拿扫码用户信息（status=1 时用）。 */
-    private suspend fun fetchUserInfo(uid: String): LoginResultData? {
-        val resp = api.getLoginResult(account = uid)
-        if (!resp.isSuccessful) return null
-        return resp.body()?.takeIf { it.state == 1 }?.data
-    }
-
     /**
-     * 调 loginResult 同时拿 userInfo（body.data）+ cookies（Set-Cookie 头）。
-     * 115 端点会一次性把 cookies 塞进 Set-Cookie。
+     * 调 POST /app/1.0/{app}/1.0/login/qrcode/ 拿 cookies（**仅在 status=2 时调**）。
+     *
+     *  cookies 来自响应 body 的 `data.cookie` 字段（**不是 Set-Cookie 头**）。
+     *  115 实际返回的 shape（实测）：
+     *    - JSON 对象 `{"UID":"xxx","CID":"xxx","SEID":"xxx","KID":"xxx"}`
+     *      → 我们用 `Map<String, String>` 接，再拼成 "UID=xxx; CID=xxx; ..."
+     *
+     *  userInfo（userId/userName/device）115 不一定回，nullable。
      */
-    private suspend fun fetchLoginResult(uid: String): Pair<LoginResultData, String>? {
-        val resp = api.getLoginResult(account = uid)
-        if (!resp.isSuccessful) return null
-        val userInfo = resp.body()?.takeIf { it.state == 1 }?.data ?: return null
-        val raw = resp.headers().values("Set-Cookie").takeIf { it.isNotEmpty() } ?: return null
-        val cookies = raw.joinToString("; ") { cookie ->
-            // "UID=abc; Path=/; HttpOnly" → "UID=abc"
-            cookie.substringBefore(";").trim()
-        }.takeIf { it.isNotBlank() } ?: return null
-        return userInfo to cookies
+    private suspend fun fetchLoginResult(uid: String): Pair<LoginResultData?, String>? {
+        val resp = api.getLoginResult(app = "qandroid", appName = "qandroid", account = uid)
+        if (!resp.isSuccessful) {
+            Log.w(TAG, "getLoginResult HTTP ${resp.code()}")
+            return null
+        }
+        val data = resp.body()?.takeIf { it.state == 1 }?.data
+            ?: return null
+        val cookieMap = data.cookie?.takeIf { it.isNotEmpty() } ?: return null
+        val cookies = cookieMap.entries.joinToString("; ") { (k, v) -> "$k=$v" }
+        return data to cookies
     }
 }

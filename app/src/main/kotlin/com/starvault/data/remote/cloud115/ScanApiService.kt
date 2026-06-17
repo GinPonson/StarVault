@@ -5,6 +5,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.Field
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -32,17 +33,22 @@ interface ScanApiService {
     ): Response<ApiEnvelope<QrStatusData>>
 
     /**
-     * 扫码确认后取 cookies + 扫码用户信息。
-     * cookies 在 Response Headers Set-Cookie 里，**不在 body**。
-     * body 里的 data 是 LoginResultData（userId/userName/device）。
+     * 扫码确认后绑定设备并拿 cookies。
      *
-     *  app=qandroid → ssoent=M1（115管理），不踢用户 web (A1) / 115 安卓 App (F3) session。
+     *  cookies 在响应 body 的 `data.cookie` 字符串里（**不是 Set-Cookie 头**），
+     *  Lumen/p115client 都从这里读。
+     *
+     *  @param app 路径变量 + 表单 app/appname，决定 ssoent：
+     *    - "web"       → ssoent=A1（踢用户 115.com 网页端 session）
+     *    - "qandroid"  → ssoent=M1（115管理 app；不踢 web/115 Android App）
+     *    - "alipaymini"/"wechatmini" → 小程序 ssoent
+     *  默认 "qandroid"：与用户既有 web / 115 Android App session 互不干扰。
      */
     @FormUrlEncoded
-    @POST("app/1.0/qandroid/1.0/login/qrcode/")
+    @POST("app/1.0/{app}/1.0/login/qrcode/")
     suspend fun getLoginResult(
-        @Field("app") app: String = "qandroid",
-        @Field("appname") appName: String = "qandroid",
-        @Field("account") account: String,         // = uid
+        @Path("app") app: String = "qandroid",
+        @Field("app") appName: String = "qandroid",
+        @Field("account") account: String,         // = QR session uid
     ): Response<ApiEnvelope<LoginResultData>>
 }
