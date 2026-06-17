@@ -5,10 +5,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.starvault.component.BottomNavBar
+import com.starvault.core.ServiceLocator
 import com.starvault.nav.Route
 import com.starvault.nav.StarVaultNavHost
 import com.starvault.theme.StarVaultTheme
@@ -21,6 +23,7 @@ import com.starvault.theme.StarVaultTheme
  *  - 仅当栈顶属于 5 个 Tab 之一（Home/Files/Album/Transfers/Profile）时才显示 [BottomNavBar]，
  *    Login/Player/Share/Wallpaper 等全屏页隐藏底栏（与 design HTML mockup 一致）
  *  - 用 [Route] sealed 类型 + `hasRoute<T>()` 判定，避免比对字符串导致的拼写错误
+ *  - 订阅 [ServiceLocator.authRepository.authState]，由 NavHost 据此决定 startDestination
  */
 @Composable
 fun StarVaultApp() {
@@ -29,6 +32,9 @@ fun StarVaultApp() {
     // -- 订阅当前栈顶 entry，destination 用来匹配是否在底栏所辖的 4 个 tab --
     val backStack by nav.currentBackStackEntryAsState()
     val destination = backStack?.destination
+
+    // -- 订阅全局认证状态，NavHost 据此决定 startDestination 是 Login 还是 Home --
+    val authState by ServiceLocator.authRepository.authState.collectAsStateWithLifecycle()
 
     // -- 判定是否展示 BottomNavBar --
     //   只在 4 个 tab 顶层展示；首次启动时 backStack == null，destination == null，因此默认隐藏
@@ -48,6 +54,7 @@ fun StarVaultApp() {
         // 内容区使用 Scaffold 计算出的 inset padding，避免被底栏遮挡
         StarVaultNavHost(
             navController = nav,
+            authState = authState,
             modifier = Modifier.padding(padding),
         )
     }

@@ -15,7 +15,6 @@ import com.starvault.theme.StarVaultTheme
 fun LoginWaitingPreview() = StarVaultTheme {
     LoginScreen(
         state = LoginUiState.Waiting(expireSeconds = 120),
-        onScanClick = {},
         onRefresh = {},
     )
 }
@@ -29,7 +28,6 @@ fun LoginScannedPreview() = StarVaultTheme {
             deviceName = "iPhone 15 Pro · 来自广东",
             expireSeconds = 118,
         ),
-        onScanClick = {},
         onRefresh = {},
     )
 }
@@ -39,7 +37,6 @@ fun LoginScannedPreview() = StarVaultTheme {
 fun LoginLoggedInPreview() = StarVaultTheme {
     LoginScreen(
         state = LoginUiState.LoggedIn(nickname = "Gin", expireSeconds = 116),
-        onScanClick = {},
         onRefresh = {},
     )
 }
@@ -49,7 +46,6 @@ fun LoginLoggedInPreview() = StarVaultTheme {
 fun LoginErrorPreview() = StarVaultTheme {
     LoginScreen(
         state = LoginUiState.Error("二维码服务不可达"),
-        onScanClick = {},
         onRefresh = {},
     )
 }

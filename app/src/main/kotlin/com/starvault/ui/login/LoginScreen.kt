@@ -7,13 +7,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.starvault.theme.StarVaultTheme
 
@@ -49,19 +50,17 @@ import com.starvault.theme.StarVaultTheme
  *   └─ agree 协议页脚
  *
  * 状态映射 (与 [LoginUiState] 一一对应)：
- *   - Waiting   : 默认 QR，status "等待扫码…"，dot pulse 动画
+ *   - Waiting   : 真 QR bitmap 或加载占位，status "等待扫码…"，dot pulse 动画
  *   - Scanned   : QR 上盖 overlay (avatar+nickname+device)，status "已扫码，请在手机上确认"
  *   - LoggedIn  : overlay 切到 check icon + "登录成功"，status 切 success 色
  *   - Error     : status 行显示 message + 红色 dot
  *
  * @param state         当前 UI 状态
- * @param onScanClick   点击 QR 卡片底部"刷新二维码"前面的演示按钮触发
  * @param onRefresh     点击 qr-meta 的"刷新二维码"触发
  */
 @Composable
 fun LoginScreen(
     state: LoginUiState,
-    onScanClick: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -111,9 +110,33 @@ fun LoginScreen(
                     modifier = Modifier.size(220.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    QrPlaceholder(modifier = Modifier.fillMaxSize())
+                    // 真 QR：bitmap 从 VM 异步加载进来前显示白色占位
+                    if (state is LoginUiState.Waiting) {
+                        val bitmap = state.qrBitmap
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = "登录二维码",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit,
+                            )
+                        } else {
+                            // 加载中：白底 + 灰色「正在加载二维码…」文字
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.White),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "正在加载二维码…",
+                                    style = StarVaultTheme.typography.micro,
+                                    color = StarVaultTheme.colors.muted,
+                                )
+                            }
+                        }
+                    }
                     QrCornerBrackets()
-                    // 扫码/登录态浮层
                     if (state is LoginUiState.Scanned || state is LoginUiState.LoggedIn) {
                         QrOverlay(state = state)
                     }
@@ -147,12 +170,6 @@ fun LoginScreen(
             Text(text = "《StarVault 用户协议》 · 《隐私政策》", style = t.micro, color = c.muted)
         }
 
-        // ─── 演示按钮 (仅 Phase 1)：底部居中触发扫码 ────────
-        if (state is LoginUiState.Waiting) {
-            Spacer(Modifier.height(20.dp))
-            DemoScanButton(onClick = onScanClick)
-        }
-
         Spacer(Modifier.height(40.dp))
     }
 }
@@ -162,9 +179,7 @@ fun LoginScreen(
 /**
  * 25x25 模块的伪 QR：3 个 finder 框 + 时序线 + 中心 logo + 数据区伪随机。
  *
- * 与 design/00-login.html 的 genQR() 算法等价但用固定 seed (避免每次重组都洗牌)。
- * T22 Paparazzi 截图会与 HTML 渲染做像素近似比对——若日后接入真 QR 服务，
- * 替换为 ZXing/QRGen 生成的 Bitmap 即可，外部接口不变。
+ * 真 QR 由服务端 PNG bitmap 提供；本函数仅作 Preview / 极端兜底，正常登录流程不会触发。
  */
 @Composable
 private fun QrPlaceholder(modifier: Modifier = Modifier) {
@@ -279,12 +294,12 @@ private fun QrCorner(color: Color, modifier: Modifier, top: Boolean, start: Bool
         val w = size.width
         val stroke = 3.dp.toPx()
         // 横边
-        val hX = if (start) 0f else 0f
+        val hX = 0f
         val hY = if (top) 0f else w - stroke
         drawRect(color, topLeft = Offset(hX, hY), size = Size(w, stroke))
         // 竖边
         val vX = if (start) 0f else w - stroke
-        val vY = if (top) 0f else 0f
+        val vY = 0f
         drawRect(color, topLeft = Offset(vX, vY), size = Size(stroke, w))
     }
 }
@@ -478,34 +493,5 @@ private fun StepCard(number: String, text: String, modifier: Modifier = Modifier
         }
         Spacer(Modifier.size(8.dp))
         Text(text = text, style = t.micro, color = c.fg)
-    }
-}
-
-/* ───────────────────────────── Demo Scan Button ───────────────────────────── */
-
-/**
- * Phase 1 演示按钮：底部居中 pill，点击触发模拟扫码。
- * 真实接入扫码服务后此按钮删除。
- */
-@Composable
-private fun DemoScanButton(onClick: () -> Unit) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 80.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
-                .background(c.fg)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 24.dp, vertical = 10.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "演示扫码登录", style = t.caption, color = c.accentOn)
-        }
     }
 }

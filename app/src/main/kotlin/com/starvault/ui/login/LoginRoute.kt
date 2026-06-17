@@ -5,11 +5,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 
 /**
  * Route 入口（NavHost 唯一注入点）。
  *
- *  - 持有 [LoginViewModel]（由 NavBackStackEntry scope 管理）
+ *  - 持有 [LoginViewModel]（由 NavBackStackEntry scope 管理；默认从 [com.starvault.core.ServiceLocator] 拿 AuthRepository）
  *  - 监听 state，当出现 [LoginUiState.LoggedIn] 时一次性触发 [onLoggedIn] 跳 Home
  *  - 把 UI 状态与命令委托给纯 UI 的 [LoginScreen]，方便 Preview / Paparazzi 直渲
  *
@@ -19,7 +21,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun LoginRoute(
     onLoggedIn: () -> Unit,
-    vm: LoginViewModel = viewModel(),
+    vm: LoginViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { LoginViewModel() }   // 默认从 ServiceLocator 拿 AuthRepository
+        }
+    ),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
@@ -31,7 +37,6 @@ fun LoginRoute(
 
     LoginScreen(
         state = state,
-        onScanClick = vm::simulateScan,
-        onRefresh   = vm::refresh,
+        onRefresh = vm::refresh,
     )
 }
