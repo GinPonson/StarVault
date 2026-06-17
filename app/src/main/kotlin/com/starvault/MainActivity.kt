@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.starvault.core.ServiceLocator
 import com.starvault.theme.StarVaultTheme
 
 /**
@@ -20,6 +21,8 @@ import com.starvault.theme.StarVaultTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Application context 早于 Activity.onCreate，安全
+        ServiceLocator.init(this)
         enableEdgeToEdge()
         setContent {
             StarVaultTheme {
