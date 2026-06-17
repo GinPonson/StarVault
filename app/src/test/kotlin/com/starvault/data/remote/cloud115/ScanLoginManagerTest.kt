@@ -21,7 +21,7 @@ class ScanLoginManagerTest {
     fun `getQRCode returns failure when token business-state is false`() = runTest {
         // 走 "state=false 业务失败" 快速路径，避免触发 Log.e（android.util.Log 静态初始化需要 Android runtime）
         coEvery { api.getScanToken() } returns Response.success(
-            ApiEnvelope(state = false, code = 10001, message = "rate limited", data = null)
+            ApiEnvelope(state = 0, code = 10001, message = "rate limited", data = null)
         )
         val r = manager.getQRCode()
         assertTrue(r.isFailure)
@@ -30,7 +30,7 @@ class ScanLoginManagerTest {
     @Test
     fun `signIn emits Cancelled when status=-1`() = runTest {
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = true, data = QrStatusData(status = -1))
+            ApiEnvelope(state = 1, data = QrStatusData(status = -1))
         )
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
         val events = manager.signIn(qr, deadline = System.currentTimeMillis() + 5_000).toList()
@@ -40,7 +40,7 @@ class ScanLoginManagerTest {
     @Test
     fun `signIn emits Timeout when deadline passed`() = runTest {
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = true, data = QrStatusData(status = 0))
+            ApiEnvelope(state = 1, data = QrStatusData(status = 0))
         )
         // 设 deadline=now → 立即超时
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
@@ -51,10 +51,10 @@ class ScanLoginManagerTest {
     @Test
     fun `signIn emits Scanned when status=1 and userInfo fetched`() = runTest {
         coEvery { api.checkScanStatus(any<String>(), any<Long>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = true, data = QrStatusData(status = 1))
+            ApiEnvelope(state = 1, data = QrStatusData(status = 1))
         )
         coEvery { api.getLoginResult(any<String>(), any<String>(), any<String>()) } returns Response.success(
-            ApiEnvelope(state = true, data = LoginResultData(userId = 1L, userName = "alice", device = "iPhone"))
+            ApiEnvelope(state = 1, data = LoginResultData(userId = 1L, userName = "alice", device = "iPhone"))
         )
         val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
         // 短 deadline 强制让 flow 在几次 poll 后超时退出（status=1 不会自己终止 loop）

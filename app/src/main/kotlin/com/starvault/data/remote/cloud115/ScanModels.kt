@@ -5,13 +5,15 @@ import kotlinx.serialization.Serializable
 
 /**
  * 115 API 统一响应壳：{state, code, message, data}
- *  - state=true  → 业务成功（data 非空）
- *  - state=false → 业务失败（message 有内容）
+ *  - state=1  → 业务成功（data 非空）
+ *  - state=0  → 业务失败（message 有内容）
  *  - HTTP 层失败（404/500）由 Retrofit Response.isSuccessful 判定
+ *
+ *  注：state 实际是 Int（0/1）而非 Boolean，需要在调用方 takeIf { it.state == 1 } 判定。
  */
 @Serializable
 data class ApiEnvelope<T>(
-    val state: Boolean = false,
+    val state: Int = 0,
     val code: Int = 0,
     val message: String? = null,
     val data: T? = null,
@@ -30,9 +32,8 @@ data class QrTokenData(
 @Serializable
 data class QrStatusData(
     val status: Int = 0,           // 0=Waiting, 1=Scanned, 2=Confirmed, -1=Cancelled
-    val version: Int = 0,
-    val sign: String = "",
-    val time: Long = 0L,
+    val version: String = "",      // 服务端版本 hash，扫码轮询里不带 sign/time
+    val msg: String = "",
 )
 
 /** GET /app/1.0/qandroid/1.0/login/qrcode/ 响应 data（扫码确认后回包，含扫码用户信息）*/

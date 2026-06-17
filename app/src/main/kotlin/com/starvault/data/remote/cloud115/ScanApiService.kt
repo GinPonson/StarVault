@@ -17,7 +17,7 @@ import retrofit2.http.Query
 interface ScanApiService {
 
     /** 拿扫码会话（uid / time / sign），返回包内的 qrcode 字段是跳转链接不是图。 */
-    @GET("api/1.0/web/1.0/qrcode/")
+    @GET("api/1.0/web/1.0/token/")
     suspend fun getScanToken(): Response<ApiEnvelope<QrTokenData>>
 
     /**

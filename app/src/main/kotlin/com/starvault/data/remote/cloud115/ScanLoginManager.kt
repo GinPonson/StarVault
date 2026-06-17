@@ -74,7 +74,7 @@ class ScanLoginManager(
             if (!tokenResp.isSuccessful) return@withContext Result.failure(
                 IllegalStateException("GET /qrcode HTTP ${tokenResp.code()}")
             )
-            val token = tokenResp.body()?.takeIf { it.state }?.data
+            val token = tokenResp.body()?.takeIf { it.state == 1 }?.data
                 ?: return@withContext Result.failure(IllegalStateException("GET /qrcode 业务失败"))
 
             val bitmap = downloadQrBitmap(token.uid)
@@ -126,7 +126,7 @@ class ScanLoginManager(
                     emit(ScanStatus.Error("HTTP ${resp.code()}"))
                     delay(POLLING_INTERVAL_MS); continue
                 }
-                val data = resp.body()?.takeIf { it.state }?.data
+                val data = resp.body()?.takeIf { it.state == 1 }?.data
                 if (data == null) {
                     emit(ScanStatus.Error(resp.body()?.message ?: "查询失败"))
                     delay(POLLING_INTERVAL_MS); continue
@@ -179,7 +179,7 @@ class ScanLoginManager(
     private suspend fun fetchUserInfo(uid: String): LoginResultData? {
         val resp = api.getLoginResult(account = uid)
         if (!resp.isSuccessful) return null
-        return resp.body()?.takeIf { it.state }?.data
+        return resp.body()?.takeIf { it.state == 1 }?.data
     }
 
     /**
@@ -189,7 +189,7 @@ class ScanLoginManager(
     private suspend fun fetchLoginResult(uid: String): Pair<LoginResultData, String>? {
         val resp = api.getLoginResult(account = uid)
         if (!resp.isSuccessful) return null
-        val userInfo = resp.body()?.takeIf { it.state }?.data ?: return null
+        val userInfo = resp.body()?.takeIf { it.state == 1 }?.data ?: return null
         val raw = resp.headers().values("Set-Cookie").takeIf { it.isNotEmpty() } ?: return null
         val cookies = raw.joinToString("; ") { cookie ->
             // "UID=abc; Path=/; HttpOnly" → "UID=abc"
