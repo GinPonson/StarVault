@@ -1,5 +1,6 @@
 package com.starvault.ui.files
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,8 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -75,6 +78,8 @@ fun FilesScreen(
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
+    // 拦截系统 back：Files 在 bottom-nav tab，无父栈；让 onBack 决定回上一级目录或退出屏
+    BackHandler(enabled = true) { onBack() }
     Box(modifier = modifier.fillMaxSize().background(c.bg)) {
         when (state) {
             is FilesUiState.Loading -> {
@@ -382,9 +387,11 @@ private fun FileList(
     onOpen: (FileEntry) -> Unit,
 ) {
     val c = StarVaultTheme.colors
+    val scrollState = rememberScrollState()
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(horizontal = 12.dp)
             .padding(bottom = 80.dp),
     ) {

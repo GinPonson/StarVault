@@ -30,7 +30,10 @@ fun FilesRoute(
 
     FilesScreen(
         state = state,
-        onBack = { nav.popBackStack() },
+        onBack = {
+            // 先尝试目录层级回退；栈已到根时再 popBackStack 退出 Files
+            if (!vm.backFolder()) nav.popBackStack()
+        },
         onSearch = { /* TODO: 弹搜索 */ },
         onTransfers = { nav.navigate(Route.Transfers) },
         onMore = { /* TODO: 弹文件更多菜单 */ },

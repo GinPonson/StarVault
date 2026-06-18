@@ -42,6 +42,14 @@ class FilesViewModel(
     /** 当前目录 cid；用于 setFolder / refresh 复用。 */
     private var currentCid: String = "0"
 
+    /**
+     * 目录栈：根为 ["0"]，进入子目录 push 栈顶。
+     *  - setFolder(cid)  ：push cid → loadFolder(cid)
+     *  - backFolder()    ：pop 栈顶 → loadFolder(新栈顶)；栈长=1 时返回 false（已到根）
+     *  - 栈机制让系统 back / 「返回上一级」按钮能逐层回退到根
+     */
+    private val folderStack: ArrayDeque<String> = ArrayDeque<String>().apply { addLast("0") }
+
     /** 当前正在跑的拉取任务；切换目录或 refresh 时取消旧任务。 */
     private var loadJob: Job? = null
 
@@ -53,9 +61,24 @@ class FilesViewModel(
     fun setFolder(folderId: String?) {
         val cid = folderId ?: "0"
         if (cid == currentCid && _state.value is FilesUiState.Success) return
+        folderStack.addLast(cid)
         currentCid = cid
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadFolder(cid) }
+    }
+
+    /**
+     * 返回上一级目录。栈长=1（已在根）时返回 false，让 Route 端继续 popBackStack。
+     * 栈长>1 时 pop 出栈顶后重新 load 新的栈顶目录。
+     */
+    fun backFolder(): Boolean {
+        if (folderStack.size <= 1) return false
+        folderStack.removeLast()
+        val cid = folderStack.last()
+        currentCid = cid
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { loadFolder(cid) }
+        return true
     }
 
     /** 重新拉当前目录（pull-to-refresh）。 */
