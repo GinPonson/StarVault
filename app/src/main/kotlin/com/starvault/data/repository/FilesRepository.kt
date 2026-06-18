@@ -79,6 +79,13 @@ class FilesRepository(
             val playLong = obj.intOrZero("play_long")
             val sha1 = obj.stringOrNull("sha") ?: ""
             val mtime = obj.longOrZero("tp")
+            // 115 webapi /files 响应 `u` 字段：图片/视频缩略图 URL（带 ?s=&t= 签名）
+            // folder 无此字段；doc/zip 等类型也可能为空
+            // URL 后缀反爬：
+            //  - `_100`/`_250` 等数字后缀 → 17KB 固定占位图（115 反爬诱饵，**不要**用）
+            //  - `_0` 或无后缀 → 真实原图；Coil 用 ContentScale.Crop 缩到 40dp 渲染
+            val thumbnailUrl = (obj.stringOrNull("u") ?: "")
+                .replace(Regex("_\\d+(?=\\?)"), "_0")
             ParsedFileItem(
                 id = fid,
                 parentId = parentCid,
@@ -91,6 +98,7 @@ class FilesRepository(
                 playLong = playLong,
                 sha1 = sha1,
                 fileCategory = fc,
+                thumbnailUrl = thumbnailUrl,
             )
         } else {
             // ───── 文件夹 ─────

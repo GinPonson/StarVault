@@ -437,7 +437,7 @@ private fun FileListRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         CheckCircle(checked = selected, onClick = onSelect)
-        FileThumb(type = file.type, size = 40)
+        FileThumb(type = file.type, size = 40, thumbnailUrl = file.thumbnailUrl)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = file.name,
@@ -508,7 +508,7 @@ private fun FileGrid(
             ) {
                 Column {
                     Box {
-                        FileThumb(type = f.type, size = 40, fillMaxWidth = true)
+                        FileThumb(type = f.type, size = 40, fillMaxWidth = true, thumbnailUrl = f.thumbnailUrl)
                         if (sel) {
                             Box(
                                 modifier = Modifier
@@ -553,8 +553,17 @@ private fun t5() = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
 
 /* ───────────────────── FileThumb ───────────────────── */
 
+/**
+ * 文件缩略图：渐变色块背景 + icon。IMAGE / VIDEO 若 [thumbnailUrl] 非空，用 Coil AsyncImage
+ * 加载 115 缩略图（响应 `u` 字段）覆盖在背景上。
+ */
 @Composable
-private fun FileThumb(type: FileType, size: Int, fillMaxWidth: Boolean = false) {
+private fun FileThumb(
+    type: FileType,
+    size: Int,
+    fillMaxWidth: Boolean = false,
+    thumbnailUrl: String? = null,
+) {
     val brush = when (type) {
         FileType.FOLDER -> Brush.linearGradient(listOf(Color(0xFF6B7280), Color(0xFF4B5563)))
         FileType.VIDEO  -> Brush.linearGradient(listOf(Color(0xFF2F6FEB), Color(0xFF1D4ED8)))
@@ -587,12 +596,22 @@ private fun FileThumb(type: FileType, size: Int, fillMaxWidth: Boolean = false) 
             .background(brush)
     }
     Box(modifier = mod, contentAlignment = Alignment.Center) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
-        )
+        // IMAGE / VIDEO 缩略图覆盖在背景上（失败 fallback 到 icon）
+        if (!thumbnailUrl.isNullOrBlank()) {
+            coil3.compose.AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
+            )
+        }
     }
 }
 

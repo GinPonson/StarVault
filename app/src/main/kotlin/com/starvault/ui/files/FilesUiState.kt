@@ -56,6 +56,9 @@ data class TabCounts(
 /**
  * 列表单行（与 HTML .file-row 一一对应）。把所有展示需要的扁平化字符串都带好，
  * Screen 只负责布局，不再做格式化。
+ *
+ *  - thumbnailUrl 仅 IMAGE / VIDEO 类型有值（115 webapi /files 响应 `u` 字段）；
+ *    folder / audio / doc / zip 留 null，FileRow 仍用渐变色块 fallback
  */
 data class FileEntry(
     val id: String,
@@ -63,4 +66,5 @@ data class FileEntry(
     val type: FileType,
     val metaSegments: List<String>,  // 3-4 段，用 " · " 拼成 meta 行
     val isFolder: Boolean,
+    val thumbnailUrl: String? = null,
 )

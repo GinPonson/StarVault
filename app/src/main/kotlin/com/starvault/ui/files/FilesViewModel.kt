@@ -185,12 +185,19 @@ class FilesViewModel(
         if (sizeText.isNotEmpty() && sizeText != "—") meta += sizeText
         if (durationText.isNotEmpty()) meta += durationText
         if (timeText.isNotEmpty()) meta += timeText
+        // thumbnailUrl: 仅 IMAGE / VIDEO 携带；其它类型留 null，FileRow 用渐变色块 fallback
+        val thumb = when {
+            isFolder -> null
+            type == FileType.IMAGE || type == FileType.VIDEO -> thumbnailUrl.takeIf { it.isNotEmpty() }
+            else -> null
+        }
         return FileEntry(
             id = id,
             name = name,
             type = type,
             metaSegments = meta,
             isFolder = isFolder,
+            thumbnailUrl = thumb,
         )
     }
 }

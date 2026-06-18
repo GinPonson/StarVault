@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,8 +21,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.starvault.data.model.FileItem
 import com.starvault.data.model.FileTag
 import com.starvault.data.model.FileType
@@ -62,7 +65,7 @@ fun FileRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileThumb(type = file.type)
+        FileThumb(type = file.type, thumbnailUrl = file.thumbnailUrl)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -96,9 +99,16 @@ fun FileRow(
 /**
  * 40dp gradient thumbnail。颜色与 design HTML `.file-thumb.{folder|video|image|...}` 一一对应。
  * 中央 icon 来自 [Icons]（Folder / Play / Image / Music / Doc / Archive）。
+ *
+ * 如果 [thumbnailUrl] 非空（IMAGE / VIDEO 类型，115 webapi /files `u` 字段），
+ * 用 Coil [AsyncImage] 加载真实缩略图；加载失败时 fallback 到渐变色块 + icon。
  */
 @Composable
-private fun FileThumb(type: FileType, modifier: Modifier = Modifier) {
+private fun FileThumb(
+    type: FileType,
+    modifier: Modifier = Modifier,
+    thumbnailUrl: String? = null,
+) {
     val (brush, icon) = thumbBrushAndIcon(type)
     Box(
         modifier = modifier
@@ -107,12 +117,21 @@ private fun FileThumb(type: FileType, modifier: Modifier = Modifier) {
             .background(brush),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(20.dp),
-        )
+        if (!thumbnailUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

@@ -50,6 +50,10 @@ object Cloud115ApiClient {
     fun scanApiService(cookieProvider: () -> String?): ScanApiService =
         scanRetrofit(buildOkHttpClient(cookieProvider)).create(ScanApiService::class.java)
 
+    /** 共享 OkHttpClient 版本的 ScanApiService（ServiceLocator 用，client 还能给 Coil 复用）。 */
+    fun scanApiService(client: OkHttpClient): ScanApiService =
+        scanRetrofit(client).create(ScanApiService::class.java)
+
     /**
      * webapi 域 Retrofit 工厂（用户信息 / 空间 / 后续文件列表）。
      *
@@ -66,9 +70,17 @@ object Cloud115ApiClient {
     fun userApiService(cookieProvider: () -> String?): UserApiService =
         webRetrofit(buildOkHttpClient(cookieProvider)).create(UserApiService::class.java)
 
+    /** webapi 域 [UserApiService] 工厂（共享 OkHttpClient）。 */
+    fun userApiService(client: OkHttpClient): UserApiService =
+        webRetrofit(client).create(UserApiService::class.java)
+
     /** webapi 域 [FileApiService] 工厂（文件列表 /files）。共用同一个 OkHttpClient。 */
     fun fileApiService(cookieProvider: () -> String?): FileApiService =
         webRetrofit(buildOkHttpClient(cookieProvider)).create(FileApiService::class.java)
+
+    /** webapi 域 [FileApiService] 工厂（共享 OkHttpClient）。 */
+    fun fileApiService(client: OkHttpClient): FileApiService =
+        webRetrofit(client).create(FileApiService::class.java)
 
     /**
      * 浏览器伪装头：Referer/Origin/User-Agent 全用 115 域名，

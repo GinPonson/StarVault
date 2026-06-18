@@ -140,4 +140,11 @@ data class ParsedFileItem(
     val playLong: Int = 0,    // 时长（秒），audio/video 才有
     val sha1: String = "",    // 文件 sha1（folder 为空）
     val fileCategory: Int = 0,// fc，folder=0；文件 1=audio 2=video 3=image ...
+    /**
+     * 115 缩略图 URL（webapi /files 响应 `u` 字段）。
+     *  - 仅 IMAGE / VIDEO 类文件有值（folder 永远为空）
+     *  - URL 含 115 签名 (`?s=...&t=...`)，带登录态 Cookie 直接 GET 即可
+     *  - 路径格式：`thumb.115.com/thumb/{sha1 头 1/2/4/8 char 分段}/{sha1}_100`
+     */
+    val thumbnailUrl: String = "",
 )
