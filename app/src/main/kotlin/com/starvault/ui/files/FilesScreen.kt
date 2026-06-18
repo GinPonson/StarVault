@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -108,6 +109,16 @@ fun FilesScreen(
                         onNewFolder = onNewFolder,
                     )
                     Crumb(totalCount = state.all.size)
+                    // 切目录/refresh 时顶部细进度条，旧列表保留渲染避免全屏闪烁
+                    if (state.pendingLoad) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp),
+                            color = c.accent,
+                            trackColor = c.border,
+                        )
+                    }
                     Toolbar(
                         activeType = state.activeType,
                         counts = state.tabCounts,

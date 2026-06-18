@@ -23,6 +23,8 @@ sealed interface FilesUiState {
         val selectedIds: Set<String>,             // 多选集合
         val sortLabel: String,                    // "按修改时间"（sort 菜单待 T22+）
         val totalCount: Int,                      // 段头 "共 N 项"
+        /** 切目录/refresh 时旧列表保留渲染，新数据到位前显示顶部进度条 */
+        val pendingLoad: Boolean = false,
     ) : FilesUiState {
         /** 5 个 tab + 全部的计数（顺序：全部/视频/图片/文档/音频/其他） */
         val tabCounts: TabCounts get() = TabCounts(

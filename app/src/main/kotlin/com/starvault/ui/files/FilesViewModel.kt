@@ -63,6 +63,7 @@ class FilesViewModel(
         if (cid == currentCid && _state.value is FilesUiState.Success) return
         folderStack.addLast(cid)
         currentCid = cid
+        markPending()
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadFolder(cid) }
     }
@@ -76,6 +77,7 @@ class FilesViewModel(
         folderStack.removeLast()
         val cid = folderStack.last()
         currentCid = cid
+        markPending()
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadFolder(cid) }
         return true
@@ -83,16 +85,26 @@ class FilesViewModel(
 
     /** 重新拉当前目录（pull-to-refresh）。 */
     fun refresh() {
+        markPending()
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadFolder(currentCid) }
     }
 
+    /**
+     * 保留旧 Success 列表渲染，加 pendingLoad=true 让 UI 显示顶部细进度条。
+     * 没有旧 Success（init 首次加载）时不动作，仍由 loadFolder 切到 Loading。
+     */
+    private fun markPending() {
+        val s = _state.value as? FilesUiState.Success ?: return
+        if (s.pendingLoad) return
+        _state.value = s.copy(pendingLoad = true)
+    }
+
     private suspend fun loadFolder(cid: String) {
-        // 切目录/refresh 时，先显示 Loading；保留旧选中集合（防止选中态意外消失）
+        // 不再立即覆盖为 Loading：markPending 已保留旧列表 + pendingLoad
         val previousSelected = (_state.value as? FilesUiState.Success)?.selectedIds ?: emptySet()
         val previousViewMode = (_state.value as? FilesUiState.Success)?.viewMode ?: ViewMode.LIST
         val previousSort = (_state.value as? FilesUiState.Success)?.sortLabel ?: "按修改时间"
-        _state.value = FilesUiState.Loading()
 
         filesRepository.listFolder(cid)
             .onSuccess { items ->
@@ -105,9 +117,11 @@ class FilesViewModel(
                     selectedIds = previousSelected.filterSelected(entries).toSet(),
                     sortLabel = previousSort,
                     totalCount = entries.size,
+                    pendingLoad = false,
                 )
             }
             .onFailure { e ->
+                // 失败：清空旧列表，进 Error 态；如有旧列表保留会更复杂，先简化
                 _state.value = FilesUiState.Error(
                     message = e.message ?: "文件列表加载失败",
                 )
