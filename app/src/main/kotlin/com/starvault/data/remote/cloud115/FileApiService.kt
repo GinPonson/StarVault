@@ -18,17 +18,22 @@ import retrofit2.http.Query
  *
  *  所有端点都需登录态（Cookie 头由 [CookieInterceptor] 注入）。
  *
- *  注意 115 这套 /files API 的几个怪点：
- *  - 同一个端点必须用 `show_dir` 区分文件夹 vs 文件，两次都返回 state=true 但数据形态不同：
- *    show_dir=1 → 仅文件夹（每个 item 有 cid，但**无 fid**，fc=0）
- *    show_dir=0 → 仅文件  （每个 item 有 fid + s(字节) + ico(扩展名) + fc(file_category)）
- *  - 因此"我的文件"屏需并行 2 次请求合并结果（见 [FilesRepository]）
- *  - 文件 id 是 string（fid / cid），文件夹 id 也是 string，避免 toLong
+ *  注意 115 /files API 的关键参数（来自 p115client/tool/fs_files.py:221）：
+ *  - show_dir=1（默认）+ 不带 nf → 115 一次性返回目录+文件混合数据
+ *  - fc_mix  : 0=目录置顶, 1=按排序混合
+ *  - nf=1   : 仅显示目录（与 show_dir=1 配合使用）
+ *  - show_dir=0: 仅文件
+ *  - 早期设计以为 show_dir=1 严格只返回目录，实际 115 在某些情况会带文件，
+ *    [FilesRepository] 已用 distinctBy + 形状守卫防御，**不要**改回「并行两次请求」
+ *    （那会拿到重复文件）。
  */
 interface FileApiService {
 
     /**
-     * GET /files — 列出某目录的子项（文件夹或文件，按 show_dir 区分）。
+     * GET /files — 列出某目录的子项（文件夹 + 文件 混合）。
+     *
+     *  调用方式：单次请求 `show_dir=1 + fc_mix=1`，115 在一次响应里返回目录 + 文件混合列表。
+     *  数据形态区分：folder item 无 `fid` 字段，file item 有 `fid`（见 [ParsedFileItem.isFolder]）。
      *
      *  关键参数：
      *  - aid      : 应用 id，固定 1
@@ -36,13 +41,13 @@ interface FileApiService {
      *  - o        : 排序字段，默认 `user_ptime`（修改时间）
      *  - asc      : 0=降序 1=升序
      *  - offset   : 分页偏移（默认 0）
-     *  - limit    : 单页大小（默认 / 最大 50）
-     *  - show_dir : 1=只文件夹, 0=只文件
+     *  - limit    : 单页大小（默认 50，p115client 实测上限 1150）
+     *  - show_dir : 固定 1（115 默认值，配合 fc_mix=1 取混合数据）
+     *  - fc_mix   : 0=目录置顶，1=混合排序（默认 1）
+     *  - nf       : 0/null=显示文件，1=仅显示目录（Files 屏用 0，根目录展示混合）
      *
-     *  响应：顶层 { state: Boolean, count: Int, data: [...] }，**没有 data 包装壳**，
+     *  响应：顶层 { state, count, data, path, ... }（**没有 data 包装壳**），
      *  所以用独立的 [FileListResponse]（与 [com.starvault.data.remote.cloud115.SpaceSummuryResponse] 同样的处理）。
-     *
-     *  实测返回 size 上限 50（即使 limit=50，实际只回 48），分页用 offset+limit 累加。
      */
     @GET("files")
     suspend fun listFiles(
@@ -53,6 +58,8 @@ interface FileApiService {
         @Query("offset") offset: Int = 0,
         @Query("limit") limit: Int = 50,
         @Query("show_dir") showDir: Int = 1,
+        @Query("fc_mix") fcMix: Int = 1,
+        @Query("nf") nf: Int? = null,
     ): Response<FileListResponse>
 }
 

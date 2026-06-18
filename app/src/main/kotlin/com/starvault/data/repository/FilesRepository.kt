@@ -3,94 +3,74 @@ package com.starvault.data.repository
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.FileApiService
 import com.starvault.data.remote.cloud115.ParsedFileItem
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Files 列表仓库：聚合 115 webapi /files 端点，转成 [ParsedFileItem]。
+ * Files 列表仓库：调 115 webapi /files 端点，转成 [ParsedFileItem]。
  *
  *  调用模式：
- *  - listFolder(cid) → 同一 cid 并行 2 次请求（show_dir=1 仅文件夹 + show_dir=0 仅文件），
- *    合并为按"文件夹优先"顺序的统一列表
+ *  - listFolder(cid) → **单次**请求 `show_dir=1 + fc_mix=1`，由 115 一次性返回
+ *    目录 + 文件的混合列表（按 fc_mix=1 排序）。这与 p115client 的
+ *    `iter_fs_files` 默认 payload（p115client/tool/fs_files.py:221）一致。
  *
- *  错误处理（partial-success，与 AuthRepository.fetchUserInfo 一致）：
- *  - 两端点都成功 → 合并返回
- *  - 仅一端成功 → 返回成功的部分（让 UI 仍能展示）
- *  - 两端都失败 → Result.failure
+ *  错误处理：
+ *  - HTTP / 业务失败 → Result.failure，message 来自 115 error 字段
+ *  - 成功 → 解析后 distinctBy({it.id}) 去重（兜底防御 115 偶发重复）
  *
- *  ⚠️ 115 /files 的怪点：同一个端点 show_dir=1 / 0 返回**完全不同的字段**，
- *  文件夹没有 fid 字段，文件有 fid + s(字节) + ico(扩展名)。所以**必须**并行 2 次，
- *  不能用单次请求"过滤出文件夹/文件"。
+ *  ⚠️ 115 /files 形状：
+ *  - folder item：无 `fid` 字段，文件夹 id 用 `cid`
+ *  - file item：有 `fid` + `s`(字节) + `ico`(扩展名) + `fc`(file_category) + `play_long`(秒)
+ *  - 判别 `"fid" in element`（见 [parseRaw]）
+ *
+ *  历史教训：早期误以为 show_dir=1 严格只返回目录，于是并行 show_dir=1 + show_dir=0
+ *  两次请求合并。实测 show_dir=1 偶尔也会带文件 → 合并后单文件出现两次（"021.png 看到 2 个" bug）。
+ *  正确做法是单次请求让 115 自己混合返回，parseRaw 内部按 `fid` 字段判别 shape。
  */
 class FilesRepository(
     private val api: FileApiService,
 ) {
     /**
-     * 列出某目录的所有直接子项（文件夹 + 文件）。
+     * 列出某目录的所有直接子项（文件夹 + 文件 混合）。
      *
      * @param cid 父目录 id；根目录传 "0"
      */
-    suspend fun listFolder(cid: String): Result<List<ParsedFileItem>> = coroutineScope {
-        val foldersDeferred = async { runCatching { fetchRaw(cid, showDir = 1) } }
-        val filesDeferred   = async { runCatching { fetchRaw(cid, showDir = 0) } }
-        val foldersResult = foldersDeferred.await()
-        val filesResult   = filesDeferred.await()
-
-        when {
-            foldersResult.isSuccess && filesResult.isSuccess -> {
-                val folders = foldersResult.getOrThrow().mapNotNull(::parseRaw)
-                val files   = filesResult.getOrThrow().mapNotNull(::parseRaw)
-                Result.success(folders + files)
+    suspend fun listFolder(cid: String): Result<List<ParsedFileItem>> {
+        return runCatching {
+            val resp = api.listFiles(cid = cid, showDir = 1, fcMix = 1)
+            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
+            val body = resp.body() ?: throw IllegalStateException("empty body")
+            if (!body.isOk) {
+                val msg = body.error ?: "errno=${body.errNo ?: body.errno ?: -1} cid=$cid"
+                throw IllegalStateException(msg)
             }
-            foldersResult.isSuccess ->
-                Result.success(foldersResult.getOrThrow().mapNotNull(::parseRaw))
-            filesResult.isSuccess ->
-                Result.success(filesResult.getOrThrow().mapNotNull(::parseRaw))
-            else -> Result.failure(
-                foldersResult.exceptionOrNull() ?: filesResult.exceptionOrNull()
-                    ?: IllegalStateException("listFolder failed")
-            )
+            body.data
+        }.map { items ->
+            items.mapNotNull { parseRaw(it) }.distinctBy { it.id }
         }
-    }
-
-    /**
-     * 调一次 /files，返回原始 JsonElement 列表（保留 file/folder 两种 shape）。
-     * 失败时抛 IllegalStateException，由调用方 runCatching 包。
-     */
-    private suspend fun fetchRaw(cid: String, showDir: Int): List<JsonElement> {
-        val resp = api.listFiles(cid = cid, showDir = showDir)
-        if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-        val body = resp.body() ?: throw IllegalStateException("empty body")
-        if (!body.isOk) {
-            val msg = body.error ?: "errno=${body.errNo ?: body.errNo} showDir=$showDir"
-            throw IllegalStateException(msg)
-        }
-        return body.data
     }
 
     /**
      * 把单个 JsonElement（folder 或 file shape）解析成 [ParsedFileItem]。
      *
-     *  判别：folder → 无 `fid` 字段，文件夹 id 用 `cid`
-     *         file   → 有 `fid`，文件 id 用 `fid`，父目录用 `cid`
+     *  判别：`"fid" in obj` → file，否则 folder。
+     *  - folder → id 用 `cid`，父目录用同 `cid`
+     *  - file   → id 用 `fid`，父目录用 `cid`
      *
-     *  解析失败返回 null（被 mapNotNull 过滤，不影响其他 item）。
+     *  解析失败 / 缺关键字段返回 null（被 mapNotNull 过滤，不影响其他 item）。
      */
     private fun parseRaw(element: JsonElement): ParsedFileItem? {
         val obj = runCatching { element.jsonObject }.getOrNull() ?: return null
+        val hasFid = "fid" in obj
         val name = obj.stringOrNull("n") ?: return null
         val parentCid = obj.stringOrNull("cid") ?: "0"
         val pc = obj.stringOrNull("pc") ?: ""
 
-        return if ("fid" in obj) {
+        return if (hasFid) {
             // ───── 文件 ─────
             val fid = obj.stringOrNull("fid") ?: return null
             val sizeBytes = obj.longOrZero("s")
