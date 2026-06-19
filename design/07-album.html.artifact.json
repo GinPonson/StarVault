@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "07-album.html",
+  "entry": "07-album.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-06-07T13:21:00.202Z",
+  "updatedAt": "2026-06-07T13:21:00.202Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

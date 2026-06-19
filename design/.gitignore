@@ -1,0 +1,13 @@
+# Tool caches
+/.od-skills/
+/.playwright-mcp/
+/.superpowers/
+/.DS_Store
+/.idea/
+/.vscode/
+
+# Build artifacts
+node_modules/
+dist/
+build/
+*.log

@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>扫码登录 · StarVault</title>
+<style>
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --fg: #111111;
+    --muted: #6B6B6B;
+    --border: #E5E5E5;
+    --accent: #2F6FEB;
+    --accent-soft: rgba(47,111,235,0.08);
+    --success: #17A34A;
+    --success-soft: rgba(23,163,74,0.08);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input { font: inherit; border: 0; background: none; padding: 0; color: inherit; outline: none; }
+  button { cursor: pointer; }
+  input { -webkit-appearance: none; appearance: none; }
+
+  .device {
+    position: relative;
+    width: 412px; height: 900px;
+    margin: 0 auto;
+    background: var(--bg);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+  }
+  .device::before {
+    content: ""; position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 96px; height: 26px;
+    background: #1A1A1A; border-radius: 13px;
+    z-index: 30;
+  }
+
+  .status-bar {
+    position: relative; z-index: 5;
+    height: 38px;
+    padding: 0 28px 0 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; color: var(--fg);
+  }
+  .status-bar .right { display: flex; align-items: center; gap: 6px; }
+  .status-bar svg { display: block; }
+
+  .scroll {
+    height: calc(900px - 38px - 64px);
+    position: relative; overflow-y: auto;
+    background: var(--bg);
+    padding: 0 32px 40px;
+  }
+  .nav-bar {
+    height: 64px;
+    display: flex; align-items: center; justify-content: center; gap: 56px;
+    background: var(--bg);
+  }
+  .nav-bar .nav-btn { width: 16px; height: 16px; border: 1.4px solid #1A1A1A; border-radius: 3px; }
+  .nav-bar .nav-btn.pill { width: 38px; height: 16px; border-radius: 9px; }
+  .nav-bar .nav-btn.dot { width: 16px; height: 16px; border-radius: 50%; background: #1A1A1A; border: 0; }
+
+  .mark {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    background: var(--fg);
+    display: grid; place-items: center;
+    margin: 40px 0 20px;
+  }
+  .mark span {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+  }
+  .h {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+    margin: 0 0 6px;
+  }
+  .sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 24px;
+  }
+
+  /* QR 区 */
+  .qr-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px 24px 20px;
+    position: relative;
+    transition: opacity 200ms;
+  }
+  .qr-card.dim { opacity: 0.5; }
+  .qr-wrap {
+    width: 220px; height: 220px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .qr-svg {
+    width: 220px; height: 220px;
+    display: block;
+  }
+  .qr-corner {
+    position: absolute;
+    width: 28px; height: 28px;
+    border: 3px solid var(--accent);
+    border-radius: 4px;
+  }
+  .qr-corner.tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+  .qr-corner.tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+  .qr-corner.bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+  .qr-corner.br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+  .qr-wrap.refresh .qr-svg { animation: qr-rotate 400ms ease; }
+  @keyframes qr-rotate {
+    0% { transform: rotate(0); opacity: 1; }
+    50% { transform: rotate(90deg); opacity: 0.3; }
+    100% { transform: rotate(0); opacity: 1; }
+  }
+
+  /* 扫码状态浮层 */
+  .qr-overlay {
+    position: absolute;
+    inset: 24px;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(8px);
+    border-radius: 14px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 20px;
+  }
+  .qr-overlay.show { display: flex; }
+  .qr-overlay .avatar {
+    width: 48px; height: 48px;
+    border-radius: 999px;
+    background: var(--fg);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 18px; font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .qr-overlay .who {
+    font-size: 14px; font-weight: 600;
+    color: var(--fg);
+    margin-bottom: 2px;
+  }
+  .qr-overlay .device-name {
+    font-size: 12px; color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .qr-overlay .icon-check {
+    width: 40px; height: 40px;
+    border-radius: 999px;
+    background: var(--success-soft);
+    color: var(--success);
+    display: grid; place-items: center;
+    margin-bottom: 10px;
+  }
+  .qr-overlay .icon-check svg { display: block; }
+  .qr-overlay .ok-text {
+    font-size: 14px; font-weight: 600;
+    color: var(--success);
+  }
+
+  /* 状态行 */
+  .status-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    margin: 20px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .status-row.success { color: var(--success); }
+  .status-row .dot {
+    width: 6px; height: 6px;
+    border-radius: 999px;
+    background: var(--muted);
+    transition: background 200ms;
+  }
+  .status-row .dot.pulse { animation: pulse 1.6s ease-in-out infinite; }
+  .status-row.success .dot { background: var(--success); animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.4); }
+  }
+
+  /* 过期 / 刷新 */
+  .qr-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 10px 4px 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .qr-meta .refresh {
+    color: var(--accent);
+    font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .qr-meta .refresh svg { display: block; }
+  .qr-meta .refresh:active { opacity: 0.6; }
+  .qr-meta .expire b {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  /* 3 步指引 */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin: 24px 0 0;
+  }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .step .num {
+    width: 22px; height: 22px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    display: grid; place-items: center;
+    margin: 0 auto 8px;
+  }
+  .step .t {
+    font-size: 11.5px;
+    color: var(--fg);
+    line-height: 1.4;
+  }
+
+  /* 协议 */
+  .agree {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px;
+    margin-top: 24px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .agree a { color: var(--muted); text-decoration: none; }
+  .agree a:hover { color: var(--fg); }
+
+  /* 演示按钮（dev only） */
+  .demo-btn {
+    position: absolute;
+    bottom: 84px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--fg);
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px -2px rgba(0,0,0,0.3);
+    z-index: 10;
+  }
+  .demo-btn:active { transform: translateX(-50%) scale(0.97); }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="status-bar">
+      <div class="time">9:41</div>
+      <div class="right">
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M1 9h2v2H1zM5 6h2v5H5zM9 3h2v8H9zM13 0h2v11h-2z"/></svg>
+        <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M0.5 4 Q 7 -1, 13.5 4"/><path d="M2.5 6.5 Q 7 2.5, 11.5 6.5"/><circle cx="7" cy="9" r="1" fill="currentColor"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2.5" stroke="currentColor" stroke-opacity="0.35"/><rect x="2" y="2" width="15" height="7" rx="1.5" fill="currentColor"/><rect x="19.5" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor" fill-opacity="0.4"/></svg>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <div class="mark"><span>S</span></div>
+      <h1 class="h">扫码登录</h1>
+      <p class="sub">使用 StarVault 扫一扫即可登录</p>
+
+      <div class="qr-card" id="qrCard">
+        <div class="qr-wrap" id="qrWrap">
+          <svg class="qr-svg" id="qrSvg" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" aria-label="登录二维码"></svg>
+          <div class="qr-corner tl"></div>
+          <div class="qr-corner tr"></div>
+          <div class="qr-corner bl"></div>
+          <div class="qr-corner br"></div>
+
+          <div class="qr-overlay" id="qrOverlay">
+            <div class="icon-check" id="overlayCheck" style="display:none">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>
+            </div>
+            <div class="avatar" id="overlayAvatar" style="display:none">G</div>
+            <div class="who" id="overlayWho">Gin</div>
+            <div class="device-name" id="overlayDevice">iPhone 15 Pro · 来自广东</div>
+            <div class="ok-text" id="overlayOk" style="display:none">登录成功</div>
+          </div>
+        </div>
+
+        <div class="status-row" id="statusRow">
+          <div class="dot pulse"></div>
+          <span id="statusText">等待扫码…</span>
+        </div>
+
+        <div class="qr-meta">
+          <span class="refresh" id="refresh">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 5a4 4 0 1 1-1.2-2.8M10 1v3h-3"/></svg>
+            刷新二维码
+          </span>
+          <span class="expire">二维码 <b id="expire">02:00</b> 后过期</span>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step"><div class="num">1</div><div class="t">打开 StarVault</div></div>
+        <div class="step"><div class="num">2</div><div class="t">点击右上角扫一扫</div></div>
+        <div class="step"><div class="num">3</div><div class="t">扫描二维码并确认</div></div>
+      </div>
+
+      <div class="agree">
+        扫码登录即代表您已阅读并同意<br/>
+        <a href="#">《StarVault 用户协议》</a> · <a href="#">《隐私政策》</a>
+      </div>
+    </div>
+
+    <button class="demo-btn" id="demoBtn">演示扫码登录</button>
+
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+  </div>
+
+  <script>
+    const QR_SIZE = 25;        // 25x25 模块
+    const CELL = 8.8;          // 每个模块像素
+    const PADDING = 0;
+    const SVG = 220;
+
+    // 生成稳定的"伪 QR"数据（看起来像二维码）
+    function genQR() {
+      const cells = Array.from({ length: QR_SIZE }, () => Array(QR_SIZE).fill(0));
+      let seed = Date.now() & 0xffffffff;
+
+      // 3 个定位框（左上、右上、左下），每个 7x7
+      function finder(r0, c0) {
+        for (let r = 0; r < 7; r++) {
+          for (let c = 0; c < 7; c++) {
+            const outer = r === 0 || r === 6 || c === 0 || c === 6;
+            const inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+            cells[r0 + r][c0 + c] = (outer || inner) ? 1 : 0;
+          }
+        }
+      }
+      finder(0, 0); finder(0, QR_SIZE - 7); finder(QR_SIZE - 7, 0);
+
+      // 时序图（行 6 / 列 6，黑白交替）
+      for (let i = 8; i < QR_SIZE - 8; i++) {
+        cells[6][i] = (i + 1) % 2;
+        cells[i][6] = (i + 1) % 2;
+      }
+
+      // 中心 logo 区（5x5，挖空为白底 + 115 标识）
+      const center = Math.floor(QR_SIZE / 2);
+      const logoHalf = 2;
+      for (let r = center - logoHalf; r <= center + logoHalf; r++) {
+        for (let c = center - logoHalf; c <= center + logoHalf; c++) {
+          cells[r][c] = 0;
+        }
+      }
+
+      // 数据区伪随机
+      for (let r = 0; r < QR_SIZE; r++) {
+        for (let c = 0; c < QR_SIZE; c++) {
+          if (r < 8 && c < 8) continue;
+          if (r < 8 && c > QR_SIZE - 9) continue;
+          if (r > QR_SIZE - 9 && c < 8) continue;
+          if (r >= center - logoHalf && r <= center + logoHalf &&
+              c >= center - logoHalf && c <= center + logoHalf) continue;
+          if (r === 6 || c === 6) continue;
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+          cells[r][c] = (seed >> 16) & 1;
+        }
+      }
+      return cells;
+    }
+
+    function renderQR(cells) {
+      const svg = document.getElementById('qrSvg');
+      let inner = `<rect width="${SVG}" height="${SVG}" fill="#fff"/>`;
+      inner += `<g fill="#111">`;
+      for (let r = 0; r < QR_SIZE; r++) {
+        for (let c = 0; c < QR_SIZE; c++) {
+          if (cells[r][c]) {
+            const x = (c * CELL).toFixed(2);
+            const y = (r * CELL).toFixed(2);
+            inner += `<rect x="${x}" y="${y}" width="${CELL.toFixed(2)}" height="${CELL.toFixed(2)}"/>`;
+          }
+        }
+      }
+      inner += `</g>`;
+      // 中心 logo
+      const center = Math.floor(QR_SIZE / 2);
+      const logoSize = (5 * CELL).toFixed(2);
+      const logoX = (center * CELL - 2 * CELL).toFixed(2);
+      const logoY = (center * CELL - 2 * CELL).toFixed(2);
+      inner += `<rect x="${logoX}" y="${logoY}" width="${logoSize}" height="${logoSize}" fill="#fff" rx="3"/>`;
+      inner += `<rect x="${logoX}" y="${logoY}" width="${logoSize}" height="${logoSize}" fill="none" stroke="#111" stroke-width="1.2" rx="3"/>`;
+      const textX = (center * CELL).toFixed(2);
+      const textY = (center * CELL + 3).toFixed(2);
+      inner += `<text x="${textX}" y="${textY}" text-anchor="middle" font-size="11" font-weight="700" fill="#111" font-family="Inter, system-ui, sans-serif">S</text>`;
+      svg.innerHTML = inner;
+    }
+
+    // 初始生成
+    let sessionId = 'qr_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('od115.qrSession', sessionId);
+    renderQR(genQR());
+
+    // 过期倒计时（2 分钟）
+    let expire = 120;
+    const expireEl = document.getElementById('expire');
+    const tick = setInterval(() => {
+      expire--;
+      if (expire < 0) {
+        // 自动刷新
+        handleRefresh();
+        return;
+      }
+      const m = String(Math.floor(expire / 60)).padStart(2, '0');
+      const s = String(expire % 60).padStart(2, '0');
+      expireEl.textContent = `${m}:${s}`;
+    }, 1000);
+
+    // 刷新
+    function handleRefresh() {
+      sessionId = 'qr_' + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('od115.qrSession', sessionId);
+      renderQR(genQR());
+      expire = 120;
+      expireEl.textContent = '02:00';   // 立即更新 DOM，不必等下一次 tick
+      const wrap = document.getElementById('qrWrap');
+      wrap.classList.remove('refresh');
+      void wrap.offsetWidth;
+      wrap.classList.add('refresh');
+      setState(0);
+    }
+    document.getElementById('refresh').addEventListener('click', handleRefresh);
+
+    // 状态机：0=等待扫码, 1=已扫码, 2=登录成功
+    function setState(state) {
+      const overlay = document.getElementById('qrOverlay');
+      const statusRow = document.getElementById('statusRow');
+      const statusText = document.getElementById('statusText');
+      const dot = statusRow.querySelector('.dot');
+      const avatar = document.getElementById('overlayAvatar');
+      const check = document.getElementById('overlayCheck');
+      const ok = document.getElementById('overlayOk');
+      const qrCard = document.getElementById('qrCard');
+
+      if (state === 0) {
+        overlay.classList.remove('show');
+        statusRow.classList.remove('success');
+        dot.classList.add('pulse');
+        statusText.textContent = '等待扫码…';
+        qrCard.classList.remove('dim');
+      } else if (state === 1) {
+        overlay.classList.add('show');
+        avatar.style.display = 'grid';
+        check.style.display = 'none';
+        ok.style.display = 'none';
+        statusRow.classList.remove('success');
+        dot.classList.remove('pulse');
+        statusText.textContent = '已扫码，请在手机上确认';
+        qrCard.classList.add('dim');
+      } else if (state === 2) {
+        avatar.style.display = 'none';
+        check.style.display = 'grid';
+        ok.style.display = 'block';
+        statusRow.classList.add('success');
+        dot.classList.remove('pulse');
+        statusText.textContent = '登录成功，正在跳转…';
+        qrCard.classList.add('dim');
+      }
+    }
+
+    // 演示扫码：模拟手机扫码 → 用户确认 → 登录
+    let demoTimer = null;
+    document.getElementById('demoBtn').addEventListener('click', () => {
+      if (demoTimer) return;
+      setState(1);
+      demoTimer = setTimeout(() => {
+        setState(2);
+        localStorage.setItem('od115.loggedIn', '1');
+        localStorage.setItem('od115.user', JSON.stringify({
+          name: 'Gin', phone: '138****8000', vip: true, vipUntil: '2027-06-30'
+        }));
+        setTimeout(() => { location.href = '01-home.html'; }, 1000);
+      }, 1800);
+    });
+  </script>
+
+<script>
+/* 演示导航：返回总览（注入式，不污染原版式） */
+(function () {
+  const BACK = { href: 'index.html', label: '总览' };
+  if (window.self !== window.top) return;
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+  `;
+  const s = document.createElement('style');
+  s.textContent = css;
+  document.head.appendChild(s);
+  const back = document.createElement('a');
+  back.className = 'screen-back';
+  back.href = BACK.href;
+  back.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>' + BACK.label + '</span>';
+  document.body.appendChild(back);
+})();
+</script>
+</body>
+</html>

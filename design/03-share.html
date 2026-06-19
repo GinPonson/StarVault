@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>分享 · StarVault</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EDECE8;
+    color: #111;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 16px;
+  }
+  p { margin: 0; }
+  button { font: inherit; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; }
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --fg: #111111;
+    --muted: #6B6B6B;
+    --border: #E5E5E5;
+    --accent: #2F6FEB;
+    --tag-1:   #2F6FEB;
+    --tag-2:   #9333EA;
+    --tag-3:   #EA580C;
+    --tag-4:   #16A34A;
+    --tag-5:   #DB2777;
+  }
+  .device {
+    width: 412px; height: 900px;
+    background: #FAFAFA;
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+  }
+  .device::before {
+    content: "";
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 96px; height: 26px;
+    background: #1A1A1A;
+    border-radius: 13px;
+    z-index: 30;
+  }
+  .status-bar {
+    position: relative;
+    z-index: 5;
+    height: 38px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    color: #111;
+    background: var(--bg);
+  }
+  .status-bar .status-icons { display: inline-flex; align-items: center; gap: 6px; }
+  .screen {
+    height: calc(900px - 38px - 64px);
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .nav-bar {
+    height: 64px;
+    display: flex; align-items: center; justify-content: center; gap: 56px;
+    background: var(--bg);
+  }
+  .nav-bar .nav-btn {
+    width: 16px; height: 16px;
+    border: 1.4px solid #1A1A1A;
+    border-radius: 3px;
+  }
+  .nav-bar .nav-btn.pill { width: 38px; height: 16px; border-radius: 9px; }
+  .nav-bar .nav-btn.dot { width: 16px; height: 16px; border-radius: 50%; background: #1A1A1A; border: 0; }
+
+  /* ───────── 背景：模糊的文件列表 ───────── */
+  .bg {
+    position: absolute;
+    inset: 0;
+    padding: 12px 20px 20px;
+    filter: blur(2px) brightness(0.96);
+    pointer-events: none;
+  }
+  .bg .row {
+    height: 44px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.04);
+    margin-bottom: 8px;
+  }
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.32);
+    z-index: 2;
+  }
+
+  /* ───────── 顶部 app-bar：share-modal 模式下隐藏 ─────────
+     原因：sheet 内容高度（~800px）超过 screen 高度（798px），
+     sheet 顶端已覆盖 topbar 区域，z-index 4 的 topbar 元素会盖在
+     sheet 上造成视觉重叠（返回按钮压住 "分享与转存" 标题）。
+     iOS share-sheet 标准做法是 sheet 弹出时隐藏上层导航，
+     由 sheet 自身的 grabber + 标题 + X 关闭键承担导航职责。 */
+  .share-topbar { display: none; }
+
+  /* ───────── 保留原 topbar 样式以备他用（注释掉） ───────── */
+  /*
+  .share-topbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 4;
+  }
+  .topbar-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: rgba(255,255,255,0.14);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background 150ms;
+  }
+  .topbar-btn:hover { background: rgba(255,255,255,0.22); }
+  .topbar-btn svg { width: 20px; height: 20px; }
+  .topbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -0.01em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  /* ───────── 底部弹层 ───────── */
+  .sheet-wrap {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 3;
+    display: flex;
+    justify-content: center;
+  }
+  .sheet {
+    width: 100%;
+    background: var(--surface);
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    padding: 12px 20px 24px;
+    box-shadow: 0 -20px 40px -20px rgba(0,0,0,0.18);
+    max-height: 100%;
+  }
+  .grabber {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 12px;
+  }
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .sheet-head .t {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .sheet-head .x {
+    color: var(--muted);
+  }
+
+  /* 文件信息卡 */
+  .file-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .file-card .thumb {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2F6FEB, #1D4ED8);
+    display: grid; place-items: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .file-card .thumb svg { width: 18px; height: 18px; }
+  .file-card .info { flex: 1; min-width: 0; }
+  .file-card .info .name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-card .info .meta {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .file-card .picked {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    background: var(--accent);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  /* Tab 切换 */
+  .tab-bar {
+    display: flex;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 3px;
+    margin-bottom: 16px;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .tab.active {
+    background: var(--surface);
+    color: var(--fg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  /* 表单字段 */
+  .field {
+    margin-bottom: 14px;
+  }
+  .field .label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .select {
+    height: 44px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    color: var(--fg);
+  }
+  .select .v { font-weight: 500; }
+  .select .chev { color: var(--muted); }
+  .select-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* 链接生成结果 */
+  .result {
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .result .url {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .result .url .l {
+    flex: 1;
+    font-size: 13px;
+    color: var(--fg);
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .result .url .copy {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+    padding: 4px 10px;
+    background: rgba(47,111,235,0.08);
+    border-radius: 6px;
+  }
+  .result .extras {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  .result .extras .item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .result .extras .item svg { width: 14px; height: 14px; color: var(--accent); }
+
+  /* 权限选项 */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+  }
+  .toggle-row .l { font-size: 13px; color: var(--fg); font-weight: 500; }
+  .toggle-row .r { font-size: 12px; color: var(--muted); }
+
+  /* 开关 */
+  .switch {
+    width: 36px; height: 20px;
+    background: #E5E5E5;
+    border-radius: 999px;
+    position: relative;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 16px; height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { left: 18px; }
+
+  /* CTA */
+  .cta {
+    width: 100%;
+    height: 48px;
+    background: var(--fg);
+    color: #fff;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .cta.primary {
+    background: var(--accent);
+  }
+  .cta svg { width: 18px; height: 18px; }
+
+  /* QR 区 */
+  .qr-row {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 14px;
+    padding: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+  .qr {
+    width: 88px; height: 88px;
+    border-radius: 8px;
+    background:
+      conic-gradient(#111 25%, transparent 25% 50%, #111 50% 75%, transparent 75%) 0 0/12px 12px,
+      conic-gradient(#111 25%, transparent 25% 50%, #111 50% 75%, transparent 75%) 6px 6px/12px 12px;
+    background-color: #fff;
+    border: 4px solid #fff;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .qr-row .info .h {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .qr-row .info .sub {
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .qr-row .info .row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .qr-row .info .row span {
+    font-size: 10.5px;
+    color: var(--accent);
+    background: rgba(47,111,235,0.08);
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M1 8h2v2H1zM5 6h2v4H5zM9 4h2v6H9zM13 1h2v9h-2z"/></svg>
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><path d="M7 0C4.4 0 2 1 0 2.7L1.4 4.4C3 3 4.9 2.2 7 2.2s4 .8 5.6 2.2L14 2.7C12 1 9.6 0 7 0zm0 4c-1.4 0-2.8.5-3.8 1.4L4.6 7C5.2 6.4 6 6 7 6s1.8.4 2.4 1L10.8 5.4C9.8 4.5 8.4 4 7 4zm0 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2" stroke="currentColor"/><rect x="2" y="2" width="15" height="7" rx="1" fill="currentColor"/><rect x="20" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <div class="screen">
+      <!-- 背景模糊（模拟从文件列表唤起） -->
+      <div class="bg">
+        <div class="row"></div>
+        <div class="row"></div>
+        <div class="row"></div>
+        <div class="row"></div>
+        <div class="row"></div>
+        <div class="row"></div>
+        <div class="row"></div>
+        <div class="row"></div>
+      </div>
+      <div class="scrim"></div>
+
+      <!-- 顶部 app-bar（返回 + 标题 + 更多） -->
+      <div class="share-topbar">
+        <a class="topbar-btn" href="06-files.html" aria-label="返回文件" title="返回文件">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </a>
+        <div class="topbar-title">分享</div>
+        <button class="topbar-btn" aria-label="更多">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+        </button>
+      </div>
+
+      <!-- 底部弹层 -->
+      <div class="sheet-wrap">
+        <div class="sheet">
+          <div class="grabber"></div>
+
+          <div class="sheet-head">
+            <div class="t">分享与转存</div>
+            <button class="x" aria-label="关闭">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- 文件卡 -->
+          <div class="file-card">
+            <div class="thumb">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            </div>
+            <div class="info">
+              <div class="name">Final.Destination.2026.1080p.mkv</div>
+              <div class="meta">2.18 GB · /影视/科幻/</div>
+            </div>
+            <span class="picked">已选 1</span>
+          </div>
+
+          <!-- Tab 切换 -->
+          <div class="tab-bar">
+            <div class="tab active">链接分享</div>
+            <div class="tab">转存到我的</div>
+            <div class="tab">发送给…</div>
+          </div>
+
+          <!-- 权限 & 有效期 -->
+          <div class="field">
+            <div class="label">谁能访问</div>
+            <div class="select">
+              <span class="v">有提取码 · 任何人</span>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="select-row">
+            <div class="field">
+              <div class="label">提取码</div>
+              <div class="select" style="background: var(--fg); color: #fff; border-color: var(--fg);">
+                <span class="v" style="font-family: ui-monospace, monospace; letter-spacing: 0.15em;">8K3F</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 0115-6.7L21 8M21 3v5h-5M21 12a9 9 0 01-15 6.7L3 16M3 21v-5h5"/></svg>
+              </div>
+            </div>
+            <div class="field">
+              <div class="label">有效期</div>
+              <div class="select">
+                <span class="v">7 天</span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 高级开关 -->
+          <div class="toggle-row">
+            <span class="l">禁止转存</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" style="border-top: 1px solid var(--border);">
+            <span class="l">仅 VIP 可见</span>
+            <div class="switch on"></div>
+          </div>
+          <div class="toggle-row" style="border-top: 1px solid var(--border);">
+            <span class="l">下载需登录</span>
+            <div class="switch on"></div>
+          </div>
+
+          <!-- 二维码 -->
+          <div class="qr-row">
+            <div class="qr"></div>
+            <div class="info">
+              <div class="h">扫码分享 / 转存</div>
+              <div class="sub">朋友扫码后可直接转存到自己的网盘，无需登录提取码。</div>
+              <div class="row">
+                <span>7 天</span>
+                <span>有提取码</span>
+                <span>仅 VIP</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 链接结果 -->
+          <div class="result">
+            <div class="url">
+              <span class="l">https://115.com/s/9f2c-7ab4-2026-…</span>
+              <span class="copy">复制</span>
+            </div>
+            <div class="extras">
+              <div class="item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                剩余 7 天
+              </div>
+              <div class="item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h18M3 6h18M3 18h12"/></svg>
+                已复制 3 次
+              </div>
+            </div>
+          </div>
+
+          <button class="cta primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13"/></svg>
+            立即转存到我的网盘
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+  </div>
+
+<script>
+/* 演示导航：底部 Tab + 返回总览（注入式，不污染原版式） */
+(function () {
+  const ACTIVE = 'home'; /* 分享是首页点击文件"分享"后进入的子页，仍归属首页 */
+  const BACK = { href: '06-files.html', label: '文件' };
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+    .bottom-tab{position:absolute;left:0;right:0;bottom:46px;height:64px;background:#FFF;border-top:1px solid #E5E5E5;display:flex;align-items:stretch;z-index:5}
+    .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:#6B6B6B;font-weight:500;letter-spacing:.02em;text-decoration:none;font-family:inherit;transition:color 150ms}
+    .bt-item:hover{color:#111}
+    .bt-item.active{color:#2F6FEB}
+    .bt-item svg{width:22px;height:22px}
+    .screen{padding-bottom:64px}
+  `;
+  const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+  const TABS=[
+    {id:'home',href:'01-home.html',label:'首页',icon:'<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z"/>'},
+    {id:'files',href:'06-files.html',label:'文件',icon:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>'},
+    {id:'album',href:'07-album.html',label:'相册',icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>'},
+    {id:'profile',href:'05-profile.html',label:'我的',icon:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>'}
+  ];
+  const dev=document.querySelector('.device');
+  if(dev){
+    const navBar=dev.querySelector('.nav-bar');
+    const nav=document.createElement('nav');nav.className='bottom-tab';
+    nav.innerHTML=TABS.map(t=>`<a class="bt-item${t.id===ACTIVE?' active':''}" href="${t.href}" data-tab="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span></a>`).join('');
+    /* 插入到 .nav-bar 之前，让 bottom-tab 紧贴 nav-bar 顶部（消除 2px 缝隙） */
+    if(navBar){dev.insertBefore(nav,navBar);}else{dev.appendChild(nav);}
+  }
+
+  const back=document.createElement('a');back.className='screen-back';back.href=BACK.href;
+  back.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>'+BACK.label+'</span>';
+  document.body.appendChild(back);
+})();
+</script>
+</body>
+</html>

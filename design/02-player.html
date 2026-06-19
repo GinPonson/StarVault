@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>视频预览 · StarVault</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EDECE8;
+    color: #111;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 16px;
+  }
+  p { margin: 0; }
+  button { font: inherit; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; }
+
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --fg: #111111;
+    --muted: #6B6B6B;
+    --border: #E5E5E5;
+    --accent: #2F6FEB;
+    --accent-on: #FFFFFF;
+    --tag-1:   #2F6FEB;
+    --tag-2:   #9333EA;
+    --tag-3:   #EA580C;
+    --tag-4:   #16A34A;
+    --tag-5:   #DB2777;
+  }
+
+  /* ───────── Pixel 设备框 ───────── */
+  .device {
+    width: 412px; height: 900px;
+    background: #FAFAFA;
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+  }
+  .device::before {
+    content: "";
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 96px; height: 26px;
+    background: #1A1A1A;
+    border-radius: 13px;
+    z-index: 30;
+  }
+
+  .status-bar {
+    position: relative;
+    z-index: 5;
+    height: 38px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: #000;
+  }
+  .status-bar.light { color: #111; background: var(--bg); }
+  .status-bar .status-icons { display: inline-flex; align-items: center; gap: 6px; }
+  .status-bar svg { color: inherit; }
+
+  .screen {
+    height: calc(900px - 38px - 64px);
+    position: relative;
+    overflow: hidden;
+  }
+  .nav-bar {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    background: var(--bg);
+  }
+  .nav-bar .nav-btn {
+    width: 16px; height: 16px;
+    border: 1.4px solid #1A1A1A;
+    border-radius: 3px;
+  }
+  .nav-bar .nav-btn.pill { width: 38px; height: 16px; border-radius: 9px; }
+  .nav-bar .nav-btn.dot { width: 16px; height: 16px; border-radius: 50%; background: #1A1A1A; border: 0; }
+
+  /* ───────── Player 视图 ───────── */
+  .player {
+    background: #000;
+    color: #fff;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 顶部透明工具栏 */
+  .player-top {
+    padding: 8px 16px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .player-top .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: #fff;
+  }
+  .player-top .icon-btn svg { width: 20px; height: 20px; }
+
+  /* 视频画布 */
+  .canvas {
+    flex: 1;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(47,111,235,0.18), transparent 60%),
+      radial-gradient(ellipse at 80% 90%, rgba(15,23,42,0.40), transparent 60%),
+      #0A0A0A;
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  /* 模拟视频画面中的中心播放按钮 */
+  .play-center {
+    width: 76px; height: 76px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.92);
+    display: grid; place-items: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+  .play-center svg {
+    width: 30px; height: 30px;
+    color: #111;
+    transform: translateX(2px);
+  }
+  /* 画布右下角：画质/全屏 */
+  .canvas-hint {
+    position: absolute;
+    right: 16px; top: 12px;
+    display: flex; gap: 6px;
+  }
+  .canvas-hint .chip {
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .canvas-hint .chip.accent {
+    background: rgba(47,111,235,0.85);
+  }
+  /* 缓冲占位（左下小标） */
+  .canvas-info {
+    position: absolute;
+    left: 16px; top: 12px;
+    color: #fff;
+    font-size: 11px;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .canvas-info .rec-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(47,111,235,0.7);
+    animation: pulse 1.6s ease-out infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(47,111,235,0.7); }
+    100% { box-shadow: 0 0 0 8px rgba(47,111,235,0); }
+  }
+
+  /* 底部控制条 */
+  .player-controls {
+    padding: 8px 16px 12px;
+    background: #000;
+  }
+  .progress {
+    position: relative;
+    height: 18px;
+    display: flex;
+    align-items: center;
+  }
+  .progress .track {
+    height: 3px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 2px;
+    flex: 1;
+    position: relative;
+  }
+  .progress .filled {
+    position: absolute; left: 0; top: 0;
+    height: 100%;
+    width: 32%;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .progress .thumb {
+    position: absolute;
+    left: 32%;
+    transform: translateX(-50%);
+    width: 12px; height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  .progress .time {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    font-variant-numeric: tabular-nums;
+    margin-left: 12px;
+    min-width: 84px;
+    text-align: right;
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  .ctrl-left, .ctrl-right { display: flex; align-items: center; gap: 8px; }
+  .ctrl-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: #fff;
+  }
+  .ctrl-btn svg { width: 20px; height: 20px; }
+  .ctrl-btn.play {
+    width: 44px; height: 44px;
+    background: #fff;
+    color: #111;
+  }
+  .ctrl-btn.play svg { width: 22px; height: 22px; }
+  .ctrl-divider { width: 1px; height: 18px; background: rgba(255,255,255,0.18); margin: 0 4px; }
+
+  /* ───────── 下方文件信息 / 标签 ───────── */
+  .info {
+    background: var(--bg);
+    padding: 18px 20px 0;
+    flex: 0 0 auto;
+  }
+  .info .title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    color: var(--fg);
+  }
+  .info .sub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .info .sub .dot {
+    width: 3px; height: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+  }
+
+  .action-row {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0 0;
+  }
+  .action {
+    flex: 1;
+    height: 36px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .action svg { width: 14px; height: 14px; }
+  .action.primary {
+    background: var(--fg);
+    color: #fff;
+    border-color: var(--fg);
+  }
+
+  .tag-row {
+    display: flex;
+    gap: 6px;
+    margin: 14px 0 0;
+    flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--border);
+  }
+  .tag .swatch { width: 6px; height: 6px; border-radius: 50%; }
+  .tag.add {
+    color: var(--muted);
+    border-style: dashed;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 18px 0 0;
+  }
+
+  /* 描述 */
+  .desc {
+    padding: 16px 20px 0;
+  }
+  .desc .h {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .desc p {
+    font-size: 13.5px;
+    color: var(--fg);
+    line-height: 1.6;
+  }
+  .desc .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+    margin-top: 12px;
+  }
+  .desc .meta-grid .k {
+    color: var(--muted);
+    font-size: 11.5px;
+    margin-bottom: 2px;
+  }
+  .desc .meta-grid .v {
+    color: var(--fg);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .related {
+    padding: 18px 20px 24px;
+  }
+  .related .h {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .related .h span:first-child {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .related .h span:last-child {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .related .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .related .thumb {
+    width: 56px; height: 38px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #2F6FEB, #1D4ED8);
+    display: grid; place-items: center;
+    color: #fff;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .related .thumb.dur {
+    color: #fff;
+  }
+  .related .thumb .dur {
+    position: absolute;
+    bottom: 2px; right: 3px;
+    font-size: 9px;
+    background: rgba(0,0,0,0.7);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .related .row .info { padding: 0; background: transparent; flex: 1; min-width: 0; }
+  .related .row .info .name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .related .row .info .meta {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+  <div class="device">
+    <!-- 状态栏（暗色，播放界面用） -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M1 8h2v2H1zM5 6h2v4H5zM9 4h2v6H9zM13 1h2v9h-2z"/></svg>
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><path d="M7 0C4.4 0 2 1 0 2.7L1.4 4.4C3 3 4.9 2.2 7 2.2s4 .8 5.6 2.2L14 2.7C12 1 9.6 0 7 0zm0 4c-1.4 0-2.8.5-3.8 1.4L4.6 7C5.2 6.4 6 6 7 6s1.8.4 2.4 1L10.8 5.4C9.8 4.5 8.4 4 7 4zm0 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2" stroke="currentColor"/><rect x="2" y="2" width="15" height="7" rx="1" fill="currentColor"/><rect x="20" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <div class="screen">
+      <div class="player">
+        <!-- 顶部透明工具栏 -->
+        <div class="player-top">
+          <button class="icon-btn" aria-label="返回">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <div style="display:flex; gap:8px;">
+            <button class="icon-btn" aria-label="字幕">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12h3M14 12h3M7 16h3M14 16h3"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="投屏">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16l4-4 4 4 6-6 6 6M2 20h20"/><circle cx="8" cy="6" r="2"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="更多">
+              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 视频画布 -->
+        <div class="canvas">
+          <div class="canvas-info">
+            <span class="rec-dot"></span>
+            在线播放 · 已缓冲 8.2 MB
+          </div>
+          <div class="canvas-hint">
+            <span class="chip accent">1080P</span>
+            <span class="chip">2.0×</span>
+            <span class="chip">原声</span>
+          </div>
+          <div class="play-center">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+          </div>
+        </div>
+
+        <!-- 控制条 -->
+        <div class="player-controls">
+          <div class="progress">
+            <div class="track">
+              <div class="filled"></div>
+              <div class="thumb"></div>
+            </div>
+            <div class="time">32:14 / 1:42:08</div>
+          </div>
+          <div class="ctrl-row">
+            <div class="ctrl-left">
+              <button class="ctrl-btn" aria-label="上一集">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM9.5 12l8.5 6V6z"/></svg>
+              </button>
+              <button class="ctrl-btn play" aria-label="播放">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+              </button>
+              <button class="ctrl-btn" aria-label="下一集">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+              </button>
+            </div>
+            <div class="ctrl-right">
+              <button class="ctrl-btn" aria-label="倍速">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              </button>
+              <button class="ctrl-btn" aria-label="下载">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12M5 10l7 7 7-7M5 21h14"/></svg>
+              </button>
+              <button class="ctrl-btn" aria-label="全屏">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 下方信息 -->
+      <div class="info">
+        <div class="title">Final.Destination.2026.1080p.mkv</div>
+        <div class="sub">
+          <span>2.18 GB</span>
+          <span class="dot"></span>
+          <span>1080P · H.265</span>
+          <span class="dot"></span>
+          <span>2026-04-12 存入</span>
+        </div>
+
+        <div class="action-row">
+          <button class="action primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            下载到本地
+          </button>
+          <button class="action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13"/></svg>
+            转存
+          </button>
+          <button class="action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13"/></svg>
+            分享
+          </button>
+        </div>
+
+        <div class="tag-row">
+          <span class="tag"><span class="swatch" style="background:#EA580C"></span>影视</span>
+          <span class="tag"><span class="swatch" style="background:#16A34A"></span>4K 源</span>
+          <span class="tag">未加密</span>
+          <span class="tag add">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+            添加标签
+          </span>
+        </div>
+        <div class="divider"></div>
+      </div>
+
+      <!-- 描述 + 元数据 -->
+      <div class="desc">
+        <div class="h">文件信息</div>
+        <div class="meta-grid">
+          <div>
+            <div class="k">位置</div>
+            <div class="v">/影视/科幻/</div>
+          </div>
+          <div>
+            <div class="k">上传者</div>
+            <div class="v">我</div>
+          </div>
+          <div>
+            <div class="k">SHA-1</div>
+            <div class="v" style="font-family: ui-monospace, monospace; font-size: 11.5px;">9f2c…b4e1</div>
+          </div>
+          <div>
+            <div class="k">下载次数</div>
+            <div class="v">12</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 相关推荐 -->
+      <div class="related">
+        <div class="h">
+          <span>相关推荐</span>
+          <span>共 18 条</span>
+        </div>
+        <div class="row">
+          <div class="thumb">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            <span class="dur">1:48:02</span>
+          </div>
+          <div class="info">
+            <div class="name">Final.Destination.2025.1080p.mkv</div>
+            <div class="meta">1.92 GB · 2025-08-22</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="thumb" style="background: linear-gradient(135deg, #9333EA, #7E22CE);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            <span class="dur">2:14:55</span>
+          </div>
+          <div class="info">
+            <div class="name">Final.Destination.2024.BluRay.REMUX.mkv</div>
+            <div class="meta">32.1 GB · 2024-11-04</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="thumb" style="background: linear-gradient(135deg, #EA580C, #C2410C);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            <span class="dur">1:38:12</span>
+          </div>
+          <div class="info">
+            <div class="name">Final.Destination.Bloodlines.Trailer.mp4</div>
+            <div class="meta">142 MB · 2026-05-19</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部 3 键导航 -->
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+  </div>
+
+<script>
+/* 演示导航：底部 Tab + 返回总览（注入式，不污染原版式） */
+(function () {
+  const ACTIVE = 'home'; /* 播放器是首页点击文件进入的子屏，仍高亮首页 */
+  const BACK = { href: '06-files.html', label: '文件' };
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+    .bottom-tab{position:absolute;left:0;right:0;bottom:46px;height:64px;background:#FFF;border-top:1px solid #E5E5E5;display:flex;align-items:stretch;z-index:5}
+    .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:#6B6B6B;font-weight:500;letter-spacing:.02em;text-decoration:none;font-family:inherit;transition:color 150ms}
+    .bt-item:hover{color:#111}
+    .bt-item.active{color:#2F6FEB}
+    .bt-item svg{width:22px;height:22px}
+    .screen{padding-bottom:64px}
+  `;
+  const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+  const TABS=[
+    {id:'home',href:'01-home.html',label:'首页',icon:'<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z"/>'},
+    {id:'files',href:'06-files.html',label:'文件',icon:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>'},
+    {id:'album',href:'07-album.html',label:'相册',icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>'},
+    {id:'profile',href:'05-profile.html',label:'我的',icon:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>'}
+  ];
+  const dev=document.querySelector('.device');
+  if(dev){
+    const navBar=dev.querySelector('.nav-bar');
+    const nav=document.createElement('nav');nav.className='bottom-tab';
+    nav.innerHTML=TABS.map(t=>`<a class="bt-item${t.id===ACTIVE?' active':''}" href="${t.href}" data-tab="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span></a>`).join('');
+    /* 插入到 .nav-bar 之前，让 bottom-tab 紧贴 nav-bar 顶部（消除 2px 缝隙） */
+    if(navBar){dev.insertBefore(nav,navBar);}else{dev.appendChild(nav);}
+  }
+
+  const back=document.createElement('a');back.className='screen-back';back.href=BACK.href;
+  back.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>'+BACK.label+'</span>';
+  document.body.appendChild(back);
+})();
+</script>
+</body>
+</html>

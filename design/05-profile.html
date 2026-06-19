@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>我的 · StarVault</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EDECE8;
+    color: #111;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 16px;
+  }
+  p { margin: 0; }
+  button { font: inherit; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; }
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --fg: #111111;
+    --muted: #6B6B6B;
+    --border: #E5E5E5;
+    --accent: #2F6FEB;
+    --warn: #EAB308;
+    --danger: #DC2626;
+    --tag-1:   #2F6FEB;
+    --tag-2:   #9333EA;
+    --tag-3:   #EA580C;
+    --tag-4:   #16A34A;
+    --tag-5:   #DB2777;
+  }
+  /* 全局键盘焦点环 —— 仅键盘触发（不影响鼠标） */
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* 减弱动效偏好：压扁所有过渡与动画 */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .device {
+    width: 412px; height: 900px;
+    background: #FAFAFA;
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+  }
+  .device::before {
+    content: ""; position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 96px; height: 26px;
+    background: #1A1A1A; border-radius: 13px;
+    z-index: 30;
+  }
+  .status-bar {
+    position: relative; z-index: 5;
+    height: 38px; padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; color: #111;
+    background: var(--bg);
+  }
+  .status-bar .status-icons { display: inline-flex; align-items: center; gap: 6px; }
+  .screen {
+    flex: 1 1 0; min-height: 0;
+    position: relative; overflow-y: auto;
+    background: var(--bg);
+  }
+  .nav-bar {
+    height: 64px;
+    display: flex; align-items: center; justify-content: center; gap: 56px;
+    background: var(--bg);
+  }
+  .nav-bar .nav-btn { width: 16px; height: 16px; border: 1.4px solid #1A1A1A; border-radius: 3px; }
+  .nav-bar .nav-btn.pill { width: 38px; height: 16px; border-radius: 9px; }
+  .nav-bar .nav-btn.dot { width: 16px; height: 16px; border-radius: 50%; background: #1A1A1A; border: 0; }
+
+  /* 顶部 header */
+  .header {
+    padding: 12px 20px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .app-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; color: var(--fg); }
+  .header .actions { display: flex; gap: 4px; }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.04); }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  /* 用户卡 */
+  .user {
+    margin: 0 16px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #111, #444);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 22px; font-weight: 600;
+    letter-spacing: -0.02em;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .avatar::after {
+    content: "";
+    position: absolute;
+    right: 0; bottom: 0;
+    width: 14px; height: 14px;
+    background: #10B981;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+  }
+  .user .info { flex: 1; }
+  .user .info .name {
+    font-size: 18px; font-weight: 700;
+    letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .user .info .name .vip {
+    font-size: 10px; font-weight: 600;
+    background: var(--fg);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+  }
+  .user .info .id {
+    font-size: 12px; color: var(--muted);
+    margin-top: 2px;
+    font-family: ui-monospace, monospace;
+  }
+  .user .qr {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: grid; place-items: center;
+  }
+  .user .qr svg { width: 16px; height: 16px; color: var(--muted); }
+
+  /* 存储大卡 */
+  .storage-big {
+    margin: 0 16px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+  }
+  .storage-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 18px;
+  }
+  .storage-head .t {
+    font-size: 13px; font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .storage-head .r {
+    font-size: 12px; color: var(--muted);
+  }
+
+  .storage-body {
+    display: grid;
+    grid-template-columns: 132px 1fr;
+    gap: 18px;
+    align-items: center;
+  }
+  .ring-wrap {
+    position: relative;
+    width: 132px; height: 132px;
+  }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-bg {
+    stroke: #F0F0F0;
+    stroke-width: 12;
+    fill: none;
+  }
+  .ring-fg {
+    stroke: var(--accent);
+    stroke-width: 12;
+    fill: none;
+    stroke-linecap: round;
+  }
+  .ring-fg.warn { stroke: var(--warn); }
+  .ring-center {
+    position: absolute;
+    inset: 0;
+    display: grid; place-items: center;
+    text-align: center;
+  }
+  .ring-center .pct {
+    font-size: 24px; font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .ring-center .lbl {
+    font-size: 10px; color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 0.04em;
+  }
+  .breakdown {
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  .bd-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .bd-row .swatch { width: 8px; height: 8px; border-radius: 2px; }
+  .bd-row .name { font-size: 12.5px; color: var(--fg); flex: 1; font-weight: 500; }
+  .bd-row .val {
+    font-size: 12px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .bd-row .val .accent { color: var(--fg); font-weight: 600; }
+
+  .storage-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .storage-foot .l {
+    font-size: 12px; color: var(--muted);
+  }
+  .storage-foot .l b {
+    color: var(--fg); font-weight: 600;
+  }
+  .storage-foot .upgrade {
+    font-size: 12.5px; color: var(--accent);
+    font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .storage-foot .upgrade svg { width: 14px; height: 14px; }
+
+  /* VIP 卡 */
+  .vip {
+    margin: 0 16px 14px;
+    background: linear-gradient(135deg, #1A1A1A, #2A2A2A);
+    color: #fff;
+    border-radius: 16px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .vip::before {
+    content: "";
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 140px; height: 140px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08), transparent 60%);
+  }
+  .vip-top {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .vip-top .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600;
+  }
+  .vip-top .badge svg { width: 16px; height: 16px; }
+  .vip-top .exp {
+    font-size: 11px; color: rgba(255,255,255,0.6);
+  }
+  .vip-mid {
+    margin-top: 10px;
+    display: flex; justify-content: space-between; align-items: end;
+  }
+  .vip-mid .lvl {
+    font-size: 24px; font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .vip-mid .lvl .tier {
+    font-size: 12px; color: rgba(255,255,255,0.6);
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .vip-mid .renew {
+    background: #fff; color: #111;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12.5px; font-weight: 600;
+  }
+  .vip-bot {
+    display: flex; gap: 16px; margin-top: 14px;
+    font-size: 11.5px; color: rgba(255,255,255,0.7);
+  }
+  .vip-bot .item {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .vip-bot .item svg { width: 12px; height: 12px; color: #fff; }
+  .vip-bot .item b { color: #fff; font-weight: 600; }
+
+  /* 功能列表 */
+  .section {
+    margin: 0 16px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .section-h {
+    padding: 14px 18px 8px;
+    font-size: 11px; font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .row {
+    display: flex; align-items: center;
+    padding: 12px 18px;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 120ms ease;
+    user-select: none;
+  }
+  .row:hover { background: rgba(0,0,0,0.025); }
+  .row:active { background: rgba(0,0,0,0.05); }
+  .row:first-of-type { border-top: 0; }
+  .row .ic {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--bg);
+    display: grid; place-items: center;
+    color: var(--fg);
+    flex-shrink: 0;
+  }
+  .row .ic svg { width: 16px; height: 16px; }
+  .row .ic.accent {
+    background: rgba(47,111,235,0.10);
+    color: var(--accent);
+  }
+  .row .l {
+    flex: 1; font-size: 14px; font-weight: 500;
+    color: var(--fg);
+  }
+  .row .r {
+    font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .row .r .badge {
+    background: var(--fg); color: #fff;
+    font-size: 10px; padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .row .chev { color: var(--muted); }
+
+  /* 壁纸引擎卡 */
+.wp-card {
+  margin: 0 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex; align-items: center; gap: 14px;
+  cursor: pointer;
+  transition: background 150ms;
+  text-decoration: none;
+  color: inherit;
+  /* T6 修复 layout shift：两种态都容纳最大内容（启用态：64px 缩略图 + 三行 sub），统一高度 116px */
+  min-height: 116px;
+}
+.wp-card:hover { background: #F5F5F5; }
+.wp-card .wp-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: rgba(47,111,235,0.10);
+  color: var(--accent);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.wp-card .wp-icon svg { width: 20px; height: 20px; }
+.wp-card .wp-body { flex: 1; min-width: 0; }
+.wp-card .wp-title-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 2px;
+}
+.wp-card .wp-title {
+  font-size: 15px; font-weight: 600;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+.wp-card .wp-badge {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.wp-card .wp-badge.off {
+  background: rgba(0,0,0,0.04);
+  color: var(--muted);
+}
+.wp-card .wp-badge.on {
+  background: rgba(47,111,235,0.10);
+  color: var(--accent);
+}
+.wp-card .wp-sub {
+  font-size: 12px; color: var(--muted);
+  font-weight: 400;
+}
+.wp-card .wp-chev { color: var(--muted); flex-shrink: 0; }
+.wp-card .wp-chev svg { width: 14px; height: 14px; }
+
+/* 已启用态：缩略图 + 状态行 */
+.wp-card .wp-thumb {
+  width: 64px; height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2F6FEB, #1E4FAB);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.wp-card .wp-thumb::after {
+  content: ""; position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), transparent 50%);
+}
+.wp-card .wp-detail {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 12.5px;
+}
+.wp-card .wp-detail .wp-album {
+  font-size: 14px; font-weight: 600;
+  color: var(--fg);
+}
+.wp-card .wp-detail .wp-meta {
+  font-size: 12px; color: var(--muted);
+}
+.wp-card .wp-detail .wp-next {
+  font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+  /* 退出 */
+  .logout {
+    margin: 4px 16px 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    padding: 10px 0;
+    cursor: pointer;
+    transition: color 150ms ease;
+    user-select: none;
+  }
+  .logout:hover { color: var(--danger); }
+  .logout:focus-visible { color: var(--danger); }
+  .logout b { color: var(--danger); font-weight: 600; }
+
+  /* 移动端 fallback：设备框撑满视口，模拟真机 */
+  @media (max-width: 480px) {
+    body { padding: 0; }
+    .device {
+      width: 100vw; height: 100vh;
+      max-width: 100vw; max-height: 100vh;
+      border-radius: 0; border: 0;
+      box-shadow: none;
+    }
+    .device::before { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M1 8h2v2H1zM5 6h2v4H5zM9 4h2v6H9zM13 1h2v9h-2z"/></svg>
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><path d="M7 0C4.4 0 2 1 0 2.7L1.4 4.4C3 3 4.9 2.2 7 2.2s4 .8 5.6 2.2L14 2.7C12 1 9.6 0 7 0zm0 4c-1.4 0-2.8.5-3.8 1.4L4.6 7C5.2 6.4 6 6 7 6s1.8.4 2.4 1L10.8 5.4C9.8 4.5 8.4 4 7 4zm0 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2" stroke="currentColor"/><rect x="2" y="2" width="15" height="7" rx="1" fill="currentColor"/><rect x="20" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <main class="screen" aria-label="我的">
+      <!-- 头部 -->
+      <div class="header">
+        <div class="app-title">我的</div>
+        <div class="actions">
+          <button class="icon-btn" aria-label="钱包">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 12h4"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="设置">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3h.1a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h.1a1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8v.1a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 存储大卡 -->
+      <div class="storage-big">
+        <div class="storage-head">
+          <div class="t">云端空间</div>
+          <div class="r">2026/06/07 释放</div>
+        </div>
+        <div class="storage-body">
+          <div class="ring-wrap">
+            <svg width="132" height="132" viewBox="0 0 132 132">
+              <circle cx="66" cy="66" r="58" class="ring-bg"/>
+              <!-- 弧长 = 2πr × 占比 -->
+              <circle cx="66" cy="66" r="58" class="ring-fg"
+                stroke-dasharray="364.4" stroke-dashoffset="106.5"/>
+            </svg>
+            <div class="ring-center">
+              <div>
+                <div class="pct">71%</div>
+                <div class="lbl">已用 / 1 TB</div>
+              </div>
+            </div>
+          </div>
+          <div class="breakdown">
+            <div class="bd-row">
+              <span class="swatch" style="background: #2F6FEB"></span>
+              <span class="name">视频</span>
+              <span class="val"><span class="accent">112.4</span> GB</span>
+            </div>
+            <div class="bd-row">
+              <span class="swatch" style="background: #9333EA"></span>
+              <span class="name">图片</span>
+              <span class="val"><span class="accent">48.2</span> GB</span>
+            </div>
+            <div class="bd-row">
+              <span class="swatch" style="background: #16A34A"></span>
+              <span class="name">文档</span>
+              <span class="val"><span class="accent">12.7</span> GB</span>
+            </div>
+            <div class="bd-row">
+              <span class="swatch" style="background: #EA580C"></span>
+              <span class="name">音频</span>
+              <span class="val"><span class="accent">38.5</span> GB</span>
+            </div>
+            <div class="bd-row">
+              <span class="swatch" style="background: #D4D4D4"></span>
+              <span class="name">其他</span>
+              <span class="val"><span class="accent">26.6</span> GB</span>
+            </div>
+          </div>
+        </div>
+        <div class="storage-foot">
+          <div class="l">剩余 <b>761.6 GB</b> 可用 · 回收站 <b>2.1 GB</b></div>
+          <a class="upgrade">
+            扩容
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- 壁纸引擎 -->
+<a class="wp-card" id="wpCard" href="08-wallpaper.html">
+  <div class="wp-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="14" rx="2"/>
+      <path d="M3 18l5-5 4 4 4-4 5 5"/>
+      <circle cx="9" cy="10" r="1.5" fill="currentColor"/>
+    </svg>
+  </div>
+  <div class="wp-body">
+    <div class="wp-title-row">
+      <span class="wp-title">壁纸引擎</span>
+      <span class="wp-badge off" id="wpBadge">未启用</span>
+    </div>
+    <div class="wp-sub" id="wpSub">让相册成为会动的壁纸</div>
+  </div>
+  <span class="wp-chev">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </span>
+</a>
+
+      <!-- 常用功能 -->
+      <div class="section">
+        <div class="row">
+          <div class="ic accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a9 9 0 11-9-9M21 4v5h-5"/></svg>
+          </div>
+          <span class="l">我的分享</span>
+          <span class="r">12 个进行中</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="row">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14"/></svg>
+          </div>
+          <span class="l">回收站</span>
+          <span class="r">2.1 GB</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="row">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M2 20h20"/></svg>
+          </div>
+          <span class="l">设备管理</span>
+          <span class="r">3 台</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+
+      <!-- 设置 -->
+      <div class="section">
+        <div class="row">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2L3 7v6c0 5 3.8 9 9 10 5.2-1 9-5 9-10V7l-9-5z"/></svg>
+          </div>
+          <span class="l">隐私与安全</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="row">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+          </div>
+          <span class="l">外观与主题</span>
+          <span class="r">跟随系统</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="row">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
+          </div>
+          <span class="l">帮助与反馈</span>
+          <span class="r badge">v6.2.1</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+
+      <div class="logout" role="button" tabindex="0" aria-label="退出登录">
+        退出登录
+      </div>
+    </main>
+
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+  </div>
+
+<script>
+/* 演示导航：底部 Tab + 返回总览（注入式，不污染原版式） */
+(function () {
+  const ACTIVE = 'profile';
+  const BACK = { href: 'index.html', label: '总览' };
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+    .bottom-tab{position:absolute;left:0;right:0;bottom:46px;height:64px;background:#FFF;border-top:1px solid #E5E5E5;display:flex;align-items:stretch;z-index:5}
+    .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:#6B6B6B;font-weight:500;letter-spacing:.02em;text-decoration:none;font-family:inherit;transition:color 150ms}
+    .bt-item:hover{color:#111}
+    .bt-item.active{color:#2F6FEB}
+    .bt-item:focus-visible{outline:2px solid #2F6FEB;outline-offset:-4px;border-radius:8px}
+    .bt-item svg{width:22px;height:22px}
+    .screen{padding-bottom:64px}
+  `;
+  const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+  const TABS=[
+    {id:'home',href:'01-home.html',label:'首页',icon:'<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z"/>'},
+    {id:'files',href:'06-files.html',label:'文件',icon:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>'},
+    {id:'album',href:'07-album.html',label:'相册',icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>'},
+    {id:'profile',href:'05-profile.html',label:'我的',icon:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>'}
+  ];
+  const dev=document.querySelector('.device');
+  if(dev){
+    const navBar=dev.querySelector('.nav-bar');
+    const nav=document.createElement('nav');nav.className='bottom-tab';
+    nav.innerHTML=TABS.map(t=>`<a class="bt-item${t.id===ACTIVE?' active':''}" href="${t.href}" data-tab="${t.id}"${t.id===ACTIVE?' aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t.icon}</svg><span>${t.label}</span></a>`).join('');
+    /* 插入到 .nav-bar 之前，让 bottom-tab 紧贴 nav-bar 顶部（消除 2px 缝隙） */
+    if(navBar){dev.insertBefore(nav,navBar);}else{dev.appendChild(nav);}
+  }
+
+  const back=document.createElement('a');back.className='screen-back';back.href=BACK.href;
+  back.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>'+BACK.label+'</span>';
+  document.body.appendChild(back);
+})();
+</script>
+
+<script>
+/* 联动：壁纸引擎状态卡 → 根据 localStorage 渲染 active 态（只读不写）
+ * 新 state 结构（v2）：{ enabled, albumId, mode, display, liveWallpaper }
+ *   - 不再有 adv: {fav, recent, wifi, dedupe}（旧结构已废弃）
+ *   - display 取值映射：crop→居中裁剪, stretch→拉伸填充, fit→适配, tile→平铺
+ *                       兼容旧值：smart→居中裁剪, fill→拉伸填充, blur→平铺
+ *   - active 态不再显示「下次切换 14:30」（已无 preview/hero 概念）
+ */
+(function () {
+  'use strict';
+
+  // XSS 防御：所有从 localStorage 流入 DOM 的字符串都走这里
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  const STORAGE_KEY = '__wallpaperEngine';
+  // 切换频率：结构化对象（与 08-wallpaper 的 MIGRATE_MODE 同步）
+  // 老字符串值（'unlock' / 'hourly' / 'six-hours' / 'daily-9' / 'manual'）自动迁移
+  const MIGRATE_MODE = {
+    'unlock':    { type: 'unlock' },
+    'manual':    { type: 'manual' },
+    'daily-9':   { type: 'daily',  time: '09:00' },
+    'hourly':    { type: 'interval', value: 1, unit: 'hour' },
+    'six-hours': { type: 'interval', value: 6, unit: 'hour' }
+  };
+  const UNIT_LABEL = { minute: '分钟', hour: '小时', day: '天' };
+  function modeLabelOf(m) {
+    if (!m) return '每次解锁';
+    if (m.type === 'unlock') return '每次解锁';
+    if (m.type === 'manual') return '仅手动';
+    if (m.type === 'interval') {
+      const v = Math.max(1, parseInt(m.value) || 1);
+      const u = UNIT_LABEL[m.unit] || '小时';
+      return '每 ' + v + ' ' + u;
+    }
+    if (m.type === 'daily') return '每天 ' + (m.time || '09:00');
+    return '每次解锁';
+  }
+  function normalizeMode(m) {
+    if (m == null) return null;
+    if (typeof m === 'string') return MIGRATE_MODE[m] || null;
+    return m;
+  }
+
+  let enabled = false;
+  let albumName = '旅行 2025';
+  let modeLabel = '每次解锁';
+  let displayLabel = '居中裁剪';
+  let liveWallpaperOn = false;
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    enabled = !!s.enabled;
+    if (s.albumId) {
+      const map = { 'mine':'我的相册','travel':'旅行 2025','family':'家庭','work':'工作','fav':'收藏' };
+      albumName = map[s.albumId] || albumName;
+    }
+    if (s.mode) {
+      modeLabel = modeLabelOf(normalizeMode(s.mode));
+    }
+    if (s.display) {
+      // 新 5 项优先；旧 4 项（fit/tile）+ 旧版枚举（smart/fill/blur）保留兼容映射
+      const map = {
+        'crop':      '居中裁剪',
+        'stretch':   '拉伸填充',
+        'fill-crop': '填充裁剪',
+        'full':      '完整显示',
+        'center':    '居中显示',
+        // 旧值兼容（已删除的选项；保留标签以读老 localStorage）
+        'fit':       '适配',
+        'tile':      '平铺',
+        'smart':     '居中裁剪',
+        'fill':      '拉伸填充',
+        'blur':      '平铺'
+      };
+      displayLabel = map[s.display] || displayLabel;
+    }
+    liveWallpaperOn = !!s.liveWallpaper;
+  } catch (e) {}
+
+  const card = document.getElementById('wpCard');
+  const badge = document.getElementById('wpBadge');
+  const sub = document.getElementById('wpSub');
+  if (!card || !badge || !sub) return;
+
+  if (enabled) {
+    // 已启用：badge on + 两行状态（相册 + meta）+ icon → thumb
+    badge.textContent = '启用中';
+    badge.classList.remove('off');
+    badge.classList.add('on');
+
+    // 用 DOM API 安全构建子节点（所有 localStorage 流入值经 escapeHtml 包装）
+    sub.textContent = '';
+    const detail = document.createElement('div');
+    detail.className = 'wp-detail';
+    const elAlbum = document.createElement('span');
+    elAlbum.className = 'wp-album';
+    elAlbum.textContent = albumName;
+    const elMeta = document.createElement('span');
+    elMeta.className = 'wp-meta';
+    // meta 行：mode · display · 动态壁纸:开/关
+    elMeta.textContent = modeLabel + ' · ' + displayLabel + ' · 动态壁纸:' + (liveWallpaperOn ? '开' : '关');
+    detail.appendChild(elAlbum);
+    detail.appendChild(elMeta);
+    sub.appendChild(detail);
+
+    // 在 wp-icon 之前插入 wp-thumb（仅在不存在时）
+    const icon = card.querySelector('.wp-icon');
+    if (icon && !card.querySelector('.wp-thumb')) {
+      const thumb = document.createElement('div');
+      thumb.className = 'wp-thumb';
+      icon.replaceWith(thumb);
+    }
+  } else {
+    // 未启用：badge off + 单行 + thumb → icon（恢复原始静态 SVG）
+    badge.textContent = '未启用';
+    badge.classList.remove('on');
+    badge.classList.add('off');
+    sub.textContent = '让相册成为会动的壁纸';
+    const thumb = card.querySelector('.wp-thumb');
+    if (thumb) {
+      const icon = document.createElement('div');
+      icon.className = 'wp-icon';
+      // SVG 是静态字符串，无注入风险；但仍用 DOM API 进一步消除 XSS 面
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '1.6');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      const r = document.createElementNS(svgNS, 'rect');
+      r.setAttribute('x', '3'); r.setAttribute('y', '4');
+      r.setAttribute('width', '18'); r.setAttribute('height', '14');
+      r.setAttribute('rx', '2');
+      svg.appendChild(r);
+      const p = document.createElementNS(svgNS, 'path');
+      p.setAttribute('d', 'M3 18l5-5 4 4 4-4 5 5');
+      svg.appendChild(p);
+      const c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', '9'); c.setAttribute('cy', '10');
+      c.setAttribute('r', '1.5'); c.setAttribute('fill', 'currentColor');
+      svg.appendChild(c);
+      icon.appendChild(svg);
+      thumb.replaceWith(icon);
+    }
+  }
+})();
+</script>
+</body>
+</html>

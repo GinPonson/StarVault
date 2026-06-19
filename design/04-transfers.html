@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>传输中心 · StarVault</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EDECE8;
+    color: #111;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 16px;
+  }
+  p { margin: 0; }
+  button { font: inherit; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; }
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --fg: #111111;
+    --muted: #6B6B6B;
+    --border: #E5E5E5;
+    --accent: #2F6FEB;
+    --success: #17A34A;
+    --warn: #EAB308;
+    --danger: #DC2626;
+    --tag-1:   #2F6FEB;
+    --tag-2:   #9333EA;
+    --tag-3:   #EA580C;
+    --tag-4:   #16A34A;
+    --tag-5:   #DB2777;
+  }
+  .device {
+    width: 412px; height: 900px;
+    background: #FAFAFA;
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+  }
+  .device::before {
+    content: ""; position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 96px; height: 26px;
+    background: #1A1A1A; border-radius: 13px;
+    z-index: 30;
+  }
+  .status-bar {
+    position: relative; z-index: 5;
+    height: 38px; padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; color: #111;
+    background: var(--bg);
+  }
+  .status-bar .status-icons { display: inline-flex; align-items: center; gap: 6px; }
+  .screen {
+    height: calc(900px - 38px - 64px);
+    position: relative; overflow: hidden;
+    background: var(--bg);
+  }
+  .nav-bar {
+    height: 64px;
+    display: flex; align-items: center; justify-content: center; gap: 56px;
+    background: var(--bg);
+  }
+  .nav-bar .nav-btn { width: 16px; height: 16px; border: 1.4px solid #1A1A1A; border-radius: 3px; }
+  .nav-bar .nav-btn.pill { width: 38px; height: 16px; border-radius: 9px; }
+  .nav-bar .nav-btn.dot { width: 16px; height: 16px; border-radius: 50%; background: #1A1A1A; border: 0; }
+
+  /* App 头部 */
+  .app-bar {
+    padding: 8px 16px 8px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .app-title {
+    font-size: 22px; font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--fg);
+  }
+  .app-bar .app-title .sub {
+    font-size: 11px; color: var(--muted);
+    font-weight: 500;
+    margin-left: 8px;
+  }
+  .app-bar .actions { display: flex; gap: 4px; }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.04); }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  /* 概览卡 */
+  .overview {
+    margin: 0 16px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .overview .top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .overview .top .l {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--muted);
+    font-weight: 500;
+  }
+  .overview .top .l .live {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(47,111,235,0.18);
+  }
+  .overview .top .r {
+    font-size: 11px; color: var(--muted);
+    font-family: ui-monospace, monospace;
+  }
+  .overview .stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  }
+  .overview .stat .n {
+    font-size: 19px; font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .overview .stat .n .u {
+    font-size: 11px; color: var(--muted);
+    font-weight: 500;
+    margin-left: 2px;
+  }
+  .overview .stat .l {
+    font-size: 11px; color: var(--muted);
+    margin-top: 2px;
+  }
+  .overview .stat .n .accent { color: var(--accent); }
+
+  /* Tab */
+  .tabs {
+    display: flex;
+    margin: 0 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 500;
+    position: relative;
+    margin-right: 4px;
+  }
+  .tab.active {
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .tab.active::after {
+    content: "";
+    position: absolute;
+    left: 14px; right: 14px;
+    bottom: -1px;
+    height: 2px;
+    background: var(--fg);
+    border-radius: 1px;
+  }
+  .tab .n {
+    font-size: 10.5px;
+    color: var(--muted);
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    font-weight: 500;
+  }
+  .tab.active .n {
+    background: var(--fg);
+    color: var(--bg);
+  }
+
+  /* 操作行 */
+  .op-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 20px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .op-row .all-pause {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--fg); font-weight: 500;
+  }
+  .op-row .all-pause svg { width: 14px; height: 14px; }
+
+  /* 任务列表 */
+  .list {
+    padding: 0 16px;
+    overflow-y: auto;
+    height: calc(100% - 60px);
+  }
+  .item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .item-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .item-thumb {
+    width: 32px; height: 32px;
+    border-radius: 7px;
+    display: grid; place-items: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .item-thumb.video { background: linear-gradient(135deg, #2F6FEB, #1D4ED8); }
+  .item-thumb.audio { background: linear-gradient(135deg, #9333EA, #7E22CE); }
+  .item-thumb.image { background: linear-gradient(135deg, #EA580C, #C2410C); }
+  .item-thumb.zip   { background: linear-gradient(135deg, #DB2777, #BE185D); }
+  .item-thumb svg { width: 14px; height: 14px; }
+  .item-name {
+    flex: 1; min-width: 0;
+    font-size: 13.5px; font-weight: 500;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .item .pause, .item .more {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    color: var(--muted);
+  }
+  .item .pause:hover, .item .more:hover { background: rgba(0,0,0,0.04); color: var(--fg); }
+  .item .pause svg, .item .more svg { width: 14px; height: 14px; }
+
+  .item-bar {
+    height: 4px;
+    background: #F0F0F0;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+  .item-bar .fill {
+    position: absolute; left: 0; top: 0;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .item-bar .fill.green { background: var(--success); }
+  .item-bar .fill.gray { background: #D4D4D4; }
+  .item-bar .fill.warn { background: var(--warn); }
+  .item-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .item-foot .l { display: flex; gap: 8px; }
+  .item-foot .pct { color: var(--fg); font-weight: 600; }
+  .item-foot .speed { color: var(--accent); font-weight: 500; }
+  .item-foot .status { display: inline-flex; align-items: center; gap: 4px; }
+  .item-foot .status.dot::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+  .item-foot .status.wait::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--warn);
+  }
+  .item-foot .status.err::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M1 8h2v2H1zM5 6h2v4H5zM9 4h2v6H9zM13 1h2v9h-2z"/></svg>
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><path d="M7 0C4.4 0 2 1 0 2.7L1.4 4.4C3 3 4.9 2.2 7 2.2s4 .8 5.6 2.2L14 2.7C12 1 9.6 0 7 0zm0 4c-1.4 0-2.8.5-3.8 1.4L4.6 7C5.2 6.4 6 6 7 6s1.8.4 2.4 1L10.8 5.4C9.8 4.5 8.4 4 7 4zm0 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2" stroke="currentColor"/><rect x="2" y="2" width="15" height="7" rx="1" fill="currentColor"/><rect x="20" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <div class="screen">
+      <!-- App 头部 -->
+      <div class="app-bar">
+        <div class="app-title">传输 <span class="sub">3 进行中</span></div>
+        <div class="actions">
+          <button class="icon-btn" aria-label="搜索">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="清空已完成">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 概览 -->
+      <div class="overview">
+        <div class="top">
+          <div class="l"><span class="live"></span> 实时状态</div>
+          <div class="r">↑ 12.4 MB/s · ↓ 38.7 MB/s</div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="n">3<span class="u">/ 31</span></div>
+            <div class="l">进行中</div>
+          </div>
+          <div class="stat">
+            <div class="n">12.4 <span class="u">MB</span></div>
+            <div class="l">已传输</div>
+          </div>
+          <div class="stat">
+            <div class="n">28</div>
+            <div class="l">已完成</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab -->
+      <div class="tabs">
+        <div class="tab active">进行中 <span class="n">3</span></div>
+        <div class="tab">已完成 <span class="n">28</span></div>
+        <div class="tab">已离线 <span class="n">12</span></div>
+      </div>
+
+      <!-- 批量操作 -->
+      <div class="op-row">
+        <span>已按添加时间排序</span>
+        <button class="all-pause">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+          全部暂停
+        </button>
+      </div>
+
+      <!-- 任务列表 -->
+      <div class="list">
+        <!-- 上传中 -->
+        <div class="item">
+          <div class="item-head">
+            <div class="item-thumb video">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            </div>
+            <div class="item-name">Final.Destination.2026.1080p.mkv</div>
+            <button class="pause">
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+            </button>
+            <button class="more">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg>
+            </button>
+          </div>
+          <div class="item-bar">
+            <div class="fill" style="width: 64%"></div>
+          </div>
+          <div class="item-foot">
+            <div class="l">
+              <span class="pct">64%</span>
+              <span>1.39 / 2.18 GB</span>
+            </div>
+            <div class="status dot">↑ 8.4 MB/s · 1 分 23 秒</div>
+          </div>
+        </div>
+
+        <!-- 下载中 -->
+        <div class="item">
+          <div class="item-head">
+            <div class="item-thumb audio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <div class="item-name">Pink.Floyd.-.Time.flac</div>
+            <button class="pause">
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+            </button>
+            <button class="more">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg>
+            </button>
+          </div>
+          <div class="item-bar">
+            <div class="fill" style="width: 23%"></div>
+          </div>
+          <div class="item-foot">
+            <div class="l">
+              <span class="pct">23%</span>
+              <span>14.2 / 62.4 MB</span>
+            </div>
+            <div class="status dot">↓ 24.1 MB/s · 3 秒</div>
+          </div>
+        </div>
+
+        <!-- 等待中 -->
+        <div class="item">
+          <div class="item-head">
+            <div class="item-thumb zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 6v3M12 11v3M12 16v3"/></svg>
+            </div>
+            <div class="item-name">毕业设计源码 v2.zip</div>
+            <button class="pause">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            </button>
+            <button class="more">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg>
+            </button>
+          </div>
+          <div class="item-bar">
+            <div class="fill warn" style="width: 0%"></div>
+          </div>
+          <div class="item-foot">
+            <div class="l">
+              <span class="pct">0%</span>
+              <span>等待中</span>
+            </div>
+            <div class="status wait">排队 2 · 约 4 分钟</div>
+          </div>
+        </div>
+
+        <!-- 上传完成 -->
+        <div class="item">
+          <div class="item-head">
+            <div class="item-thumb image" style="background: linear-gradient(135deg, #16A34A, #15803D);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>
+            </div>
+            <div class="item-name">京都樱花 / DSC_4821.jpg</div>
+            <button class="pause" style="color: var(--success);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+            </button>
+            <button class="more">
+              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            </button>
+          </div>
+          <div class="item-bar">
+            <div class="fill green" style="width: 100%"></div>
+          </div>
+          <div class="item-foot">
+            <div class="l">
+              <span class="pct">100%</span>
+              <span>14.2 MB</span>
+            </div>
+            <div class="status dot">刚刚 · 21.4 MB/s</div>
+          </div>
+        </div>
+
+        <!-- 失败任务 -->
+        <div class="item">
+          <div class="item-head">
+            <div class="item-thumb video" style="background: linear-gradient(135deg, #DC2626, #B91C1C);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </div>
+            <div class="item-name">Sample.HDR.2160p.Dolby.mkv</div>
+            <button class="pause" style="color: var(--accent);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 0115-6.7L21 8M21 3v5h-5M21 12a9 9 0 01-15 6.7L3 16M3 21v-5h5"/></svg>
+            </button>
+            <button class="more">
+              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            </button>
+          </div>
+          <div class="item-bar">
+            <div class="fill gray" style="width: 38%"></div>
+          </div>
+          <div class="item-foot">
+            <div class="l">
+              <span class="pct">38%</span>
+              <span>已暂停</span>
+            </div>
+            <div class="status err">网络中断 · 3 次重试</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+  </div>
+
+<script>
+/* 演示导航：底部 Tab + 返回总览（注入式，不污染原版式） */
+(function () {
+  const ACTIVE = 'files';
+  const BACK = { href: '06-files.html', label: '文件' };
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+    .bottom-tab{position:absolute;left:0;right:0;bottom:46px;height:64px;background:#FFF;border-top:1px solid #E5E5E5;display:flex;align-items:stretch;z-index:5}
+    .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:#6B6B6B;font-weight:500;letter-spacing:.02em;text-decoration:none;font-family:inherit;transition:color 150ms}
+    .bt-item:hover{color:#111}
+    .bt-item.active{color:#2F6FEB}
+    .bt-item svg{width:22px;height:22px}
+    .screen{padding-bottom:64px}
+  `;
+  const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+  const TABS=[
+    {id:'home',href:'01-home.html',label:'首页',icon:'<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z"/>'},
+    {id:'files',href:'06-files.html',label:'文件',icon:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>'},
+    {id:'album',href:'07-album.html',label:'相册',icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>'},
+    {id:'profile',href:'05-profile.html',label:'我的',icon:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>'}
+  ];
+  const dev=document.querySelector('.device');
+  if(dev){
+    const navBar=dev.querySelector('.nav-bar');
+    const nav=document.createElement('nav');nav.className='bottom-tab';
+    nav.innerHTML=TABS.map(t=>`<a class="bt-item${t.id===ACTIVE?' active':''}" href="${t.href}" data-tab="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span></a>`).join('');
+    /* 插入到 .nav-bar 之前，让 bottom-tab 紧贴 nav-bar 顶部（消除 2px 缝隙） */
+    if(navBar){dev.insertBefore(nav,navBar);}else{dev.appendChild(nav);}
+  }
+
+  const back=document.createElement('a');back.className='screen-back';back.href=BACK.href;
+  back.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>'+BACK.label+'</span>';
+  document.body.appendChild(back);
+})();
+</script>
+</body>
+</html>

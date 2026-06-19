@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>首页 · StarVault</title>
+<style>
+  /* ───────── 基础 Reset ───────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #EDECE8;
+    color: #111111;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 16px;
+  }
+  p { margin: 0; }
+  button { font: inherit; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; }
+
+  /* ───────── 颜色 Token（Neutral Modern） ───────── */
+  :root {
+    --bg:      #FAFAFA;
+    --surface: #FFFFFF;
+    --fg:      #111111;
+    --muted:   #6B6B6B;
+    --border:  #E5E5E5;
+    --accent:  #2F6FEB;
+    --accent-on: #FFFFFF;
+    --accent-soft: rgba(47, 111, 235, 0.08);
+    --success: #17A34A;
+    --warn:    #EAB308;
+    --danger:  #DC2626;
+    --tag-1:   #2F6FEB;
+    --tag-2:   #9333EA;
+    --tag-3:   #EA580C;
+    --tag-4:   #16A34A;
+    --tag-5:   #DB2777;
+  }
+
+  /* ───────── Pixel 设备框 ───────── */
+  .device {
+    width: 412px;
+    height: 900px;
+    background: #FAFAFA;
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+  }
+  /* 打孔屏 */
+  .device::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 96px;
+    height: 26px;
+    background: #1A1A1A;
+    border-radius: 13px;
+    z-index: 10;
+  }
+  /* 状态栏 */
+  .status-bar {
+    height: 38px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #111;
+    position: relative;
+    z-index: 1;
+  }
+  .status-bar .status-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* 屏幕区（除状态栏+导航栏） */
+  .screen {
+    height: calc(900px - 38px - 64px);
+    position: relative;
+    overflow: hidden;
+  }
+  /* 底部 3 键导航 */
+  .nav-bar {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    background: #FAFAFA;
+  }
+  .nav-bar .nav-btn {
+    width: 16px; height: 16px;
+    border: 1.4px solid #1A1A1A;
+    border-radius: 3px;
+    display: grid; place-items: center;
+  }
+  .nav-bar .nav-btn.pill {
+    width: 38px; height: 16px;
+    border-radius: 9px;
+  }
+  .nav-bar .nav-btn.dot {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #1A1A1A;
+    border: 0;
+  }
+
+  /* ───────── App 内部样式 ───────── */
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  .app-bar {
+    padding: 8px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .app-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--fg);
+  }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: #111;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.04); }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .row-icons { display: flex; gap: 4px; }
+
+  /* 快捷入口 */
+  .quick {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 0 20px 16px;
+  }
+  .quick .q {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 4px;
+    color: var(--fg);
+    font-size: 12px;
+  }
+  .quick .q .qb {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: grid; place-items: center;
+  }
+  .quick .q .qb svg { width: 20px; height: 20px; color: var(--fg); }
+  .quick .q .qb .dot-rec {
+    position: relative;
+  }
+  .quick .q .qb .dot-rec::after {
+    content: "";
+    position: absolute;
+    top: -2px; right: -2px;
+    width: 8px; height: 8px;
+    background: var(--danger);
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+  }
+
+  /* 标签栏（横向滚动） */
+  .tag-strip {
+    padding: 0 20px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-bottom: 12px;
+  }
+  .tag-strip::-webkit-scrollbar { display: none; }
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--fg);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .tag-chip .swatch {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .tag-chip.active {
+    background: var(--fg);
+    color: #fff;
+    border-color: var(--fg);
+  }
+
+  /* 段头 */
+  .section-head {
+    padding: 8px 20px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section-head .h {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .section-head .more {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* 文件列表 */
+  .file-list {
+    padding: 0 20px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid #F2F2F2;
+  }
+  .file-row:last-child { border-bottom: 0; }
+  .file-thumb {
+    width: 40px; height: 40px;
+    border-radius: 9px;
+    display: grid; place-items: center;
+    color: #fff;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  .file-thumb svg { width: 18px; height: 18px; }
+  .file-thumb.folder { background: linear-gradient(135deg, #6B7280, #4B5563); }
+  .file-thumb.video  { background: linear-gradient(135deg, #2F6FEB, #1D4ED8); }
+  .file-thumb.image  { background: linear-gradient(135deg, #EA580C, #C2410C); }
+  .file-thumb.audio  { background: linear-gradient(135deg, #9333EA, #7E22CE); }
+  .file-thumb.doc    { background: linear-gradient(135deg, #16A34A, #15803D); }
+  .file-thumb.zip    { background: linear-gradient(135deg, #DB2777, #BE185D); }
+  .file-info { flex: 1; min-width: 0; }
+  .file-info .name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+  .file-info .meta {
+    font-size: 11.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .file-info .meta .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 16px;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .file-info .meta .tag.t-1 { background: rgba(47,111,235,0.08); color: var(--tag-1); }
+  .file-info .meta .tag.t-2 { background: rgba(147,51,234,0.10); color: var(--tag-2); }
+  .file-info .meta .tag.t-3 { background: rgba(234,88,12,0.10); color: var(--tag-3); }
+  .file-info .meta .tag.t-4 { background: rgba(22,163,74,0.10); color: var(--tag-4); }
+  .file-info .meta .tag.t-5 { background: rgba(219,39,119,0.10); color: var(--tag-5); }
+  .file-more {
+    color: var(--muted);
+    padding: 4px;
+  }
+
+  /* FAB */
+  .fab {
+    position: absolute;
+    right: 20px;
+    bottom: 24px;
+    width: 56px; height: 56px;
+    border-radius: 28px;
+    background: var(--fg);
+    color: #fff;
+    display: grid; place-items: center;
+    box-shadow: 0 8px 24px -6px rgba(0,0,0,0.3);
+    z-index: 5;
+  }
+  .fab svg { width: 24px; height: 24px; }
+</style>
+</head>
+<body>
+  <div class="device">
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M1 8h2v2H1zM5 6h2v4H5zM9 4h2v6H9zM13 1h2v9h-2z"/></svg>
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><path d="M7 0C4.4 0 2 1 0 2.7L1.4 4.4C3 3 4.9 2.2 7 2.2s4 .8 5.6 2.2L14 2.7C12 1 9.6 0 7 0zm0 4c-1.4 0-2.8.5-3.8 1.4L4.6 7C5.2 6.4 6 6 7 6s1.8.4 2.4 1L10.8 5.4C9.8 4.5 8.4 4 7 4zm0 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2" stroke="currentColor"/><rect x="2" y="2" width="15" height="7" rx="1" fill="currentColor"/><rect x="20" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <!-- 屏幕 -->
+    <div class="screen">
+      <div class="app">
+
+        <!-- App Bar -->
+        <div class="app-bar">
+          <div class="app-title">首页</div>
+          <div class="row-icons">
+            <button class="icon-btn" aria-label="扫描">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="通知">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 003.4 0"/></svg>
+            </button>
+            <button class="icon-btn" aria-label="更多">
+              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 快捷入口 -->
+        <div class="quick">
+          <div class="q">
+            <div class="qb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </div>
+            <span>最近</span>
+          </div>
+          <div class="q">
+            <div class="qb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M19 14l-7 7-7-7M19 5l-7 7-7-7"/></svg>
+            </div>
+            <span>收藏</span>
+          </div>
+          <a class="q" href="04-transfers.html">
+            <div class="qb">
+              <div class="dot-rec">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13"/></svg>
+              </div>
+            </div>
+            <span>传输</span>
+          </a>
+          <div class="q">
+            <div class="qb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a9 9 0 11-9-9M21 4v5h-5"/></svg>
+            </div>
+            <span>回收站</span>
+          </div>
+        </div>
+
+        <!-- 标签栏 -->
+        <div class="tag-strip">
+          <div class="tag-chip active">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l5 5L20 7"/></svg>
+            全部
+          </div>
+          <div class="tag-chip"><span class="swatch" style="background:#2F6FEB"></span>工作</div>
+          <div class="tag-chip"><span class="swatch" style="background:#9333EA"></span>学习</div>
+          <div class="tag-chip"><span class="swatch" style="background:#EA580C"></span>影视</div>
+          <div class="tag-chip"><span class="swatch" style="background:#16A34A"></span>资料</div>
+          <div class="tag-chip"><span class="swatch" style="background:#DB2777"></span>音乐</div>
+          <div class="tag-chip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            新建
+          </div>
+        </div>
+
+        <!-- 段头：文件列表 -->
+        <div class="section-head">
+          <span class="h">我的文件</span>
+          <span class="more">排序：最近 ▾</span>
+        </div>
+
+        <!-- 文件列表 -->
+        <div class="file-list">
+          <div class="file-row">
+            <div class="file-thumb folder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+            </div>
+            <div class="file-info">
+              <div class="name">设计交付 / 2026Q2</div>
+              <div class="meta">
+                <span>28 项</span>
+                <span>·</span>
+                <span>2 小时前</span>
+                <span class="tag t-1">工作</span>
+              </div>
+            </div>
+            <svg class="file-more" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </div>
+
+          <div class="file-row">
+            <div class="file-thumb video">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+            </div>
+            <div class="file-info">
+              <div class="name">Final.Destination.2026.1080p.mkv</div>
+              <div class="meta">
+                <span>2.18 GB</span>
+                <span>·</span>
+                <span>1:42:08</span>
+                <span class="tag t-3">影视</span>
+              </div>
+            </div>
+            <svg class="file-more" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </div>
+
+          <div class="file-row">
+            <div class="file-thumb audio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <div class="file-info">
+              <div class="name">陈奕迅 - 孤勇者.flac</div>
+              <div class="meta">
+                <span>32.4 MB</span>
+                <span>·</span>
+                <span>04:23</span>
+                <span class="tag t-5">音乐</span>
+              </div>
+            </div>
+            <svg class="file-more" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </div>
+
+          <div class="file-row">
+            <div class="file-thumb doc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M9 13h6M9 17h6M9 9h2"/></svg>
+            </div>
+            <div class="file-info">
+              <div class="name">2026 年度产品规划 v3.2.pdf</div>
+              <div class="meta">
+                <span>8.7 MB</span>
+                <span>·</span>
+                <span>今天 09:12</span>
+                <span class="tag t-1">工作</span>
+              </div>
+            </div>
+            <svg class="file-more" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </div>
+
+          <div class="file-row">
+            <div class="file-thumb image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            </div>
+            <div class="file-info">
+              <div class="name">京都樱花 / 4 月 / DSC_4821.jpg</div>
+              <div class="meta">
+                <span>14.2 MB</span>
+                <span>·</span>
+                <span>4032 × 3024</span>
+                <span class="tag t-2">生活</span>
+              </div>
+            </div>
+            <svg class="file-more" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </div>
+
+          <div class="file-row">
+            <div class="file-thumb zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 6v3M12 11v3M12 16v3"/></svg>
+            </div>
+            <div class="file-info">
+              <div class="name">毕业设计源码 v2.zip</div>
+              <div class="meta">
+                <span>62.1 MB</span>
+                <span>·</span>
+                <span>昨天 23:14</span>
+                <span class="tag t-2">学习</span>
+              </div>
+            </div>
+            <svg class="file-more" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部 3 键导航 -->
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+  </div>
+
+<script>
+/* 演示导航：底部 Tab + 返回总览（注入式，不污染原版式） */
+(function () {
+  const ACTIVE = 'home';
+  const BACK = { href: 'index.html', label: '总览' };
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+    .bottom-tab{position:absolute;left:0;right:0;bottom:46px;height:64px;background:#FFF;border-top:1px solid #E5E5E5;display:flex;align-items:stretch;z-index:5}
+    .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:#6B6B6B;font-weight:500;letter-spacing:.02em;text-decoration:none;font-family:inherit;transition:color 150ms}
+    .bt-item:hover{color:#111}
+    .bt-item.active{color:#2F6FEB}
+    .bt-item svg{width:22px;height:22px}
+    .screen{padding-bottom:64px}
+  `;
+  const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+  const TABS=[
+    {id:'home',href:'01-home.html',label:'首页',icon:'<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z"/>'},
+    {id:'files',href:'06-files.html',label:'文件',icon:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>'},
+    {id:'album',href:'07-album.html',label:'相册',icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>'},
+    {id:'profile',href:'05-profile.html',label:'我的',icon:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>'}
+  ];
+  const dev=document.querySelector('.device');
+  if(dev){
+    const navBar=dev.querySelector('.nav-bar');
+    const nav=document.createElement('nav');nav.className='bottom-tab';
+    nav.innerHTML=TABS.map(t=>`<a class="bt-item${t.id===ACTIVE?' active':''}" href="${t.href}" data-tab="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span></a>`).join('');
+    /* 插入到 .nav-bar 之前，让 bottom-tab 紧贴 nav-bar 顶部（消除 2px 缝隙） */
+    if(navBar){dev.insertBefore(nav,navBar);}else{dev.appendChild(nav);}
+  }
+
+  /* 仅在直接打开时显示 back；被 index.html 的 iframe 嵌入时隐藏避免视觉噪音 */
+  const back=document.createElement('a');back.className='screen-back';back.href=BACK.href;
+  back.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>'+BACK.label+'</span>';
+  document.body.appendChild(back);
+})();
+</script>
+</body>
+</html>

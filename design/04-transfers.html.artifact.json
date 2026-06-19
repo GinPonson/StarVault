@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "04-transfers.html",
+  "entry": "04-transfers.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-06-07T02:47:52.296Z",
+  "updatedAt": "2026-06-07T02:47:52.296Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

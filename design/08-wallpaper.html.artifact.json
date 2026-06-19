@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "08-wallpaper.html",
+  "entry": "08-wallpaper.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-06-13T05:22:38.498Z",
+  "updatedAt": "2026-06-13T05:22:38.498Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

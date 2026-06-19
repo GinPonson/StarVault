@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "02-player.html",
+  "entry": "02-player.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-06-07T02:47:31.171Z",
+  "updatedAt": "2026-06-07T02:47:31.171Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

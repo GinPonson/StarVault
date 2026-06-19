@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>相册 · StarVault</title>
+<style>
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --fg: #111111;
+    --muted: #6B6B6B;
+    --border: #E5E5E5;
+    --accent: #2F6FEB;
+    --accent-soft: rgba(47,111,235,0.08);
+    --success: #17A34A;
+    --success-soft: rgba(23,163,74,0.08);
+    --warn: #EAB308;
+    --danger: #DC2626;
+    --tag-1:   #2F6FEB;
+    --tag-2:   #9333EA;
+    --tag-3:   #EA580C;
+    --tag-4:   #16A34A;
+    --tag-5:   #DB2777;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, a { font: inherit; border: 0; background: none; padding: 0; color: inherit; outline: none; cursor: pointer; text-decoration: none; }
+  a { color: inherit; }
+  p { margin: 0; }
+
+  /* ─── Android 外壳 ─── */
+  .device {
+    position: relative;
+    width: 412px; height: 900px;
+    margin: 0 auto;
+    background: var(--bg);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(0,0,0,0.25),
+      0 18px 36px -18px rgba(0,0,0,0.3);
+    border-radius: 44px;
+    border: 9px solid #1A1A1A;
+  }
+  .device::before {
+    content: ""; position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 96px; height: 26px;
+    background: #1A1A1A; border-radius: 13px;
+    z-index: 30;
+  }
+  .status-bar {
+    position: relative; z-index: 5;
+    height: 38px;
+    padding: 0 28px 0 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; color: var(--fg);
+  }
+  .status-bar .right { display: flex; align-items: center; gap: 6px; }
+  .status-bar svg { display: block; }
+  .screen {
+    height: calc(900px - 38px - 64px);
+    position: relative; overflow-y: auto;
+    background: var(--bg);
+  }
+  .nav-bar {
+    height: 64px;
+    display: flex; align-items: center; justify-content: center; gap: 56px;
+    background: var(--bg);
+  }
+  .nav-bar .nav-btn { width: 16px; height: 16px; border: 1.4px solid #1A1A1A; border-radius: 3px; }
+  .nav-bar .nav-btn.pill { width: 38px; height: 16px; border-radius: 9px; }
+  .nav-bar .nav-btn.dot { width: 16px; height: 16px; border-radius: 50%; background: #1A1A1A; border: 0; }
+
+  /* ─── App bar ─── */
+  .appbar {
+    padding: 6px 20px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .app-title {
+    font-size: 22px; font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--fg);
+  }
+  .appbar .actions { display: flex; gap: 2px; }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    transition: background 150ms;
+  }
+  .icon-btn:active { background: rgba(0,0,0,0.06); }
+  .icon-btn svg { width: 20px; height: 20px; color: var(--fg); }
+
+  /* ─── B · 文件夹路径选择器 ─── */
+  .folder-picker {
+    margin: 4px 16px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  .folder-path {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px;
+    padding: 0 10px 0 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12.5px; font-weight: 600;
+    color: var(--fg);
+    transition: background 150ms;
+  }
+  .folder-path:hover { background: rgba(0,0,0,0.025); }
+  .folder-path .fp-icon { width: 14px; height: 14px; color: var(--accent); }
+  .folder-path .fp-chev { width: 12px; height: 12px; color: var(--muted); margin-left: 1px; }
+  .folder-stats {
+    font-size: 11px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .folder-stats b { color: var(--fg); font-weight: 600; }
+  .folder-stats .dot { color: #C4C4C4; }
+
+  /* ─── B · 子目录快捷筛选 ─── */
+  .sub-tabs {
+    margin: 0 16px 14px;
+    display: flex; align-items: center; gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sub-tabs::-webkit-scrollbar { display: none; }
+  .sub-tab {
+    flex-shrink: 0;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: all 150ms;
+  }
+  .sub-tab:hover { color: var(--fg); }
+  .sub-tab.active {
+    color: #fff;
+    background: var(--fg);
+    border-color: var(--fg);
+  }
+
+  /* ─── 照片网格区 ─── */
+  .recent {
+    margin: 0 16px 24px;
+  }
+  .section-h {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 0 4px 10px;
+  }
+  .section-h .t {
+    font-size: 16px; font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  .section-h .more {
+    font-size: 12px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 2px;
+  }
+  .section-h .more svg { width: 12px; height: 12px; }
+  .section-h .more:active { color: var(--fg); }
+
+  .date-group { margin-bottom: 14px; }
+  .date-h {
+    padding: 6px 4px 6px;
+    font-size: 11.5px; font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .date-h b {
+    color: var(--fg); font-weight: 600;
+    margin-left: 4px;
+  }
+
+  .photo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2px;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .photo {
+    aspect-ratio: 1;
+    position: relative;
+    overflow: hidden;
+    background: #E5E5E5;
+  }
+  .photo.video .play {
+    position: absolute;
+    inset: 0;
+    display: grid; place-items: center;
+    background: rgba(0,0,0,0.18);
+  }
+  .photo.video .play svg {
+    width: 28px; height: 28px;
+    fill: #fff;
+    filter: drop-shadow(0 1px 4px rgba(0,0,0,0.4));
+  }
+  .ph-meta {
+    position: absolute;
+    bottom: 4px; right: 5px;
+    font-size: 10px; font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .ph-fav {
+    position: absolute;
+    top: 5px; right: 5px;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .ph-fav svg { width: 12px; height: 12px; fill: #fff; }
+  .ph-fav.on svg { fill: #EF4444; }
+
+  /* 截图样式 */
+  .photo.ss {
+    background: #F2F2F4;
+    padding: 8px 6px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .photo.ss .ss-bar {
+    height: 4px; width: 30%;
+    background: #2F6FEB;
+    border-radius: 1px;
+    margin-bottom: 2px;
+  }
+  .photo.ss .ss-line {
+    height: 3px;
+    background: #D0D0D5;
+    border-radius: 1px;
+  }
+  .photo.ss .ss-line.l1 { width: 88%; }
+  .photo.ss .ss-line.l2 { width: 70%; }
+  .photo.ss .ss-line.l3 { width: 92%; }
+  .photo.ss .ss-line.l4 { width: 55%; }
+
+  /* 照片场景 · 多重渐变模拟光影 */
+  .s-sunset {
+    background:
+      radial-gradient(circle at 75% 28%, rgba(255,210,140,0.65), transparent 50%),
+      linear-gradient(180deg, #FF7B5C 0%, #C0306B 55%, #4A148C 100%);
+  }
+  .s-forest {
+    background:
+      radial-gradient(circle at 30% 25%, rgba(180,220,180,0.45), transparent 55%),
+      linear-gradient(170deg, #1B4332 0%, #2D6A4F 50%, #52B788 100%);
+  }
+  .s-mountain {
+    background:
+      radial-gradient(circle at 50% 30%, rgba(220,220,255,0.35), transparent 55%),
+      linear-gradient(180deg, #6B8AAE 0%, #3B5278 60%, #1A2B4A 100%);
+  }
+  .s-coffee {
+    background:
+      radial-gradient(circle at 35% 35%, rgba(255,235,200,0.45), transparent 50%),
+      linear-gradient(135deg, #C9A876 0%, #6B4423 100%);
+  }
+  .s-bldg {
+    background:
+      radial-gradient(circle at 50% 20%, rgba(200,215,235,0.35), transparent 60%),
+      linear-gradient(180deg, #B8C5D6 0%, #5C6F87 100%);
+  }
+  .s-night {
+    background:
+      radial-gradient(circle at 65% 35%, rgba(180,180,255,0.35), transparent 50%),
+      linear-gradient(160deg, #0F2027 0%, #203A43 50%, #4A4A8A 100%);
+  }
+  .s-food {
+    background:
+      radial-gradient(circle at 45% 45%, rgba(255,250,200,0.4), transparent 55%),
+      linear-gradient(135deg, #F6D365 0%, #FDA085 100%);
+  }
+  .s-portrait {
+    background:
+      radial-gradient(circle at 50% 30%, rgba(255,230,210,0.5), transparent 50%),
+      linear-gradient(150deg, #F8B195 0%, #C06C84 100%);
+  }
+  .s-beach {
+    background:
+      radial-gradient(circle at 60% 25%, rgba(255,255,220,0.4), transparent 50%),
+      linear-gradient(180deg, #87CEEB 0%, #5BADD6 55%, #1E5C8A 100%);
+  }
+  .s-doc {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255,255,255,0.5), transparent 60%),
+      linear-gradient(180deg, #FAFAFA 0%, #D8D8DC 100%);
+  }
+
+  /* ───────── B · 文件夹切换 Sheet ───────── */
+  .sheet-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 50;
+    opacity: 0; pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  .sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+  /* ───────── M3 底部抽屉 ───────── */
+  .sheet-panel {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: var(--surface);
+    border-top-left-radius: 28px;
+    border-top-right-radius: 28px;
+    z-index: 51;
+    transform: translateY(100%);
+    transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 92vh;
+    display: flex; flex-direction: column;
+    padding: 12px 0 24px;
+    box-shadow: 0 -8px 24px -8px rgba(0,0,0,0.18);
+  }
+  .sheet-panel.open { transform: translateY(0); }
+
+  .sheet-grabber {
+    width: 32px; height: 4px;
+    background: #C4C4C4;
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+
+  .sheet-title {
+    font-size: 18px; font-weight: 500;
+    letter-spacing: 0;
+    padding: 0 24px 16px;
+  }
+
+  .sheet-list {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 8px;
+  }
+
+  .folder-row {
+    display: flex; align-items: center; gap: 16px;
+    height: 56px; padding: 0 24px;
+    position: relative;
+    cursor: pointer;
+    transition: background 150ms;
+  }
+  .folder-row:hover { background: rgba(0,0,0,0.03); }
+  .folder-row.current {
+    background: var(--accent-soft);
+  }
+  .folder-row.current::before {
+    content: ''; position: absolute; left: 0; top: 12px; bottom: 12px;
+    width: 3px; background: var(--accent); border-radius: 0 2px 2px 0;
+  }
+  .folder-row .fr-icon {
+    width: 24px; height: 24px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    background: var(--accent);
+    color: #fff;
+  }
+  .folder-row .fr-icon svg { width: 16px; height: 16px; }
+  .folder-row .fr-name { flex: 1; font-size: 14px; color: var(--fg); }
+  .folder-row .fr-chev { color: var(--muted); font-size: 18px; }
+  .folder-row .fr-check { color: var(--accent); font-size: 18px; font-weight: 600; }
+
+  .sheet-section-h {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 12px 24px 8px;
+  }
+  .sheet-divider {
+    height: 1px; background: var(--border);
+    margin: 4px 24px;
+  }
+
+  .recent-chips {
+    display: flex; gap: 8px;
+    padding: 0 24px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .recent-chips::-webkit-scrollbar { display: none; }
+  .recent-chip {
+    flex-shrink: 0;
+    height: 32px; padding: 0 14px;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    color: var(--fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .recent-chip .rc-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+
+  .new-folder-row {
+    display: flex; align-items: center; gap: 12px;
+    height: 56px; padding: 0 24px;
+    color: var(--accent);
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+  }
+  .new-folder-row:hover { background: rgba(0,0,0,0.03); }
+
+  .sheet-cancel {
+    margin: 12px 24px 0;
+    height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+    border-radius: 100px;
+    font-size: 14px; font-weight: 500;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .sheet-cancel:hover { background: var(--surface); }
+
+  /* ───────── 切换加载遮罩 ───────── */
+  .switch-overlay {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.6);
+    z-index: 40;
+    display: none;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .switch-overlay.active { display: flex; }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(47,111,235,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ───────── 空文件夹态 ───────── */
+  .empty-state {
+    padding: 40px 20px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 12px;
+    text-align: center;
+  }
+  .empty-state .es-icon {
+    width: 48px; height: 48px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+  }
+  .empty-state .es-icon svg { width: 22px; height: 22px; }
+  .empty-state .es-title { font-size: 14px; font-weight: 600; color: var(--fg); }
+  .empty-state .es-sub { font-size: 12px; color: var(--muted); }
+  .empty-state .es-cta {
+    margin-top: 8px;
+    height: 36px; padding: 0 16px;
+    background: var(--accent); color: #fff;
+    border-radius: 999px;
+    font-size: 13px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="status-bar">
+      <div class="time">9:41</div>
+      <div class="right">
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M1 9h2v2H1zM5 6h2v5H5zM9 3h2v8H9zM13 0h2v11h-2z"/></svg>
+        <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M0.5 4 Q 7 -1, 13.5 4"/><path d="M2.5 6.5 Q 7 2.5, 11.5 6.5"/><circle cx="7" cy="9" r="1" fill="currentColor"/></svg>
+        <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="0.5" y="0.5" width="18" height="10" rx="2.5" stroke="currentColor" stroke-opacity="0.35"/><rect x="2" y="2" width="15" height="7" rx="1.5" fill="currentColor"/><rect x="19.5" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor" fill-opacity="0.4"/></svg>
+      </div>
+    </div>
+
+    <div class="screen">
+      <header class="appbar">
+        <div class="app-title">相册</div>
+        <div class="actions">
+          <button class="icon-btn" aria-label="搜索">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="相机">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="更多">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- B · 指定文件夹：当前路径选择器 -->
+      <section class="folder-picker">
+        <button class="folder-path" aria-label="切换文件夹">
+          <svg class="fp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+          <span class="fp-name">我的相册</span>
+          <svg class="fp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="folder-stats">
+          <span><b>1,247</b> 张照片</span>
+          <span class="dot">·</span>
+          <span><b>23</b> 个视频</span>
+          <span class="dot">·</span>
+          <span>4.2 GB</span>
+        </div>
+      </section>
+
+      <!-- B · 子目录快捷筛选（不是智能分类，是文件属性） -->
+      <nav class="sub-tabs">
+        <button class="sub-tab active">全部</button>
+        <button class="sub-tab">收藏</button>
+        <button class="sub-tab">最近上传</button>
+        <button class="sub-tab">原图</button>
+      </nav>
+
+      <!-- 最近照片 -->
+      <section class="recent">
+        <header class="section-h">
+          <span class="t">最近</span>
+          <a class="more" href="#">
+            查看全部
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
+        </header>
+
+        <div class="date-group">
+          <div class="date-h">今天<b>· 6 月 7 日</b></div>
+          <div class="photo-grid">
+            <div class="photo s-coffee">
+              <span class="ph-meta">14:32</span>
+            </div>
+            <div class="photo s-bldg">
+              <span class="ph-meta">10:15</span>
+            </div>
+            <div class="photo video s-night">
+              <div class="play">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+              <span class="ph-meta">0:24</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="date-group">
+          <div class="date-h">昨天<b>· 6 月 6 日</b></div>
+          <div class="photo-grid">
+            <div class="photo s-food"></div>
+            <div class="photo ss">
+              <div class="ss-bar"></div>
+              <div class="ss-line l1"></div>
+              <div class="ss-line l2"></div>
+              <div class="ss-line l3"></div>
+              <div class="ss-line l4"></div>
+            </div>
+            <div class="photo s-portrait">
+              <span class="ph-fav on">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9.5C.7 7.5 3 4 6.5 4c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3 3.5 0 5.8 3.5 4 7.5C19 16.5 12 21 12 21z"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="date-group">
+          <div class="date-h">6 月 5 日</div>
+          <div class="photo-grid">
+            <div class="photo s-sunset">
+              <span class="ph-fav on">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9.5C.7 7.5 3 4 6.5 4c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3 3.5 0 5.8 3.5 4 7.5C19 16.5 12 21 12 21z"/></svg>
+              </span>
+            </div>
+            <div class="photo s-forest"></div>
+            <div class="photo s-mountain"></div>
+          </div>
+        </div>
+
+        <div class="date-group">
+          <div class="date-h">6 月 3 日</div>
+          <div class="photo-grid">
+            <div class="photo s-beach"></div>
+            <div class="photo s-doc">
+              <span class="ph-meta">PDF</span>
+            </div>
+            <div class="photo s-portrait"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-btn"></div>
+      <div class="nav-btn pill"></div>
+      <div class="nav-btn dot"></div>
+    </div>
+
+  <!-- B · 文件夹切换 Sheet（放在 .device 内，position:absolute 撑满 412px 设备框） -->
+  <div class="sheet-overlay" id="sheetOverlay" aria-hidden="true"></div>
+  <div class="sheet-panel" id="sheetPanel" role="dialog" aria-label="选择相册">
+    <div class="sheet-grabber"></div>
+    <div class="sheet-title">选择相册</div>
+    <div class="sheet-list" id="sheetList"></div>
+    <div class="sheet-cancel" id="sheetCancel">取消</div>
+  </div>
+
+  <!-- 切换加载遮罩 -->
+  <div class="switch-overlay" id="switchOverlay">
+    <div class="spinner"></div>
+  </div>
+  </div>
+
+<script>
+/* 演示导航：底部 Tab + 返回总览（注入式，不污染原版式） */
+(function () {
+  const ACTIVE = 'album';
+  const BACK = { href: 'index.html', label: '总览' };
+  const css = `
+    .screen-back{position:fixed;top:10px;left:10px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;background:#FFF;border:1px solid #E5E5E5;border-radius:999px;font-size:12.5px;font-weight:600;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;font-family:inherit;transition:background 150ms}
+    .screen-back:hover{background:#F5F5F5}
+    .screen-back svg{width:14px;height:14px}
+    .bottom-tab{position:absolute;left:0;right:0;bottom:46px;height:64px;background:#FFF;border-top:1px solid #E5E5E5;display:flex;align-items:stretch;z-index:5}
+    .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:#6B6B6B;font-weight:500;letter-spacing:.02em;text-decoration:none;font-family:inherit;transition:color 150ms}
+    .bt-item:hover{color:#111}
+    .bt-item.active{color:#2F6FEB}
+    .bt-item svg{width:22px;height:22px}
+    .screen{padding-bottom:64px}
+  `;
+  const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+  const TABS=[
+    {id:'home',href:'01-home.html',label:'首页',icon:'<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z"/>'},
+    {id:'files',href:'06-files.html',label:'文件',icon:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>'},
+    {id:'album',href:'07-album.html',label:'相册',icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>'},
+    {id:'profile',href:'05-profile.html',label:'我的',icon:'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>'}
+  ];
+  const dev=document.querySelector('.device');
+  if(dev){
+    const navBar=dev.querySelector('.nav-bar');
+    const nav=document.createElement('nav');nav.className='bottom-tab';
+    nav.innerHTML=TABS.map(t=>`<a class="bt-item${t.id===ACTIVE?' active':''}" href="${t.href}" data-tab="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span></a>`).join('');
+    if(navBar){dev.insertBefore(nav,navBar);}else{dev.appendChild(nav);}
+  }
+
+  const back=document.createElement('a');back.className='screen-back';back.href=BACK.href;
+  back.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>'+BACK.label+'</span>';
+  document.body.appendChild(back);
+})();
+</script>
+
+<script>
+(function(){
+  'use strict';
+
+  // ───── 数据：相册列表（含子目录 + 最近使用）─────
+  const ALBUMS = [
+    { id: 'mine',    name: '我的相册',     color: '#2F6FEB', count: 1247, recent: true,  children: [
+      { id: 'mine-2025', name: '2025',     color: '#2F6FEB', count: 328 },
+      { id: 'mine-2024', name: '2024',     color: '#2F6FEB', count: 612 }
+    ]},
+    { id: 'travel',  name: '旅行 2025',   color: '#16A34A', count: 328,  recent: true,  children: [] },
+    { id: 'family',  name: '家庭',        color: '#F59E0B', count: 156,  recent: true,  children: [
+      { id: 'family-baby', name: '宝宝成长', color: '#EC4899', count: 89 }
+    ]},
+    { id: 'work',    name: '工作',        color: '#8B5CF6', count: 47,   recent: false, children: [] },
+    { id: 'fav',     name: '收藏',        color: '#EF4444', count: 23,   recent: false, children: [] }
+  ];
+
+  let currentAlbumId = 'mine';
+  let recents = ['travel', 'family'];
+
+  // ───── 工具：HTML 转义（防御 XSS，用户新建相册名走 prompt 流入模板）─────
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // ───── 工具：根据 id 找 album ─────
+  function findAlbum(id) {
+    for (const a of ALBUMS) {
+      if (a.id === id) return a;
+      for (const c of a.children) if (c.id === id) return c;
+    }
+    return ALBUMS[0];
+  }
+
+  // ───── 渲染：sheet 列表 ─────
+  function renderSheet() {
+    const list = document.getElementById('sheetList');
+    const current = findAlbum(currentAlbumId);
+
+    // 一级相册
+    let html = '';
+    ALBUMS.forEach(a => {
+      // 是否正好是当前相册（父级直接命中）
+      const isCurrent = a.id === currentAlbumId;
+      // 是否其子目录里有当前相册（child id 切换场景）
+      const hasCurrentChild = a.children && a.children.some(c => c.id === currentAlbumId);
+      // 综合"作用域内"判定：自身或其任一子项是当前相册
+      const isInScope = isCurrent || hasCurrentChild;
+      const hasChildren = a.children && a.children.length > 0;
+      const folderSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
+      html += `
+        <div class="folder-row${isInScope ? ' current' : ''}" data-id="${escapeHtml(a.id)}">
+          <span class="fr-icon" style="background:${escapeHtml(a.color)}">${folderSvg}</span>
+          <span class="fr-name">${escapeHtml(a.name)}</span>
+          ${hasChildren ? '<span class="fr-chev">›</span>' : ''}${isInScope ? '<span class="fr-check">✓</span>' : ''}
+        </div>
+      `;
+      // 有子目录且当前作用域包含其内：展开子项（自身命中 OR 任一子项命中）
+      if (hasChildren && isInScope) {
+        a.children.forEach(c => {
+          const isCurrentChild = c.id === currentAlbumId;
+          html += `
+            <div class="folder-row${isCurrentChild ? ' current' : ''}" data-id="${escapeHtml(c.id)}" style="padding-left:56px">
+              <span class="fr-icon" style="background:${escapeHtml(c.color)};width:18px;height:18px">${folderSvg}</span>
+              <span class="fr-name" style="font-size:13.5px">${escapeHtml(c.name)}</span>
+              ${isCurrentChild ? '<span class="fr-check">✓</span>' : ''}
+            </div>
+          `;
+        });
+      }
+    });
+
+    // 最近使用
+    const recentsHtml = recents
+      .map(id => findAlbum(id))
+      .filter(a => a)
+      .map(a => `<div class="recent-chip" data-id="${escapeHtml(a.id)}"><span class="rc-dot" style="background:${escapeHtml(a.color)}"></span>${escapeHtml(a.name)}</div>`)
+      .join('');
+
+    // 新建相册
+    const newFolderSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M12 5v14M5 12h14"/></svg>';
+
+    list.innerHTML = html
+      + `<div class="sheet-divider"></div>`
+      + `<div class="sheet-section-h">最近使用</div>`
+      + `<div class="recent-chips">${recentsHtml}</div>`
+      + `<div class="sheet-divider"></div>`
+      + `<div class="new-folder-row" id="newFolderBtn">${newFolderSvg}<span>新建相册</span></div>`;
+  }
+
+  // ───── 切换反馈 ─────
+  function triggerSwitch(album) {
+    // 1. 更新 pill 文字 + 统计数字
+    const fpName = document.querySelector('.fp-name');
+    const stats = document.querySelector('.folder-stats');
+    if (fpName) fpName.textContent = album.name;
+    if (stats) {
+      const gbSize = (album.count * 0.018).toFixed(1);
+      stats.innerHTML = `<span><b>${album.count.toLocaleString()}</b> 张照片</span><span class="dot">·</span><span>${gbSize} GB</span>`;
+    }
+
+    // 2. 显示 loading 遮罩 + 照片墙淡出
+    const switchOverlay = document.getElementById('switchOverlay');
+    const recent = document.querySelector('.recent');
+    if (switchOverlay) switchOverlay.classList.add('active');
+    if (recent) recent.style.opacity = '0.4';
+
+    // 3. 模拟异步刷新：350ms 后根据 count 决定显示照片墙或空状态
+    setTimeout(() => {
+      if (album.count === 0 && recent) {
+        // 空文件夹
+        recent.innerHTML = `
+          <div class="empty-state">
+            <div class="es-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            </div>
+            <div class="es-title">这里还没有照片</div>
+            <div class="es-sub">上传第一张照片开始建立你的相册</div>
+            <div class="es-cta">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 5v14M5 12h14"/></svg>
+              <span>上传照片</span>
+            </div>
+          </div>
+        `;
+      }
+      // 隐藏 loading
+      if (switchOverlay) switchOverlay.classList.remove('active');
+      if (recent) recent.style.opacity = '';
+    }, 350);
+  }
+
+  // ───── 打开 / 关闭 ─────
+  function openSheet() {
+    renderSheet();
+    document.getElementById('sheetOverlay').classList.add('open');
+    document.getElementById('sheetPanel').classList.add('open');
+    document.getElementById('sheetOverlay').setAttribute('aria-hidden', 'false');
+  }
+  function closeSheet() {
+    document.getElementById('sheetOverlay').classList.remove('open');
+    document.getElementById('sheetPanel').classList.remove('open');
+    document.getElementById('sheetOverlay').setAttribute('aria-hidden', 'true');
+  }
+
+  // ───── 切换到指定相册 ─────
+  function switchTo(albumId) {
+    if (albumId === currentAlbumId) { closeSheet(); return; }
+    const album = findAlbum(albumId);
+    currentAlbumId = albumId;
+    recents = [albumId, ...recents.filter(id => id !== albumId)].slice(0, 4);
+    closeSheet();
+    triggerSwitch(album);
+  }
+
+  // ───── 事件绑定 ─────
+  document.querySelector('.folder-path').addEventListener('click', openSheet);
+  document.getElementById('sheetOverlay').addEventListener('click', closeSheet);
+  document.getElementById('sheetCancel').addEventListener('click', closeSheet);
+
+  // 委托：folder-row / recent-chip / new-folder
+  document.getElementById('sheetPanel').addEventListener('click', (e) => {
+    const row = e.target.closest('.folder-row');
+    if (row) { switchTo(row.dataset.id); return; }
+    const chip = e.target.closest('.recent-chip');
+    if (chip) { switchTo(chip.dataset.id); return; }
+    if (e.target.closest('#newFolderBtn')) {
+      const name = prompt('新建相册名称');
+      if (name && name.trim()) {
+        const newId = 'new-' + Date.now();
+        ALBUMS.push({ id: newId, name: name.trim(), color: '#2F6FEB', count: 0, recent: false, children: [] });
+        switchTo(newId);
+      }
+    }
+  });
+
+  // 暴露给后续任务（open/close/switchTo 在 Task 4 注入）
+  window.__albumPicker = Object.assign(window.__albumPicker || {}, {
+    ALBUMS, findAlbum, renderSheet,
+    getCurrent: () => currentAlbumId,
+    setCurrent: (id) => { currentAlbumId = id; },
+    open: openSheet, close: closeSheet, switchTo: switchTo
+  });
+})();
+</script>
+</body>
+</html>
