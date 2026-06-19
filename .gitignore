@@ -1,7 +1,3 @@
-# 设计稿由外部应用（Open Design）管理，软链指向用户私有数据目录
-# 不入库，避免污染仓库
-design
-
 # 应用密钥（CLAUDE.md 红线）
 application-gin.yml
 
