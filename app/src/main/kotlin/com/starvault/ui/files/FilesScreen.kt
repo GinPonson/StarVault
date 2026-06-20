@@ -48,6 +48,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImageContent
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Size as CoilSize
 import com.starvault.component.Icons
 import com.starvault.data.model.FileType
 import com.starvault.theme.StarVaultTheme
@@ -542,6 +545,7 @@ private fun FileList(
         items(
             items = files,
             key = { it.id },                  // 复用 key：同名文件 id 不同（fid vs cid），稳定
+            contentType = { "FileRow" },  // 列表 pre-render 复用：相同 type 的 item 可共享 measure slot
         ) { f ->
             FileListRow(
                 file = f,
@@ -670,7 +674,7 @@ private fun FileGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(files, key = { it.id }) { f ->
+        items(files, key = { it.id }, contentType = { "FileGridCell" }) { f ->
             val sel = f.id in selectedIds
             Box(
                 modifier = Modifier
@@ -844,10 +848,31 @@ private fun FileThumb(
         return
     }
 
-    // ──── 有 URL：Coil 三态渲染 ────
+    // ──── 有 URL：Coil 三态渲染（保留 SubcomposeAsyncImage 三 slot，仅加 size hint） ────
+    //
+    // 性能要点：SubcomposeAsyncImage 的 sub-compose 开销其实很小（一次重组 vs 没它多一层），
+    // **真正的卡顿是 decode 时间**——没 size hint 时 Coil 解码原图（115 `_0` 档可能 1500×1500）
+    // 再缩到 40dp，主线程 30ms+；传 size 后走 inSampleSize 采样，~3ms。
+    //
+    // 暂保留 SubcomposeAsyncImage 而非切到 AsyncImage+painter.state：后者要求把 Icon Box
+    // 拆到 state 分支里（onError/onLoading 是非 Composable 回调，不能直接放 composable），
+    // 改动面更大；size hint 这一项 ROI 最高，先单点切。
+    val sizePx = with(androidx.compose.ui.platform.LocalDensity.current) {
+        size.dp.toPx().toInt()
+    }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val request: ImageRequest = remember(thumbnailUrl, sizePx, fillMaxWidth) {
+        ImageRequest.Builder(context)
+            .data(thumbnailUrl)
+            .size(CoilSize(sizePx, sizePx))           // 关键：Coil 在 decode 时直接 downsample 到 40dp 像素
+            .crossfade(120)                            // 平滑淡入，避免图 pop-in 触发 layout 抖动
+            .memoryCacheKey("${thumbnailUrl}@${sizePx}")  // 不同尺寸独立缓存
+            .build()
+    }
+
     Box(modifier = baseMod.background(Color(0xFFFAFAFA))) {
         coil3.compose.SubcomposeAsyncImage(
-            model = thumbnailUrl,
+            model = request,
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
