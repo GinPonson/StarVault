@@ -32,6 +32,7 @@ fun FilesGridPreview() = StarVaultTheme {
 
 internal fun filesPreviewSuccess(): FilesUiState.Success = FilesUiState.Success(
     folderId = null,
+    folderPath = listOf(FolderCrumb("0", "我的文件")),
     all = listOf(
         FileEntry("f-01", "设计交付 / 2026Q2",          com.starvault.data.model.FileType.FOLDER, listOf("28 项", "2 小时前"),  isFolder = true),
         FileEntry("f-02", "Final.Destination.2026.1080p.mkv", com.starvault.data.model.FileType.VIDEO, listOf("2.18 GB", "1:42:08", "1 小时前"), isFolder = false),

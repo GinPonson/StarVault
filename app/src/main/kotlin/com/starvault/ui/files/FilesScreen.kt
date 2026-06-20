@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,18 +17,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.SubcomposeAsyncImageContent
 import com.starvault.component.Icons
 import com.starvault.data.model.FileType
 import com.starvault.theme.StarVaultTheme
@@ -47,7 +57,7 @@ import com.starvault.theme.StarVaultTheme
  *
  * 整体结构（垂直滚动 / 网格）：
  *   ┌─ AppBar       "我的文件" + 4 icon-btn（搜索 / 传输 / 更多 / 新建）
- *   ├─ Crumb        "我的文件" + "/" + "28 项" right
+ *   ├─ Crumb        多段 "我的文件 / 手机相册 / 涩图" + 末尾 "28 项"
  *   ├─ Toolbar      6 tab（全部/视频/图片/文档/音频/其他）+ 列表/网格 toggle
  *   ├─ SectionHead  "共 28 项" + "按修改时间 ▾"
  *   ├─ List         10 file-row（列表或 2 列网格）
@@ -72,9 +82,16 @@ fun FilesScreen(
     onSort: () -> Unit = {},
     onSelect: (FileEntry) -> Unit = {},
     onOpen: (FileEntry) -> Unit = {},
+    /** 点击面包屑中某一段（0-based index）；截断 stack 跳回该层。 */
+    onCrumbClick: (Int) -> Unit = {},
     onCloseBulk: () -> Unit = {},
     onBulkAction: (BulkAction) -> Unit = {},
     onUpload: () -> Unit = {},
+    /**
+     * 列表滚到末尾时触发；ViewModel 用它加载下一页（offset+limit）。
+     * UI 侧用 `LazyListState.firstVisibleItemIndex` + visibleItemCount 判别接近末尾时调一次。
+     */
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val c = StarVaultTheme.colors
@@ -108,7 +125,11 @@ fun FilesScreen(
                         onMore = onMore,
                         onNewFolder = onNewFolder,
                     )
-                    Crumb(totalCount = state.all.size)
+                    Crumb(
+                        folderPath = state.folderPath,
+                        totalCount = state.all.size,
+                        onCrumbClick = onCrumbClick,
+                    )
                     // 切目录/refresh 时顶部细进度条，旧列表保留渲染避免全屏闪烁
                     if (state.pendingLoad) {
                         LinearProgressIndicator(
@@ -138,12 +159,18 @@ fun FilesScreen(
                                 selectedIds = state.selectedIds,
                                 onSelect = onSelect,
                                 onOpen = onOpen,
+                                isLoadingMore = state.isLoadingMore,
+                                hasMore = state.hasMore,
+                                onLoadMore = onLoadMore,
                             )
                             ViewMode.GRID -> FileGrid(
                                 files = visible(state),
                                 selectedIds = state.selectedIds,
                                 onSelect = onSelect,
                                 onOpen = onOpen,
+                                isLoadingMore = state.isLoadingMore,
+                                hasMore = state.hasMore,
+                                onLoadMore = onLoadMore,
                             )
                         }
                     }
@@ -228,8 +255,27 @@ private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: 
 
 /* ───────────────────── Crumb ───────────────────── */
 
+/**
+ * 路径面包屑（对应 design HTML `.crumb`）。
+ *
+ *  - 根目录：[("0", "我的文件")] → "我的文件  /  50 项"
+ *  - 进一层：[("0", "我的文件"), ("cidA", "手机相册")] → "我的文件  /  手机相册  /  50 项"
+ *  - 进三层：再加一段 "涩图"
+ *
+ *  - 每段都可点 → [onCrumbClick](index) 截断 stack 跳回该层
+ *  - 最后一段（当前目录）加粗 + 无下划线，表示当前位置
+ *  - 其余段 muted 色 + 点击高亮色（复用 c.fg），强化可点感
+ *  - 段数过多时保持单行（softWrap=false），右侧 "N 项" 推到末尾并 ellipsis 整段路径
+ *
+ *  design HTML `.crumb .root` 是 fg+SemiBold；中间段是 muted；我们这里把 root 加粗、
+ *  其余段 muted，与原设计一致。
+ */
 @Composable
-private fun Crumb(totalCount: Int) {
+private fun Crumb(
+    folderPath: List<FolderCrumb>,
+    totalCount: Int,
+    onCrumbClick: (Int) -> Unit,
+) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
     Row(
@@ -240,13 +286,39 @@ private fun Crumb(totalCount: Int) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = "我的文件", style = t.caption, color = c.fg, fontWeight = FontWeight.SemiBold)
-        Text(text = "/", style = t.caption, color = Color(0xFFC4C4C4))
+        // 路径段：folderPath = [根, A, B, ...]
+        folderPath.forEachIndexed { index, crumb ->
+            val isLast = index == folderPath.lastIndex
+            Text(
+                text = crumb.name,
+                style = t.caption,
+                color = if (isLast) c.fg else c.muted,
+                fontWeight = if (isLast) FontWeight.SemiBold else FontWeight.Medium,
+                // 末段不可点（已是当前）；其余段可点跳回
+                modifier = if (!isLast) {
+                    Modifier.clickable { onCrumbClick(index) }
+                } else {
+                    Modifier
+                },
+                maxLines = 1,
+                softWrap = false,
+            )
+            if (!isLast) {
+                Text(
+                    text = "/",
+                    style = t.caption,
+                    color = Color(0xFFC4C4C4),
+                )
+            }
+        }
+        // 末尾 "N 项"，整体 weight(1f) 推到最右；段数过多时前面的段省略
+        Spacer(Modifier.weight(1f))
         Text(
             text = "$totalCount 项",
             style = t.caption,
             color = c.muted,
-            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -266,20 +338,36 @@ private fun Toolbar(
     Column {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 0.dp),
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
+            // 6 个 tab 在窄屏（Medium Phone 360dp）上总宽必溢出。改 LazyRow 横向滚动
+            // —— 对齐 design HTML 的 `overflow-x: auto`。contentPadding(20dp) 复刻
+            // 原来的左右 20dp padding。spacedBy(4dp) 复刻原 `gap: 4px`。
+            LazyRow(
                 modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
+                userScrollEnabled = true,
             ) {
-                TypeTab("全部", counts.all,   activeType == null,            onClick = { onTypeClick(null) })
-                TypeTab("视频", counts.video, activeType == FileType.VIDEO,  onClick = { onTypeClick(FileType.VIDEO) })
-                TypeTab("图片", counts.image, activeType == FileType.IMAGE,  onClick = { onTypeClick(FileType.IMAGE) })
-                TypeTab("文档", counts.doc,   activeType == FileType.DOC,    onClick = { onTypeClick(FileType.DOC) })
-                TypeTab("音频", counts.audio, activeType == FileType.AUDIO,  onClick = { onTypeClick(FileType.AUDIO) })
-                TypeTab("其他", counts.other, activeType == FileType.OTHER,  onClick = { onTypeClick(FileType.OTHER) })
+                item("全部") {
+                    TypeTab("全部", counts.all,   activeType == null,            onClick = { onTypeClick(null) })
+                }
+                item("视频") {
+                    TypeTab("视频", counts.video, activeType == FileType.VIDEO,  onClick = { onTypeClick(FileType.VIDEO) })
+                }
+                item("图片") {
+                    TypeTab("图片", counts.image, activeType == FileType.IMAGE,  onClick = { onTypeClick(FileType.IMAGE) })
+                }
+                item("文档") {
+                    TypeTab("文档", counts.doc,   activeType == FileType.DOC,    onClick = { onTypeClick(FileType.DOC) })
+                }
+                item("音频") {
+                    TypeTab("音频", counts.audio, activeType == FileType.AUDIO,  onClick = { onTypeClick(FileType.AUDIO) })
+                }
+                item("其他") {
+                    TypeTab("其他", counts.other, activeType == FileType.OTHER,  onClick = { onTypeClick(FileType.OTHER) })
+                }
             }
             ViewToggle(mode = viewMode, onToggle = onViewToggle)
         }
@@ -304,6 +392,10 @@ private fun TypeTab(label: String, count: Int, active: Boolean, onClick: () -> U
                     style = t.body,
                     color = if (active) c.fg else c.muted,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                    // 关键：禁换行 + 单行。design HTML 用 `white-space: nowrap`，
+                    // 不禁的话窄屏 "其他" 会被竖向换行成"其/他"。
+                    maxLines = 1,
+                    softWrap = false,
                 )
                 Text(text = count.toString(), style = t.micro, color = Color(0xFFB0B0B0))
             }
@@ -390,23 +482,67 @@ private fun SectionHead(visibleCount: Int, sortLabel: String, onSort: () -> Unit
 
 /* ───────────────────── FileList ───────────────────── */
 
+/**
+ * 列表模式（设计 HTML `.file-row`）。
+ *
+ * 用 LazyColumn 替代原 Column+verticalScroll（之前全量渲染所有 row，100+ 项目录
+ *  明显卡顿，且无法做滚动监听）。LazyColumn 有 item 复用 + 可选 LazyListState，
+ *  后续要做 scroll-to-top / 隐藏 toolbar / infinite scroll 都直接接进去。
+ *
+ * 滚动加载更多（infinite scroll）：
+ *  - rememberLazyListState 监听到 firstVisibleItemIndex + layoutInfo.totalItemsCount
+ *  - 当"已看过的 item 数 + 阈值 ≥ 总数"且 hasMore=true 且没在加载中 → 调 onLoadMore()
+ *  - 阈值 LOAD_MORE_THRESHOLD=4：用户距离底部还有 4 行时就触发，体验上滑到末尾时数据已就位
+ *  - 底部 footer 用 item {} 加一个 32dp 的进度条（isLoadingMore=true 时显示；hasMore=false 时
+ *    不显示，让列表直接结束）
+ *
+ *  - padding 保留：horizontal=12dp 让 FileListRow 的 8dp padding 与 design 一致；
+ *                  bottom=80dp 避开 FAB
+ *  - selection / open 回调语义不变
+ */
 @Composable
 private fun FileList(
     files: List<FileEntry>,
     selectedIds: Set<String>,
     onSelect: (FileEntry) -> Unit,
     onOpen: (FileEntry) -> Unit,
+    isLoadingMore: Boolean = false,
+    hasMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
 ) {
-    val c = StarVaultTheme.colors
-    val scrollState = rememberScrollState()
-    Column(
+    val listState = rememberLazyListState()
+    // 滚动到接近底部时触发 loadMore。
+    // 关键：用 hasMore/isLoadingMore 作 derivedStateOf 的 calculation key——这样当 hasMore
+    // 或 isLoadingMore 变化（切目录 / loadMore 完成）时 State 会被重新生成，捕获到**当前**的
+    // 值；否则老的 `remember { derivedStateOf { ... } }` 会固定捕获首次组合时的值，导致切目录后
+    // 旧 hasMore=false 一直生效、新 hasMore=true 永远不生效（用户报的"只加载 50 条"就是这个）。
+    // 同时把 listState 也作为 key：listState 本身在切目录时是同一个实例（rememberLazyListState
+    // 只创建一次），但其内部 layoutInfo 仍是 State<T>，scroll 时自动触发 derivedStateOf 重算。
+    val shouldLoadMore by remember(hasMore, isLoadingMore, listState) {
+        derivedStateOf {
+            if (!hasMore || isLoadingMore) return@derivedStateOf false
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            // lastVisible + threshold ≥ total ⇒ 接近底部
+            lastVisible + LOAD_MORE_THRESHOLD >= total
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
+
+    LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(horizontal = 12.dp)
             .padding(bottom = 80.dp),
     ) {
-        files.forEach { f ->
+        items(
+            items = files,
+            key = { it.id },                  // 复用 key：同名文件 id 不同（fid vs cid），稳定
+        ) { f ->
             FileListRow(
                 file = f,
                 selected = f.id in selectedIds,
@@ -414,8 +550,26 @@ private fun FileList(
                 onOpen = { onOpen(f) },
             )
         }
+        // 列表底部加载指示器：仅在还能加载下一页且正在加载时显示
+        if (isLoadingMore && hasMore) {
+            item(key = "load_more_footer") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.size(width = 24.dp, height = 2.dp),
+                    )
+                }
+            }
+        }
     }
 }
+
+/** 距离底部 N 行时触发加载下一页；用户体验上"还没滚到底就已经在加载"。 */
+private const val LOAD_MORE_THRESHOLD = 4
 
 @Composable
 private fun FileListRow(
@@ -473,15 +627,41 @@ private fun FileListRow(
 
 /* ───────────────────── FileGrid ───────────────────── */
 
+/**
+ * 网格模式（2 列），同样支持 infinite scroll。
+ *
+ * 用 LazyVerticalGrid + rememberLazyGridState，lastVisibleItem 与 totalItemsCount
+ * 比较触发 loadMore。threshold 比列表模式大一点（6，因为每行 2 列）。
+ */
 @Composable
 private fun FileGrid(
     files: List<FileEntry>,
     selectedIds: Set<String>,
     onSelect: (FileEntry) -> Unit,
     onOpen: (FileEntry) -> Unit,
+    isLoadingMore: Boolean = false,
+    hasMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
+    val gridState = rememberLazyGridState()
+    // 关键：同 FileList 一样把 hasMore/isLoadingMore/gridState 放进 remember 的 key，
+    // 否则切目录后旧 closure 捕获 stale hasMore=false，新 hasMore=true 永远不生效。
+    val shouldLoadMore by remember(hasMore, isLoadingMore, gridState) {
+        derivedStateOf {
+            if (!hasMore || isLoadingMore) return@derivedStateOf false
+            val info = gridState.layoutInfo
+            val total = info.totalItemsCount
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible + LOAD_MORE_THRESHOLD_GRID >= total
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
+
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Fixed(2),
         modifier = Modifier
             .fillMaxSize()
@@ -545,8 +725,26 @@ private fun FileGrid(
                 }
             }
         }
+        // 网格底部加载指示器：跨整行 2 列
+        if (isLoadingMore && hasMore) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "load_more_footer") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.size(width = 24.dp, height = 2.dp),
+                    )
+                }
+            }
+        }
     }
 }
+
+/** 网格模式距底部行数阈值：每行 2 列，6 项 = 3 行，提前量与列表相当。 */
+private const val LOAD_MORE_THRESHOLD_GRID = 6
 
 // StarVaultTheme.typography.body 替代 13sp
 private fun t5() = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
@@ -554,8 +752,25 @@ private fun t5() = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
 /* ───────────────────── FileThumb ───────────────────── */
 
 /**
- * 文件缩略图：渐变色块背景 + icon。IMAGE / VIDEO 若 [thumbnailUrl] 非空，用 Coil AsyncImage
- * 加载 115 缩略图（响应 `u` 字段）覆盖在背景上。
+ * 文件缩略图（三态渲染，与 Home 屏 [com.starvault.component.FileRow] 内的 FileThumb 一致）。
+ *
+ * 无 URL 时的分支（按 [type] 区分）：
+ *  - `FOLDER` → 灰色 FOLDER 渐变 + 白 Folder icon（folder 本来就没缩略图，渐变是设计意图）
+ *  - 其他（IMAGE / VIDEO / AUDIO / DOC / ZIP / OTHER）→ `#FAFAFA` 灰底 + 灰色类型 icon
+ *      （图片/视频"应该有缩略图但 115 没给 u" 跟"加载中"视觉一致）
+ *
+ * 有 URL 时（仅 IMAGE / VIDEO 实际会传 URL）：
+ *  - 加载中 → `#FAFAFA` 灰底（loading slot 空，透出外层 Box）
+ *  - 加载成功 → 真实缩略图（Crop）
+ *  - 加载失败 → `#E4E4E7` 深灰底 + `#52525B` 裂图 icon
+ *
+ * 三态色阶：
+ *   folder 无 URL:        `#6B7280 → #4B5563` 灰渐变 + 白 Folder icon
+ *   其他无 URL / loading: `#FAFAFA` 灰底 + `#A1A1AA` icon（zinc-400）
+ *   error:                `#E4E4E7` 深灰底 + `#52525B` icon（zinc-200 / zinc-600）
+ *
+ * @param size         列表模式下的边长（dp），默认 40
+ * @param fillMaxWidth 网格模式：宽度撑满父布局，按 1:1 aspectRatio 渲染
  */
 @Composable
 private fun FileThumb(
@@ -565,7 +780,11 @@ private fun FileThumb(
     thumbnailUrl: String? = null,
 ) {
     val brush = when (type) {
-        FileType.FOLDER -> Brush.linearGradient(listOf(Color(0xFF6B7280), Color(0xFF4B5563)))
+        FileType.FOLDER -> Brush.linearGradient(
+            colorStops = arrayOf(0f to Color(0xFF6B7280), 1f to Color(0xFF4B5563)),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
+        )
         FileType.VIDEO  -> Brush.linearGradient(listOf(Color(0xFF2F6FEB), Color(0xFF1D4ED8)))
         FileType.IMAGE  -> Brush.linearGradient(listOf(Color(0xFFEA580C), Color(0xFFC2410C)))
         FileType.AUDIO  -> Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFF7E22CE)))
@@ -583,35 +802,77 @@ private fun FileThumb(
         FileType.OTHER  -> Icons.Folder
     }
     val shape = if (fillMaxWidth) RoundedCornerShape(8.dp) else RoundedCornerShape(9.dp)
-    val mod = if (fillMaxWidth) {
+    val baseMod = if (fillMaxWidth) {
         Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clip(shape)
-            .background(brush)
     } else {
         Modifier
             .size(size.dp)
             .clip(shape)
-            .background(brush)
     }
-    Box(modifier = mod, contentAlignment = Alignment.Center) {
-        // IMAGE / VIDEO 缩略图覆盖在背景上（失败 fallback 到 icon）
-        if (!thumbnailUrl.isNullOrBlank()) {
-            coil3.compose.AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            )
+
+    if (thumbnailUrl.isNullOrBlank()) {
+        if (type == FileType.FOLDER) {
+            // ──── folder 无 URL：保留灰色 FOLDER 渐变 + 白 icon（设计意图）────
+            Box(
+                modifier = baseMod.background(brush),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
+                )
+            }
         } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
-            )
+            // ──── 其他类型无 URL：灰底 + 灰 icon（统一 loading 视觉）────
+            Box(
+                modifier = baseMod.background(Color(0xFFFAFAFA)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFFA1A1AA),
+                    modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
+                )
+            }
         }
+        return
+    }
+
+    // ──── 有 URL：Coil 三态渲染 ────
+    Box(modifier = baseMod.background(Color(0xFFFAFAFA))) {
+        coil3.compose.SubcomposeAsyncImage(
+            model = thumbnailUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            loading = {
+                // loading slot 留空，外层 Box #FAFAFA 灰底透出
+            },
+            error = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFE4E4E7)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.BrokenImage,
+                        contentDescription = "缩略图加载失败",
+                        tint = Color(0xFF52525B),
+                        modifier = Modifier.size(if (fillMaxWidth) 36.dp else 20.dp),
+                    )
+                }
+            },
+            success = { state ->
+                SubcomposeAsyncImageContent()
+            },
+        )
     }
 }
 

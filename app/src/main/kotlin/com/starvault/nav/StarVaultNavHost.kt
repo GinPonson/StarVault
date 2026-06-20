@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.starvault.data.repository.AuthState
 import com.starvault.ui.album.AlbumRoute
+import com.starvault.ui.debug.ThumbStateLab
 import com.starvault.ui.files.FilesRoute
 import com.starvault.ui.home.HomeRoute
 import com.starvault.ui.login.LoginRoute
@@ -53,5 +54,6 @@ fun StarVaultNavHost(
         composable<Route.Player>    { entry -> PlayerRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
         composable<Route.Share>     { entry -> ShareRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
         composable<Route.Wallpaper> { WallpaperRoute(onBack = { navController.popBackStack() }) }
+        composable<Route.ThumbLab>  { ThumbStateLab() }
     }
 }

@@ -58,6 +58,9 @@ android {
 }
 
 kotlin {
+    // 编译/测试都用 JDK 21（Gradle 自动从 Adoptium 下载，无需本机配置）。
+    // 字节码目标仍是 JVM_17（兼容 minSdk 34 / 现有设备）。
+    jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }

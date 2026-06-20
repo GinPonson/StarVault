@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
 import com.starvault.data.model.FileItem
 import com.starvault.data.model.FileTag
 import com.starvault.data.model.FileType
@@ -47,6 +47,10 @@ import com.starvault.theme.StarVaultTheme
  * @param metaSecondaryOverride  强制覆写 meta 第二段（size 之后的 · 段）。
  *                                Home 屏传相对时间（"2 小时前"），其它屏不传时
  *                                自动用 [file].durationOrCount 或 formatDate(mtime)。
+ * @param useDesignFallback  无 thumbnailUrl 时是否走 design 渐变色块。
+ *                              **Home 屏 mock 数据走 true**（保留设计稿预览视觉）；
+ *                              **真实数据屏（Files）走 false**（统一 loading 灰底）。
+ *                              缺省 `true`（保持原有 Home 屏行为）。
  */
 @Composable
 fun FileRow(
@@ -55,6 +59,7 @@ fun FileRow(
     modifier: Modifier = Modifier,
     onMore: (() -> Unit)? = null,
     metaSecondaryOverride: String? = null,
+    useDesignFallback: Boolean = true,
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
@@ -65,7 +70,11 @@ fun FileRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileThumb(type = file.type, thumbnailUrl = file.thumbnailUrl)
+        FileThumb(
+            type = file.type,
+            thumbnailUrl = file.thumbnailUrl,
+            useDesignFallback = useDesignFallback,
+        )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -97,43 +106,133 @@ fun FileRow(
 }
 
 /**
- * 40dp gradient thumbnail。颜色与 design HTML `.file-thumb.{folder|video|image|...}` 一一对应。
- * 中央 icon 来自 [Icons]（Folder / Play / Image / Music / Doc / Archive）。
+ * 40dp 缩略图。
  *
- * 如果 [thumbnailUrl] 非空（IMAGE / VIDEO 类型，115 webapi /files `u` 字段），
- * 用 Coil [AsyncImage] 加载真实缩略图；加载失败时 fallback 到渐变色块 + icon。
+ * 渲染策略（两种无 URL 路径，由 [useDesignFallback] 控制）：
+ *
+ *  - `useDesignFallback = true`（**Home 屏 mock 数据专用**）
+ *      无 URL → design 渐变色块 + 白色类型 icon（design HTML mock 预览风格）
+ *
+ *  - `useDesignFallback = false`（**真实数据屏专用**）
+ *      无 URL → `#FAFAFA` 灰底 + `#A1A1AA` 灰色类型 icon（统一 loading 视觉）
+ *
+ * 共同路径（无论 useDesignFallback）：
+ *  - 有 URL + 加载中 → `#FAFAFA` 灰底（loading slot 空，透出外层 Box）
+ *  - 有 URL + 加载成功 → 真实缩略图（Crop）
+ *  - 有 URL + 加载失败 → `#E4E4E7` 深灰底 + `#52525B` 裂图 icon
+ *
+ * 三态色阶：
+ *   loading:  `#FAFAFA` 灰底（zinc-50）
+ *   error:    `#E4E4E7` 深灰底 + `#52525B` icon（zinc-200 / zinc-600）
+ *
+ * @param useDesignFallback  无 URL 时是否走 design 渐变色块。默认 `true`（保留
+ *                          Home 屏 mock 预览视觉）。真实数据屏传 `false`。
  */
 @Composable
 private fun FileThumb(
     type: FileType,
     modifier: Modifier = Modifier,
     thumbnailUrl: String? = null,
+    useDesignFallback: Boolean = true,
 ) {
-    val (brush, icon) = thumbBrushAndIcon(type)
+    val (placeholderBrush, icon) = thumbBrushAndIcon(type)
+    if (thumbnailUrl.isNullOrBlank()) {
+        if (useDesignFallback) {
+            // ──── Home 屏 mock 预览：design 渐变 + 白色 icon ────
+            Box(
+                modifier = modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(placeholderBrush),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        } else {
+            // ──── 真实数据屏：灰底 + 灰 icon（统一 loading 视觉） ────
+            Box(
+                modifier = modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(PlaceholderGray),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = PlaceholderIconTint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        return
+    }
+
+    // 有 URL：Coil 三态渲染（loading=浅灰, success=图片, error=深灰+裂图）
+    //
+    // 关键：把 background 放到**外层 Box**，而非 SubcomposeAsyncImage 的 modifier。
+    // 实测发现：SubcomposeAsyncImage 的 modifier.background() 在 loading slot 为空时
+    // 不会绘制背景（连外层 Box 也不显示），只有 loading slot 内有 composable 才会触发
+    // SubcomposeAsyncImage 内部 Box 的渲染。把背景放在外层 Box 上更稳。
     Box(
         modifier = modifier
             .size(40.dp)
             .clip(RoundedCornerShape(9.dp))
-            .background(brush),
-        contentAlignment = Alignment.Center,
+            .background(PlaceholderGray),     // ← 外层 Box 永远显示 loading 灰底
     ) {
-        if (!thumbnailUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        SubcomposeAsyncImage(
+            model = thumbnailUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            loading = {
+                // loading: 什么都不渲染，外层 Box 灰底 #FAFAFA 透出
+            },
+            error = {
+                // error: 覆盖一个更深灰底 Box + 中央裂图 icon
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(ErrorBgGray),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.BrokenImage,
+                        contentDescription = "缩略图加载失败",
+                        tint = BrokenImageTint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+            success = { state ->
+                // success: 真实图片覆盖（Crop）
+                androidx.compose.foundation.Image(
+                    painter = state.painter,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            },
+        )
     }
 }
+
+/** 加载中 / 无 URL 灰底（中性 stone-50，极浅，几乎不抢戏） */
+private val PlaceholderGray = Color(0xFFFAFAFA)
+
+/** 加载中 / 无 URL 的类型 icon 颜色（中性 zinc-400，与底色 #FAFAFA 接近但不消失） */
+private val PlaceholderIconTint = Color(0xFFA1A1AA)
+
+/** 加载失败灰底（中性 zinc-200，比 loading 深一档，视觉上明显区分） */
+private val ErrorBgGray = Color(0xFFE4E4E7)
+
+/** 裂图 icon 颜色（中性 zinc-600，确保在 zinc-200 底上有足够对比度） */
+private val BrokenImageTint = Color(0xFF52525B)
 
 /** 根据文件类型映射 design HTML 中对应的 135° 渐变与 SVG 图标。
  *  渐变方向 135° = 左上 → 右下，与 HTML `linear-gradient(135deg, …)` 一致。*/

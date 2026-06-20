@@ -17,12 +17,23 @@ sealed interface FilesUiState {
 
     data class Success(
         val folderId: String?,                    // null → "我的文件" 根
-        val all: List<FileEntry>,                 // 当前目录的扁平列表
+        val folderPath: List<FolderCrumb>,        // 根→当前 的完整路径，每段可点跳回
+        val all: List<FileEntry>,                 // 当前目录的扁平列表（可能跨多页）
         val activeType: FileType?,                // null = 全部
         val viewMode: ViewMode,                   // 列表 / 网格
         val selectedIds: Set<String>,             // 多选集合
         val sortLabel: String,                    // "按修改时间"（sort 菜单待 T22+）
-        val totalCount: Int,                      // 段头 "共 N 项"
+        /** 顶部 "共 N 项" 用的总数；优先用 115 报的 totalServerCount，否则用已加载 size */
+        val totalCount: Int,
+        /**
+         * 115 当前筛选下的总条数（来自 115 /files 响应的 `count` 字段）。
+         * null = 还没拉到（首屏未到前）或老数据。供 ViewModel 翻页决策与 UI "已加载 X / 共 Y" 文案。
+         */
+        val totalServerCount: Int? = null,
+        /** 是否还有下一页。true 时滚动到末尾触发 loadMore() */
+        val hasMore: Boolean = false,
+        /** 正在拉下一页（防重复触发）。UI 用于列表底部小转圈 */
+        val isLoadingMore: Boolean = false,
         /** 切目录/refresh 时旧列表保留渲染，新数据到位前显示顶部进度条 */
         val pendingLoad: Boolean = false,
     ) : FilesUiState {
@@ -67,4 +78,17 @@ data class FileEntry(
     val metaSegments: List<String>,  // 3-4 段，用 " · " 拼成 meta 行
     val isFolder: Boolean,
     val thumbnailUrl: String? = null,
+)
+
+/**
+ * 面包屑一段（根→当前 路径上的一节）。
+ *
+ *  - cid  : 115 文件夹 id；根 = "0"，固定 name = "我的文件"
+ *  - name : 面包屑显示文本；最后一节（当前目录）加粗 + 无下划线
+ *
+ * Crumb 点击通过 index 反查 → vm.popToFolder(index)，截断 stack 后重新加载。
+ */
+data class FolderCrumb(
+    val cid: String,
+    val name: String,
 )

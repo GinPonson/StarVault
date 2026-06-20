@@ -21,4 +21,5 @@ sealed interface Route {
     @Serializable data class   Files(val folderId: String? = null)                : Route
     @Serializable data object  Album                                              : Route
     @Serializable data object  Wallpaper                                          : Route
+    @Serializable data object  ThumbLab                                           : Route
 }

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material.icons.outlined.ImageNotSupported
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.ViewModule
@@ -120,6 +121,7 @@ object Icons {
     val Share: ImageVector       get() = MaterialIcons.Outlined.Share
     val Move: ImageVector        get() = MaterialIcons.Outlined.DriveFileMove
     val Rename: ImageVector      get() = MaterialIcons.Outlined.Edit
+    val BrokenImage: ImageVector get() = MaterialIcons.Outlined.ImageNotSupported
 
     /* ─────────────────── Profile rows (6) ─────────────────── */
     val ShareOut: ImageVector   get() = MaterialIcons.Outlined.IosShare

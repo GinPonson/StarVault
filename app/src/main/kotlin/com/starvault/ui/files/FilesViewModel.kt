@@ -42,30 +42,63 @@ class FilesViewModel(
     /** 当前目录 cid；用于 setFolder / refresh 复用。 */
     private var currentCid: String = "0"
 
+    /** 当前目录的路径快照（根→当前）。Success 状态携带，Crumb 直接渲染。 */
+    private var currentPath: List<FolderCrumb> = listOf(FolderCrumb("0", "我的文件"))
+
     /**
-     * 目录栈：根为 ["0"]，进入子目录 push 栈顶。
-     *  - setFolder(cid)  ：push cid → loadFolder(cid)
-     *  - backFolder()    ：pop 栈顶 → loadFolder(新栈顶)；栈长=1 时返回 false（已到根）
-     *  - 栈机制让系统 back / 「返回上一级」按钮能逐层回退到根
+     * 目录栈：根为 [("0", "我的文件")]，进入子目录 push (cid, name)。
+     *  - setFolder(cid, name) ：push (cid, name) → loadFolder(cid)
+     *  - backFolder()         ：pop 栈顶 → loadFolder(新栈顶)；栈长=1 时返回 false（已到根）
+     *  - popToFolder(index)   ：截断到 index+1 → loadFolder(该 cid)；用于点击 Crumb 中段
+     *
+     *  栈机制让系统 back / 「返回上一级」按钮 / Crumb 点击都能逐层回退到根。
+     *  name 由调用方传入（来自 FileEntry.name），保证路径显示 = 用户实际点的名字。
      */
-    private val folderStack: ArrayDeque<String> = ArrayDeque<String>().apply { addLast("0") }
+    private val folderStack: ArrayDeque<FolderCrumb> =
+        ArrayDeque<FolderCrumb>().apply { addLast(FolderCrumb("0", "我的文件")) }
 
     /** 当前正在跑的拉取任务；切换目录或 refresh 时取消旧任务。 */
     private var loadJob: Job? = null
 
+    /**
+     * 独立的"加载更多"任务。**不与 loadJob 互斥**——分页是并发的：
+     * 切目录时取消 loadJob，但已有的 loadMore 也会被下面 markPending() 期间的状态变更
+     * 自然覆盖（hasMore 重置、isLoadingMore 旧值不再被读）。
+     * 用独立 Job 是为了 loadMore 之间不互相 cancel（连滚到底时可能两个 loadMore 排队）。
+     */
+    private var loadMoreJob: Job? = null
+
+    /**
+     * 分页状态：
+     *  - currentOffset : 下一页要用的 offset（首屏后 = 已加载 size）
+     *  - currentCid    : 当前目录；loadMore / setFolder / backFolder 都用它
+     * 切目录 / tab 切换时 reset 到 0。
+     */
+    private var currentOffset: Int = 0
+
     init {
-        loadJob = viewModelScope.launch { loadFolder("0") }
+        loadJob = viewModelScope.launch { loadFolder(cid = "0", offset = 0) }
     }
 
-    /** 切换目录（点击文件夹行触发）。 */
-    fun setFolder(folderId: String?) {
+    /**
+     * 切换目录（点击文件夹行触发）。
+     *
+     * @param folderId  目标 cid；null 视为根 "0"
+     * @param folderName 该文件夹显示名；进入子目录时 Crumb 用它，
+     *                   null 时用 cid 占位（深链 / 测试场景）
+     */
+    fun setFolder(folderId: String?, folderName: String? = null) {
         val cid = folderId ?: "0"
         if (cid == currentCid && _state.value is FilesUiState.Success) return
-        folderStack.addLast(cid)
+        folderStack.addLast(FolderCrumb(cid, folderName ?: cid))
         currentCid = cid
+        currentPath = folderStack.toList()
+        currentOffset = 0
+        // 切目录前：取消 loadMore（避免旧目录的下一页覆盖新列表）
+        loadMoreJob?.cancel()
         markPending()
         loadJob?.cancel()
-        loadJob = viewModelScope.launch { loadFolder(cid) }
+        loadJob = viewModelScope.launch { loadFolder(cid, offset = 0) }
     }
 
     /**
@@ -75,19 +108,94 @@ class FilesViewModel(
     fun backFolder(): Boolean {
         if (folderStack.size <= 1) return false
         folderStack.removeLast()
-        val cid = folderStack.last()
-        currentCid = cid
+        val top = folderStack.last()
+        currentCid = top.cid
+        currentPath = folderStack.toList()
+        currentOffset = 0
+        loadMoreJob?.cancel()
         markPending()
         loadJob?.cancel()
-        loadJob = viewModelScope.launch { loadFolder(cid) }
+        loadJob = viewModelScope.launch { loadFolder(top.cid, offset = 0) }
         return true
     }
 
-    /** 重新拉当前目录（pull-to-refresh）。 */
-    fun refresh() {
+    /**
+     * 跳回到 Crumb 路径中的某一段（index，0-based）。截断 stack 到 index+1 后重新加载。
+     * - 0 → 根 "我的文件"
+     * - 1 → 第一级子目录
+     * 传 null 视作根（=index=0）。
+     */
+    fun popToFolder(index: Int) {
+        if (index < 0 || index >= folderStack.size) return
+        // 截断到 index+1，保留 0..index 的所有段
+        while (folderStack.size > index + 1) folderStack.removeLast()
+        val top = folderStack.last()
+        currentCid = top.cid
+        currentPath = folderStack.toList()
+        currentOffset = 0
+        loadMoreJob?.cancel()
         markPending()
         loadJob?.cancel()
-        loadJob = viewModelScope.launch { loadFolder(currentCid) }
+        loadJob = viewModelScope.launch { loadFolder(top.cid, offset = 0) }
+    }
+
+    /** 重新拉当前目录（pull-to-refresh）。重置分页回首屏。 */
+    fun refresh() {
+        currentOffset = 0
+        loadMoreJob?.cancel()
+        markPending()
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { loadFolder(currentCid, offset = 0) }
+    }
+
+    /**
+     * 加载下一页。**UI 滚到列表底部时调用**。
+     *
+     *  并发防护：
+     *  - isLoadingMore=true 时直接 return（Fast Scroll 不会重复触发）
+     *  - hasMore=false 时直接 return（已到底）
+     *  - currentCid 与当前 Success.folderId 不一致时 return（用户已切走，旧请求结果丢弃）
+     *
+     *  数据合并：append 到 s.all 末尾，distinctBy(id) 兜底防 115 跨页偶发重复。
+     *  totalCount 更新策略：已加载 size 与 115 count 取较大值——
+     *  - 拉下一页过程中用户可能新删除文件，count 会变小；用 max 防 "已加载 60 / 共 50" 倒挂
+     *  - 也避免初次 totalCount = 50 但 all.size 一直在涨，UI 顶部数显需要及时同步
+     */
+    fun loadMore() {
+        val s = _state.value as? FilesUiState.Success ?: return
+        if (s.isLoadingMore || !s.hasMore) return
+        if (s.folderId != currentCid) return
+        val offset = currentOffset
+        _state.value = s.copy(isLoadingMore = true)
+        loadMoreJob?.cancel()
+        loadMoreJob = viewModelScope.launch {
+            filesRepository.listFolder(cid = currentCid, offset = offset)
+                .onSuccess { page ->
+                    // 二次防护：拉回来时目录已切走 → 丢弃结果
+                    val current = _state.value as? FilesUiState.Success ?: return@onSuccess
+                    if (current.folderId != currentCid) return@onSuccess
+                    val merged = (current.all + page.items.map { it.toFileEntry() })
+                        .distinctBy { it.id }
+                    currentOffset = offset + page.items.size
+                    _state.value = current.copy(
+                        all = merged,
+                        // ⚠️ totalCount 用已加载数（merged.size），不用 115 的 `count`：
+                        // 115 在某些目录会返回远超本目录实际子项的 `count`（疑似历史遗留或
+                        // 全账号汇总），直接展示会让"共 N 项"显示到上万。已加载数 + 底部
+                        // loading indicator 是更可靠的"还有更多"信号。
+                        totalCount = merged.size,
+                        totalServerCount = page.totalCount,
+                        hasMore = page.hasMore,
+                        isLoadingMore = false,
+                    )
+                }
+                .onFailure {
+                    val current = _state.value as? FilesUiState.Success ?: return@onFailure
+                    if (current.folderId != currentCid) return@onFailure
+                    // 失败不弹 Error 屏（已有列表可用），仅清 isLoadingMore；UI 列表底部可考虑 toast
+                    _state.value = current.copy(isLoadingMore = false)
+                }
+        }
     }
 
     /**
@@ -100,23 +208,33 @@ class FilesViewModel(
         _state.value = s.copy(pendingLoad = true)
     }
 
-    private suspend fun loadFolder(cid: String) {
+    private suspend fun loadFolder(cid: String, offset: Int) {
         // 不再立即覆盖为 Loading：markPending 已保留旧列表 + pendingLoad
         val previousSelected = (_state.value as? FilesUiState.Success)?.selectedIds ?: emptySet()
         val previousViewMode = (_state.value as? FilesUiState.Success)?.viewMode ?: ViewMode.LIST
         val previousSort = (_state.value as? FilesUiState.Success)?.sortLabel ?: "按修改时间"
+        val previousActiveType = (_state.value as? FilesUiState.Success)?.activeType
 
-        filesRepository.listFolder(cid)
-            .onSuccess { items ->
-                val entries = items.map { it.toFileEntry() }
+        filesRepository.listFolder(cid = cid, offset = offset)
+            .onSuccess { page ->
+                val entries = page.items.map { it.toFileEntry() }
+                currentOffset = offset + page.items.size
                 _state.value = FilesUiState.Success(
                     folderId = cid,
+                    folderPath = currentPath,
                     all = entries,
-                    activeType = null,
+                    activeType = previousActiveType,
                     viewMode = previousViewMode,
                     selectedIds = previousSelected.filterSelected(entries).toSet(),
                     sortLabel = previousSort,
+                    // ⚠️ 顶部 "共 N 项" 用已加载数（entries.size），不用 115 的 `count`——
+                    // 115 在某些目录会返回远超本目录实际子项的 `count`（疑似全账号汇总），
+                    // 直接展示会让"共 N 项"显示到上万。已加载数 + 底部 loading 是更可靠的
+                    // "还有更多"信号；totalServerCount 单独留字段供后续做"已加载 X / 共 Y" 增量 UI。
                     totalCount = entries.size,
+                    totalServerCount = page.totalCount,
+                    hasMore = page.hasMore,
+                    isLoadingMore = false,
                     pendingLoad = false,
                 )
             }
@@ -132,6 +250,11 @@ class FilesViewModel(
 
     fun selectType(type: FileType?) {
         val s = _state.value as? FilesUiState.Success ?: return
+        // ⚠️ tab 切换会改变 115 端筛选后的 totalCount（fc/fe 参数），所以应重新拉
+        // 当前实现：仅做本地 filter（"全部" 50 + "图片" 48 都从同一份拉到的数据里筛）。
+        // 这是个已知简化——服务端筛选待切到分页 endpoint 增量时再做。
+        // tabCounts 仍按已加载数据算；totalCount 同理（避免顶部跳数）。hasMore 不重置，
+        // 滚到末尾时 loadMore 仍会拉到下一原始页（含其它类型），UI 再过滤显示。
         _state.value = s.copy(
             activeType = type,
             totalCount = s.all.count { e -> type == null || e.type == type },

@@ -1,5 +1,6 @@
 package com.starvault.ui.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.starvault.BuildConfig
 import kotlinx.coroutines.launch
 
 /**
@@ -60,5 +62,19 @@ fun ProfileRoute(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 80.dp),   // 避 BottomNav
         )
+        // DEBUG 入口（仅 debug 包可见）：跳到 ThumbStateLab 看缩略图四态
+        if (BuildConfig.DEBUG) {
+            androidx.compose.material3.Text(
+                text = "DEBUG → 缩略图四态",
+                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 90.dp)
+                    .clickable(
+                        onClick = { nav.navigate(com.starvault.nav.Route.ThumbLab) },
+                    ),
+            )
+        }
     }
 }

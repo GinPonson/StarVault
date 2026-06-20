@@ -43,11 +43,13 @@ fun FilesRoute(
         onSort = { /* TODO: 弹排序菜单 */ },
         onSelect = { e -> vm.toggleSelect(e.id) },
         onOpen = { e ->
-            // 文件夹：切子目录；文件：Phase 1 noop（Player/Preview 后续切片）
-            if (e.isFolder) vm.setFolder(e.id)
+            // 文件夹：切子目录，附带 name 给 Crumb 路径用；文件：Phase 1 noop
+            if (e.isFolder) vm.setFolder(e.id, e.name)
         },
+        onCrumbClick = { index -> vm.popToFolder(index) },
         onCloseBulk = vm::clearSelection,
         onBulkAction = vm::bulk,
         onUpload = { /* TODO: 弹上传选择 */ },
+        onLoadMore = vm::loadMore,
     )
 }
