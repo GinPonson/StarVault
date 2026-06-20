@@ -77,6 +77,23 @@ class FilesViewModel(
     private var currentOffset: Int = 0
 
     init {
+        // 首屏不再走 Loading 分支（避免全屏"加载中…"闪现）：
+        // 先放一个空 Success + pendingLoad=true，让 UI 立即渲染 AppBar/Crumb/Toolbar
+        // + 列表 skeleton（all=empty），顶部进度条在数据到达前持续显示。
+        // 数据到达后由 loadFolder() 的 onSuccess 直接覆盖此 state。
+        _state.value = FilesUiState.Success(
+            folderId = currentCid,
+            folderPath = currentPath,
+            all = emptyList(),
+            activeType = null,
+            viewMode = ViewMode.LIST,
+            selectedIds = emptySet(),
+            sortLabel = "按修改时间",
+            totalCount = 0,
+            hasMore = false,
+            isLoadingMore = false,
+            pendingLoad = true,
+        )
         loadJob = viewModelScope.launch { loadFolder(cid = "0", offset = 0) }
     }
 
