@@ -13,7 +13,7 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowBackground">@color/bg</item>
-        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>
