@@ -19,6 +19,8 @@ sealed interface Route {
     @Serializable data object  Transfers                                          : Route
     @Serializable data object  Profile                                            : Route
     @Serializable data class   Files(val folderId: String? = null)                : Route
+    @Serializable data class   PreviewImage(val fileId: String)                   : Route
+    @Serializable data class   PreviewVideo(val fileId: String)                   : Route
     @Serializable data object  Album                                              : Route
     @Serializable data object  Wallpaper                                          : Route
     @Serializable data object  ThumbLab                                           : Route

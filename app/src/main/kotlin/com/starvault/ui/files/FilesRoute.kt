@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.starvault.data.model.FileType
 import com.starvault.nav.Route
 
 /**
@@ -43,8 +44,16 @@ fun FilesRoute(
         onSort = { /* TODO: 弹排序菜单 */ },
         onSelect = { e -> vm.toggleSelect(e.id) },
         onOpen = { e ->
-            // 文件夹：切子目录，附带 name 给 Crumb 路径用；文件：Phase 1 noop
-            if (e.isFolder) vm.setFolder(e.id, e.name)
+            // 文件夹 → 切子目录
+            // IMAGE   → PreviewImage
+            // VIDEO   → PreviewVideo
+            // AUDIO / DOC / ZIP / OTHER → 当前 phase 不接预览，noop（后续 phase）
+            when {
+                e.isFolder -> vm.setFolder(e.id, e.name)
+                e.type == FileType.IMAGE -> nav.navigate(Route.PreviewImage(e.id))
+                e.type == FileType.VIDEO -> nav.navigate(Route.PreviewVideo(e.id))
+                else -> { /* TODO: 详情页 / 下载 */ }
+            }
         },
         onCrumbClick = { index -> vm.popToFolder(index) },
         onCloseBulk = vm::clearSelection,

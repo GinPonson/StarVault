@@ -87,6 +87,10 @@ dependencies {
     implementation(libs.retrofit.kotlinx.ser)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // Media3 视频播放（PreviewVideo 用，播放 115 m3u8 流）
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.datasource.okhttp)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

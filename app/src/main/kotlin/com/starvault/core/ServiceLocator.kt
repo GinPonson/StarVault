@@ -13,6 +13,7 @@ import com.starvault.data.remote.cloud115.ScanLoginManager
 import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.FilesRepository
+import com.starvault.data.repository.MediaPreviewRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
@@ -62,6 +63,13 @@ object ServiceLocator {
     lateinit var filesRepository: FilesRepository
         private set
 
+    /**
+     * Preview 仓库（image 原图 URL + video m3u8 URL）。
+     * 复用现有 [filesApi] —— 同一个 OkHttpClient + Cookie 注入链路。
+     */
+    lateinit var mediaPreviewRepository: MediaPreviewRepository
+        private set
+
     fun init(context: Context) {
         val appContext = context.applicationContext
         authStore = Cloud115AuthStore(appContext)
@@ -79,6 +87,7 @@ object ServiceLocator {
             appScope = appScope,
         )
         filesRepository = FilesRepository(api = filesApi)
+        mediaPreviewRepository = MediaPreviewRepository(api = filesApi)
         // Coil 全局 ImageLoader 注入 OkHttpNetworkFetcher（带 Cookie）
         SingletonImageLoader.setSafe { ctx ->
             ImageLoader.Builder(ctx)

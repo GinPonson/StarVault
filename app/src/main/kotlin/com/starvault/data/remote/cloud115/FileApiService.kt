@@ -61,6 +61,92 @@ interface FileApiService {
         @Query("fc_mix") fcMix: Int = 1,
         @Query("nf") nf: Int? = null,
     ): Response<FileListResponse>
+
+    /**
+     * GET /files/download — 拿指定 pickcode 的真实下载 URL（用于图片原图 / 大文件）。
+     *
+     *  调用模式：单一文件 pickcode，115 响应 JSON 含 `data[0].file_url`，该 URL 可被
+     *  Coil 直接拉图（已带 115 Cookie + 签名）。参考 p115client/client.py:7646。
+     *
+     *  参数：
+     *  - pickcode : 提取码（115 `/files` 响应的 `pc` 字段）
+     *  - dl       : 0=普通下载直链（默认）；1=需 302 二次跳转拿 file_url_302（单次有效）
+     *
+     *  ⚠️ 200 MB 限制（p115client 注释）：超此大小的文件此接口会失败，需用 m3u8 / 客户端下载。
+     *
+     *  响应：[FileDownloadResponse]
+     *  - data[0].file_url     — 直链 URL（带 115 签名 + Cookie 已隐含在签名里）
+     *  - data[0].file_name    — 文件名
+     *  - data[0].file_size    — 字节数
+     *  - data[0].file_sha1    — sha1
+     */
+    @GET("files/download")
+    suspend fun downloadUrl(
+        @Query("pickcode") pickcode: String,
+        @Query("dl") dl: Int = 0,
+    ): Response<FileDownloadResponse>
+
+    /**
+     * GET /files/image — 拿图片原图 URL（用于 PreviewImage）。
+     *
+     *  为什么不用 `/files/download`：
+     *  - `/files/download` 是通用下载端点，对部分图片类型（PNG 小图等）实测 `data` 返回空 array
+     *    （p115client 注释：image-only endpoint 走 /files/image）
+     *  - `/files/image` 专给图片，返回 `data[].url` + `data[].size_url`（多尺寸）
+     *
+     *  调用模式：传 pickcode，115 返回原图 + 各尺寸 CDN URL（带签名）。
+     *
+     *  响应：[FileImageResponse]
+     *  - data.url            — 原图 URL（CDN 带签名）
+     *  - data.size_url.<sz>  — 指定尺寸的 URL（sz: small / middle / large 等）
+     *
+     *  参考 p115client/client.py:12893。
+     *
+     *  ⚠️ 上限 50 MB（p115client 注释）。
+     */
+    @GET("files/image")
+    suspend fun imageOriginal(
+        @Query("pickcode") pickcode: String,
+    ): Response<FileImageResponse>
+
+    /**
+     * GET /files/video — 拿指定 pickcode 视频的 m3u8 在线播放地址（用于 PreviewVideo）。
+     *
+     *  响应：[VideoStreamResponse]
+     *  - data.video_url       — m3u8 直链 URL（带 115 签名 + 域 cookie，可直接给 Media3 播放）
+     *  - data.thumbnail_url   — 视频首帧缩略图
+     *  - data.duration        — 视频时长（秒，p115client 注释实测可能有）
+     *
+     *  参考 p115client/client.py:16323。注意：未转码视频会触发自动转码，p115client 注释提到
+     *  "如果返回信息中有 queue_url，则可用于查询转码状态"。我们本次 MVP 不实现轮询，
+     *  UI 显示 buffering 状态由 Media3 自行处理。
+     */
+    @GET("files/video")
+    suspend fun videoStream(
+        @Query("pickcode") pickcode: String,
+    ): Response<VideoStreamResponse>
+
+    /**
+     * GET /files/get_info — 拿单个文件/目录的详细信息（含 pickcode + name + size + ico）。
+     *
+     *  用于 PreviewImage / PreviewVideo 第一步：拿到 pickcode 再去调 download / video endpoint。
+     *  Files 屏列表已有 pickcode，但跨屏拿不到——只能靠 fid 再调一次。
+     *
+     *  参考 p115client/client.py:10253。注意：被移到回收站后此接口查不到，需还原/彻底删除。
+     *
+     *  响应：[FileInfoResponse]
+     *  - data[0].fid / cid       — id（注意 folder 用 cid，file 用 fid；同 listFiles 判别）
+     *  - data[0].n               — 文件名
+     *  - data[0].pc              — pickcode
+     *  - data[0].s               — 文件字节数（folder=0）
+     *  - data[0].ico             — 扩展名（mp4 / jpg ...）
+     *  - data[0].sha             — sha1
+     *  - data[0].u               — 缩略图 URL（与 listFiles 同；image/video 才有）
+     */
+    @GET("files/get_info")
+    suspend fun getInfo(
+        @Query("file_id") fileId: String,
+    ): Response<FileInfoResponse>
 }
 
 /**
