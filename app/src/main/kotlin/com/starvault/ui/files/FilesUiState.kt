@@ -22,7 +22,14 @@ sealed interface FilesUiState {
         val activeType: FileType?,                // null = 全部
         val viewMode: ViewMode,                   // 列表 / 网格
         val selectedIds: Set<String>,             // 多选集合
-        val sortLabel: String,                    // "按修改时间"（sort 菜单待 T22+）
+        val sortLabel: String,                    // "按修改时间 ▾"（SectionHead 显示用）
+        /**
+         * 当前排序字段（115 webapi `o` 参数）。驱动 SortSheet 显示当前选中项。
+         * 与 sortLabel 同步——sortLabel 是给人看的，sortField/sortAsc 是给 115 用的。
+         */
+        val sortField: String = "user_ptime",
+        /** 当前排序方向：0 = 降序，1 = 升序 */
+        val sortAsc: Int = 0,
         /** 顶部 "共 N 项" 用的总数；优先用 115 报的 totalServerCount，否则用已加载 size */
         val totalCount: Int,
         /**

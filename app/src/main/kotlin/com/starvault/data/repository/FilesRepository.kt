@@ -45,18 +45,81 @@ class FilesRepository(
      * @param cid   父目录 id；根目录传 "0"
      * @param offset  分页偏移（首屏 = 0）
      * @param limit   单页大小（默认 [DEFAULT_PAGE_SIZE] = 50）
+     * @param order   排序字段（115 webapi `o` 参数）；默认 `user_ptime`（修改时间降序）
+     *                常用值：
+     *                - `user_ptime`  修改时间
+     *                - `user_utime`  创建时间
+     *                - `user_intime` 上传时间
+     *                - `file_size`   文件大小
+     *                - `file_name`   文件名
+     *                - `file_type`   文件类型
+     * @param asc     升降序（115 webapi `asc` 参数）；0 = 降序，1 = 升序
      */
     suspend fun listFolder(
         cid: String,
         offset: Int = 0,
         limit: Int = DEFAULT_PAGE_SIZE,
+        order: String = DEFAULT_ORDER,
+        asc: Int = DEFAULT_ASC,
     ): Result<PagedFiles> {
         return runCatching {
-            val resp = api.listFiles(cid = cid, offset = offset, limit = limit, showDir = 1, fcMix = 1)
+            val resp = api.listFiles(
+                cid = cid, offset = offset, limit = limit,
+                showDir = 1, fcMix = 1,
+                order = order, asc = asc,
+            )
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
             val body = resp.body() ?: throw IllegalStateException("empty body")
             if (!body.isOk) {
                 val msg = body.error ?: "errno=${body.errNo ?: body.errno ?: -1} cid=$cid"
+                throw IllegalStateException(msg)
+            }
+            body
+        }.map { body ->
+            val items = body.data.mapNotNull { parseRaw(it) }.distinctBy { it.id }
+            PagedFiles(
+                items = items,
+                offset = body.offset,
+                limit = body.limit,
+                totalCount = body.count,
+                hasMore = body.hasMore(),
+            )
+        }
+    }
+
+    /**
+     * 搜索文件 / 文件夹（全账号，按文件名匹配，115 后端 substring）。
+     *
+     *  调用 115 `GET /files/search`（参考 p115client/client.py:15425）。
+     *  响应 shape 与 listFiles 相同（顶层 state/count/data/path/order），复用 [parseRaw]。
+     *
+     * @param searchValue 搜索关键词（**必填**，空字符串 115 返回空）
+     * @param offset      分页偏移（首屏 = 0）
+     * @param limit       单页大小
+     * @param order       排序字段（同 [listFolder.order]）
+     * @param asc         升降序（同 [listFolder.asc]）
+     */
+    suspend fun searchFiles(
+        searchValue: String,
+        offset: Int = 0,
+        limit: Int = DEFAULT_PAGE_SIZE,
+        order: String = DEFAULT_ORDER,
+        asc: Int = DEFAULT_ASC,
+    ): Result<PagedFiles> {
+        return runCatching {
+            val resp = api.searchFiles(
+                searchValue = searchValue,
+                offset = offset,
+                limit = limit,
+                order = order,
+                asc = asc,
+                showDir = 1,
+                fcMix = 1,
+            )
+            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
+            val body = resp.body() ?: throw IllegalStateException("empty body")
+            if (!body.isOk) {
+                val msg = body.error ?: "errno=${body.errNo ?: body.errno ?: -1}"
                 throw IllegalStateException(msg)
             }
             body
@@ -81,6 +144,17 @@ class FilesRepository(
          *  1.04 TB 媒体库才会需要调大。
          */
         const val DEFAULT_PAGE_SIZE = 50
+
+        /**
+         * 默认排序字段 = `user_ptime`（修改时间）。
+         * 对齐 115 webapi /files 的默认行为，避免显式传参导致与"按修改时间"UI 不一致。
+         */
+        const val DEFAULT_ORDER = "user_ptime"
+
+        /**
+         * 默认排序方向 = 0（降序）。修改时间最新的排在最上面。
+         */
+        const val DEFAULT_ASC = 0
     }
 
     /**

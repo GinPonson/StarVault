@@ -127,6 +127,38 @@ interface FileApiService {
     ): Response<VideoStreamResponse>
 
     /**
+     * GET /files/search — 115 全账号文件名搜索（substring 匹配）。
+     *
+     *  调用方式：传 search_value（关键词），115 返回与 listFiles 同结构（state/count/data/path/order/is_asc）的响应。
+     *  data item shape 与 listFiles 一致（folder / file 混合），复用 [ParsedFileItem] 解析。
+     *
+     *  关键参数（参考 p115client/client.py:15425）：
+     *  - search_value : 搜索关键词（**必填**，空字符串 115 返回空）
+     *  - aid          : 应用 id，固定 1
+     *  - cid          : 限定目录；本 MVP 不传 = 全账号搜
+     *  - o / asc      : 排序字段 + 升降序（与 listFiles 同）
+     *  - offset / limit : 分页
+     *  - show_dir     : 固定 1（取混合数据）
+     *  - fc_mix       : 固定 1（混合排序）
+     *
+     *  响应：[FileListResponse]（与 listFiles 同 DTO）
+     *
+     *  ⚠️ 115 不提供 type / size / mtime 等高级筛选，只能搜文件名（p115client 注释）。
+     */
+    @GET("files/search")
+    suspend fun searchFiles(
+        @Query("search_value") searchValue: String,
+        @Query("aid") aid: Int = 1,
+        @Query("cid") cid: String = "0",
+        @Query("o") order: String = "user_ptime",
+        @Query("asc") asc: Int = 0,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 50,
+        @Query("show_dir") showDir: Int = 1,
+        @Query("fc_mix") fcMix: Int = 1,
+    ): Response<FileListResponse>
+
+    /**
      * GET /files/get_info — 拿单个文件/目录的详细信息（含 pickcode + name + size + ico）。
      *
      *  用于 PreviewImage / PreviewVideo 第一步：拿到 pickcode 再去调 download / video endpoint。

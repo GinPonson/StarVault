@@ -42,6 +42,15 @@ class FilesViewModel(
     /** 当前目录 cid；用于 setFolder / refresh 复用。 */
     private var currentCid: String = "0"
 
+    /**
+     * 当前排序偏好（115 webapi `o` + `asc` 参数）。
+     *  - 切目录时保留（用户偏好）
+     *  - 默认值与 115 webapi 默认一致：修改时间降序
+     *  - 由 [applySort] 写入
+     */
+    private var currentOrder: String = FilesRepository.DEFAULT_ORDER
+    private var currentAsc: Int = FilesRepository.DEFAULT_ASC
+
     /** 当前目录的路径快照（根→当前）。Success 状态携带，Crumb 直接渲染。 */
     private var currentPath: List<FolderCrumb> = listOf(FolderCrumb("0", "我的文件"))
 
@@ -88,7 +97,7 @@ class FilesViewModel(
             activeType = null,
             viewMode = ViewMode.LIST,
             selectedIds = emptySet(),
-            sortLabel = "按修改时间",
+            sortLabel = formatSortLabel(currentOrder, currentAsc),
             totalCount = 0,
             hasMore = false,
             isLoadingMore = false,
@@ -166,6 +175,28 @@ class FilesViewModel(
     }
 
     /**
+     * 应用新的排序偏好。
+     *
+     * - 写入 [_currentOrder] / [_currentAsc]（跨目录保留）
+     * - sortLabel 立刻更新（无网络往返）
+     * - 重新拉当前目录（offset 归零），按新排序加载首屏
+     * - 已有列表保留 + pendingLoad=true，避免全屏 Loading 闪屏
+     *
+     * @param order 115 webapi `o` 参数（user_ptime / user_utime / user_intime / file_size / file_name / file_type）
+     * @param asc   升降序：0 = 降序，1 = 升序
+     */
+    fun applySort(order: String, asc: Int) {
+        currentOrder = order
+        currentAsc = asc
+        val s = _state.value as? FilesUiState.Success ?: run {
+            // Loading/Error 态下更新 sortLabel 等下一屏渲染
+            return
+        }
+        _state.value = s.copy(sortLabel = formatSortLabel(order, asc))
+        refresh()
+    }
+
+    /**
      * 加载下一页。**UI 滚到列表底部时调用**。
      *
      *  并发防护：
@@ -186,7 +217,12 @@ class FilesViewModel(
         _state.value = s.copy(isLoadingMore = true)
         loadMoreJob?.cancel()
         loadMoreJob = viewModelScope.launch {
-            filesRepository.listFolder(cid = currentCid, offset = offset)
+            filesRepository.listFolder(
+                cid = currentCid,
+                offset = offset,
+                order = currentOrder,
+                asc = currentAsc,
+            )
                 .onSuccess { page ->
                     // 二次防护：拉回来时目录已切走 → 丢弃结果
                     val current = _state.value as? FilesUiState.Success ?: return@onSuccess
@@ -229,10 +265,15 @@ class FilesViewModel(
         // 不再立即覆盖为 Loading：markPending 已保留旧列表 + pendingLoad
         val previousSelected = (_state.value as? FilesUiState.Success)?.selectedIds ?: emptySet()
         val previousViewMode = (_state.value as? FilesUiState.Success)?.viewMode ?: ViewMode.LIST
-        val previousSort = (_state.value as? FilesUiState.Success)?.sortLabel ?: "按修改时间"
+        val previousSortLabel = formatSortLabel(currentOrder, currentAsc)
         val previousActiveType = (_state.value as? FilesUiState.Success)?.activeType
 
-        filesRepository.listFolder(cid = cid, offset = offset)
+        filesRepository.listFolder(
+            cid = cid,
+            offset = offset,
+            order = currentOrder,
+            asc = currentAsc,
+        )
             .onSuccess { page ->
                 val entries = page.items.map { it.toFileEntry() }
                 currentOffset = offset + page.items.size
@@ -243,7 +284,7 @@ class FilesViewModel(
                     activeType = previousActiveType,
                     viewMode = previousViewMode,
                     selectedIds = previousSelected.filterSelected(entries).toSet(),
-                    sortLabel = previousSort,
+                    sortLabel = previousSortLabel,
                     // ⚠️ 顶部 "共 N 项" 用已加载数（entries.size），不用 115 的 `count`——
                     // 115 在某些目录会返回远超本目录实际子项的 `count`（疑似全账号汇总），
                     // 直接展示会让"共 N 项"显示到上万。已加载数 + 底部 loading 是更可靠的
@@ -395,3 +436,50 @@ private fun Set<String>.filterSelected(currentEntries: List<FileEntry>): List<St
 }
 
 enum class BulkAction { DOWNLOAD, SHARE, MOVE, RENAME, DELETE }
+
+/* ─────────────────── 排序字段映射 ─────────────────── */
+
+/**
+ * 115 webapi `o` 参数 → UI 显示文案的映射。
+ *
+ *  - field : 115 协议字段名（传给 listFolder / searchFiles）
+ *  - label  : SectionHead 显示文案（"按 X ▾"）
+ *  - asc    : 升降序（0 = 降序，1 = 升序）
+ *
+ *  排序 6 字段 × 2 方向 = 12 个组合，BottomSheet 一级菜单用 [SORT_FIELDS] 列字段，
+ *  点中后二级菜单用 [formatSortLabel] 拼"按 X ▾/▴"决定当前态。
+ *
+ *  **字段语义**（按 p115client docstring 10440-10447 校正）：
+ *    - `user_ptime`  = 创建时间
+ *    - `user_utime`  = 修改时间
+ *    - `file_name`   = 文件名
+ *    - `file_size`   = 文件大小
+ *    - `file_type`   = 文件种类
+ *    - `user_otime`  = 上次打开时间（p115client 支持，但显示语义弱，不放 MVP）
+ */
+internal data class SortOption(
+    val field: String,
+    val label: String,
+)
+
+internal val SORT_FIELDS: List<SortOption> = listOf(
+    SortOption("user_ptime",  "创建时间"),
+    SortOption("user_utime",  "修改时间"),
+    SortOption("user_otime",  "上次打开时间"),
+    SortOption("file_size",   "文件大小"),
+    SortOption("file_name",   "文件名"),
+    SortOption("file_type",   "文件类型"),
+)
+
+/**
+ * 把 (field, asc) 拼成 SectionHead 显示文案：
+ * - "按修改时间 ▾"  (asc=0)
+ * - "按修改时间 ▴"  (asc=1)
+ *
+ * 未知字段降级到 "按修改时间 ▾"。
+ */
+internal fun formatSortLabel(field: String, asc: Int): String {
+    val label = SORT_FIELDS.firstOrNull { it.field == field }?.label ?: "创建时间"
+    val arrow = if (asc == 1) " ▴" else " ▾"
+    return "按$label$arrow"
+}

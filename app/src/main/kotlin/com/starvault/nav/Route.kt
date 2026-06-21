@@ -24,4 +24,12 @@ sealed interface Route {
     @Serializable data object  Album                                              : Route
     @Serializable data object  Wallpaper                                          : Route
     @Serializable data object  ThumbLab                                           : Route
+
+    /**
+     * 搜索屏（Files 屏的搜索入口跳转）。
+     *
+     * @param initialQuery 初始关键词（默认空 = 用户自己输入）。
+     *                     留出 deep link 扩展点：未来可从 Home / Album 屏带初始词跳进来。
+     */
+    @Serializable data class   Search(val initialQuery: String = "")                : Route
 }

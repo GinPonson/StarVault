@@ -16,6 +16,7 @@ import com.starvault.ui.player.PlayerRoute
 import com.starvault.ui.preview.PreviewImageRoute
 import com.starvault.ui.preview.PreviewVideoRoute
 import com.starvault.ui.profile.ProfileRoute
+import com.starvault.ui.search.SearchRoute
 import com.starvault.ui.share.ShareRoute
 import com.starvault.ui.transfers.TransfersRoute
 import com.starvault.ui.wallpaper.WallpaperRoute
@@ -60,5 +61,7 @@ fun StarVaultNavHost(
         composable<Route.Share>     { entry -> ShareRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
         composable<Route.Wallpaper> { WallpaperRoute(onBack = { navController.popBackStack() }) }
         composable<Route.ThumbLab>  { ThumbStateLab() }
+        // 搜索屏（Files 屏的搜索入口跳转）：全屏覆盖，不显示 bottom-nav
+        composable<Route.Search>   { entry -> SearchRoute(args = entry.toRoute(), nav = navController) }
     }
 }
