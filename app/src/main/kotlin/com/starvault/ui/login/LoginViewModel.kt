@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
-import com.starvault.data.remote.cloud115.ScanLoginManager
+import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.repository.AuthRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -15,12 +15,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Login 屏 ViewModel — 真 115 扫码接入版。
+ * Login 屏 ViewModel — 115 OAuth 设备码接入版。
  *
- *  - init { }: 立即拉一次 QR 码（fetchQrCode），成功后开 120s expire countdown + 启动 polling
- *  - 状态机：完全复用 [LoginUiState] 4 态，与 ScanStatus 6 态 1:1 映射
- *  - [refresh]: 取消旧 polling，重新拉 QR
- *  - 不再保留 simulateScan（演示按钮一并删除）
+ *  - init { }: 立即申请设备码（requestDeviceCode），成功后开 120s expire countdown + 启动 polling
+ *  - 状态机：复用 [LoginUiState] 4 态；与 [OpenAuthManager.AuthStatus] 6 态 1:1 映射
+ *  - [refresh]: 取消旧 polling，重新申请设备码
+ *  - 替换历史：旧的 ScanStatus(cookies) → 新的 AuthStatus(access_token/refresh_token)
  */
 class LoginViewModel(
     private val authRepository: AuthRepository = ServiceLocator.authRepository,
@@ -36,7 +36,7 @@ class LoginViewModel(
         loadQrCode()
     }
 
-    /** 拉 QR 码 + 启动 polling + 启动 expire 倒计时。 */
+    /** 拉设备码 + 启动 polling + 启动 expire 倒计时。 */
     fun refresh() = loadQrCode()
 
     private fun loadQrCode() {
@@ -47,13 +47,13 @@ class LoginViewModel(
         _state.value = LoginUiState.Waiting(qrBitmap = null, expireSeconds = 120)
 
         viewModelScope.launch {
-            authRepository.fetchQrCode()
-                .onSuccess { qr ->
+            authRepository.requestDeviceCode()
+                .onSuccess { dc ->
                     _state.value = LoginUiState.Waiting(
-                        qrBitmap = qr.bitmap.asImageBitmap(),
+                        qrBitmap = dc.bitmap.asImageBitmap(),
                         expireSeconds = 120,
                     )
-                    startPolling(qr)
+                    startPolling(dc)
                     startExpireCountdown()
                 }
                 .onFailure { e ->
@@ -65,39 +65,39 @@ class LoginViewModel(
         }
     }
 
-    private fun startPolling(qr: ScanLoginManager.QRCodeData) {
+    private fun startPolling(deviceCode: OpenAuthManager.DeviceCodeData) {
         pollingJob = viewModelScope.launch {
-            authRepository.signIn(qr).collect { status ->
+            authRepository.pollForToken(deviceCode).collect { status ->
                 _state.value = when (status) {
-                    is ScanLoginManager.ScanStatus.Waiting -> _state.value   // 保持当前 Waiting(qrBitmap)
-                    is ScanLoginManager.ScanStatus.Scanned -> {
+                    is OpenAuthManager.AuthStatus.Waiting -> _state.value   // 保持当前 Waiting(qrBitmap)
+                    is OpenAuthManager.AuthStatus.Scanned -> {
                         val expire = (_state.value as? LoginUiState.Waiting)?.expireSeconds ?: 120
-                        // 115 status=1 不返回 userInfo（p115client/Lumen 都只在 status=2 才拿 userInfo）
-                        // UI 端固定提示「请在 115 App 确认登录」
+                        // OAuth 协议不区分"已扫码未确认"中间态；UI 端固定提示
                         LoginUiState.Scanned(
                             nickname = "",
                             deviceName = "请在 115 App 中点击「确认登录」",
                             expireSeconds = expire,
                         )
                     }
-                    is ScanLoginManager.ScanStatus.Success -> {
-                        // 落 cookies + user info → authState 自动重发 Authenticated
-                        authRepository.persistLogin(
-                            cookies = status.cookies,
-                            uid = status.uid,
-                            userName = status.userName,
-                            deviceName = status.deviceName,
+                    is OpenAuthManager.AuthStatus.Authorized -> {
+                        // 落 tokens + user info → authState 自动重发 Authenticated
+                        authRepository.persistTokens(
+                            accessToken  = status.accessToken,
+                            refreshToken = status.refreshToken,
+                            expiresIn    = status.expiresIn,
+                            uid          = status.uid,
+                            userName     = status.userName,
                         )
                         LoginUiState.LoggedIn(
                             nickname = status.userName.ifBlank { "已登录" },
                             expireSeconds = 0,
                         )
                     }
-                    is ScanLoginManager.ScanStatus.Cancelled ->
+                    is OpenAuthManager.AuthStatus.Denied ->
                         LoginUiState.Error("用户已取消", expireSeconds = 0)
-                    is ScanLoginManager.ScanStatus.Timeout ->
+                    is OpenAuthManager.AuthStatus.Expired ->
                         LoginUiState.Error("二维码已过期，请刷新", expireSeconds = 0)
-                    is ScanLoginManager.ScanStatus.Error ->
+                    is OpenAuthManager.AuthStatus.Error ->
                         LoginUiState.Error(status.message, expireSeconds = 0)
                 }
             }

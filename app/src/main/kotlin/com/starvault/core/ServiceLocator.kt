@@ -5,11 +5,11 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import com.starvault.data.local.auth.Cloud115AuthStore
+import com.starvault.data.local.auth.OpenAuthStore
 import com.starvault.data.remote.cloud115.Cloud115ApiClient
 import com.starvault.data.remote.cloud115.FileApiService
-import com.starvault.data.remote.cloud115.ScanApiService
-import com.starvault.data.remote.cloud115.ScanLoginManager
+import com.starvault.data.remote.cloud115.OpenAuthApiService
+import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.FilesRepository
@@ -25,13 +25,18 @@ import okhttp3.OkHttpClient
  * 所有 ViewModel 通过 [ServiceLocator] 拿依赖。
  *
  * 简单到不需要 Lazy / synchronization：MainActivity.onCreate 早于任何 ViewModel 构造。
+ *
+ * 替换历史（决策 #9）：Cookie 时代 → OAuth 时代
+ *  - `authStore: Cloud115AuthStore`  → `tokenStore: OpenAuthStore`
+ *  - `scanApi: ScanApiService`      → `openAuthApi: OpenAuthApiService`
+ *  - `scanManager: ScanLoginManager`→ `authManager: OpenAuthManager`
  */
 object ServiceLocator {
 
-    lateinit var authStore: Cloud115AuthStore
+    lateinit var tokenStore: OpenAuthStore
         private set
 
-    lateinit var scanApi: ScanApiService
+    lateinit var openAuthApi: OpenAuthApiService
         private set
 
     lateinit var userApi: UserApiService
@@ -40,12 +45,12 @@ object ServiceLocator {
     lateinit var filesApi: FileApiService
         private set
 
-    lateinit var scanManager: ScanLoginManager
+    lateinit var authManager: OpenAuthManager
         private set
 
     /**
-     * 共享 OkHttpClient：Cloud115ApiClient 用（API 请求） + Coil 用（缩略图 GET，带 Cookie）。
-     * 这样缩略图请求自动带 115 Cookie（thumb.115.com 签名 URL 必须登录态）。
+     * 共享 OkHttpClient：Cloud115ApiClient 用（API 请求） + Coil 用（缩略图 GET，带 Bearer）。
+     * 这样缩略图请求自动带 115 Bearer（thumb.115.com 签名 URL 必须登录态）。
      */
     lateinit var okHttpClient: OkHttpClient
         private set
@@ -65,30 +70,31 @@ object ServiceLocator {
 
     /**
      * Preview 仓库（image 原图 URL + video m3u8 URL）。
-     * 复用现有 [filesApi] —— 同一个 OkHttpClient + Cookie 注入链路。
+     * 复用现有 [filesApi] —— 同一个 OkHttpClient + Bearer 注入链路。
      */
     lateinit var mediaPreviewRepository: MediaPreviewRepository
         private set
 
     fun init(context: Context) {
         val appContext = context.applicationContext
-        authStore = Cloud115AuthStore(appContext)
-        val cookieProvider = authStore::cookiesBlocking
-        // 1 个 OkHttpClient 给所有 cloud115 流量（API + 缩略图）共享，确保 Cookie 一致
-        okHttpClient = Cloud115ApiClient.buildOkHttpClient(cookieProvider = cookieProvider)
-        scanApi = Cloud115ApiClient.scanApiService(okHttpClient)
+        tokenStore = OpenAuthStore(appContext)
+        val tokenProvider = tokenStore::accessTokenBlocking
+
+        // 1 个 OkHttpClient 给所有 cloud115 流量（API + 缩略图）共享，确保 Bearer 一致
+        okHttpClient = Cloud115ApiClient.buildOkHttpClient(tokenProvider = tokenProvider)
+        openAuthApi = Cloud115ApiClient.openAuthApiService(okHttpClient)
         userApi = Cloud115ApiClient.userApiService(okHttpClient)
         filesApi = Cloud115ApiClient.fileApiService(okHttpClient)
-        scanManager = ScanLoginManager(api = scanApi, authStore = authStore)
+        authManager = OpenAuthManager(api = openAuthApi)
         authRepository = AuthRepository(
-            authStore = authStore,
-            scanManager = scanManager,
-            userApi = userApi,
-            appScope = appScope,
+            tokenStore  = tokenStore,
+            authManager = authManager,
+            userApi     = userApi,
+            appScope    = appScope,
         )
         filesRepository = FilesRepository(api = filesApi)
         mediaPreviewRepository = MediaPreviewRepository(api = filesApi)
-        // Coil 全局 ImageLoader 注入 OkHttpNetworkFetcher（带 Cookie）
+        // Coil 全局 ImageLoader 注入 OkHttpNetworkFetcher（带 Bearer）
         SingletonImageLoader.setSafe { ctx ->
             ImageLoader.Builder(ctx)
                 .components { add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient })) }

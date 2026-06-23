@@ -1,7 +1,7 @@
 package com.starvault.ui.profile
 
-import com.starvault.data.local.auth.Cloud115AuthStore
-import com.starvault.data.remote.cloud115.ScanLoginManager
+import com.starvault.data.local.auth.OpenAuthStore
+import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.remote.cloud115.UserApiService
 import com.starvault.data.repository.AuthRepository
 import io.mockk.coEvery
@@ -27,6 +27,10 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  *  - 成功路径：调 [AuthRepository.signOut]，不发 effect（NavHost 自动处理跳转）
  *  - 失败路径：signOut 抛异常 → 发 [Effect.Error] 给 Route 端 Snackbar
+ *
+ * 替换历史：fakeAuthStore / fakeScanManager → 改名为对应 OAuth 类型
+ *  - Cloud115AuthStore → OpenAuthStore（cookiesFlow → accessTokenFlow）
+ *  - ScanLoginManager → OpenAuthManager
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModelTest {
@@ -89,15 +93,15 @@ class ProfileViewModelTest {
  * Fake [AuthRepository]：用 counter 验证调用，用 throw 控制失败。
  *
  *  appScope 走真实 [TestScope]（stateIn 是 lazy，但 appScope 作为构造参数是 eager 求值）。
- *  authStore / scanManager 走 mockk（VM 测试不调它们，只让类型通过）。
+ *  tokenStore / authManager 走 mockk（VM 测试不调它们，只让类型通过）。
  */
 private class FakeAuthRepository(
     private val throwOnSignOut: Exception? = null,
 ) : AuthRepository(
-    authStore = fakeAuthStore(),
-    scanManager = fakeScanManager(),
-    userApi = fakeUserApi(),
-    appScope = TestScope(),
+    tokenStore  = fakeAuthStore(),
+    authManager = fakeOpenAuthManager(),
+    userApi     = fakeUserApi(),
+    appScope    = TestScope(),
 ) {
     val signOutCalls = AtomicInteger(0)
     override suspend fun signOut() {
@@ -106,11 +110,12 @@ private class FakeAuthRepository(
     }
 }
 
-private fun fakeAuthStore(): Cloud115AuthStore = mockk(relaxed = true) {
-    coEvery { cookiesFlow } returns flowOf(null)
+private fun fakeAuthStore(): OpenAuthStore = mockk(relaxed = true) {
+    coEvery { accessTokenFlow } returns flowOf(null)
+    coEvery { refreshToken() } returns null
 }
 
-private fun fakeScanManager(): ScanLoginManager = mockk(relaxed = true)
+private fun fakeOpenAuthManager(): OpenAuthManager = mockk(relaxed = true)
 
 private fun fakeUserApi(): UserApiService = mockk(relaxed = true) {
     // VM init { loadUserInfo() } 触发；为避免 tests 收到意外的 Effect.Error 噪声，

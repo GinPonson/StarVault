@@ -10,13 +10,13 @@ import kotlinx.serialization.json.intOrNull
 /**
  * 115 API 统一响应壳（同时兼容两套 115 域的 state 约定）。
  *
- *  - scan 域（qrcodeapi.115.com）：`state: 0/1` (Int)
- *  - webapi 域（webapi.115.com）  ：`state: true/false` (Boolean)
+ *  - open 域（qrcodeapi.115.com/open/...）：`state: 0/1` (Int)
+ *  - webapi 域（webapi.115.com）        ：`state: true/false` (Boolean)
  *
- *  字段差异（webapi 用 `error` + `errno` 表示失败，scan 用 `code` + `message`）：
- *  - message : scan 失败文本
+ *  字段差异（webapi 用 `error` + `errno` 表示失败，open 用 `code` + `message`）：
+ *  - message : open 失败文本
  *  - error   : webapi 失败文本
- *  - code    : scan 错误码
+ *  - code    : open 错误码
  *  - errno   : webapi 错误码
  *
  *  HTTP 层失败（404/500）由 Retrofit Response.isSuccessful 判定。
@@ -36,7 +36,7 @@ data class ApiEnvelope<T>(
  * 业务成功判定：state=1 (Int) 或 state=true (Boolean)。
  * 缺失 / null / 0 / false / 其他值都视为失败。
  *
- *  使用：[com.starvault.data.remote.cloud115.ScanLoginManager] 扫码域、
+ *  使用：[com.starvault.data.remote.cloud115.OpenAuthManager] open 域、
  *         [com.starvault.data.repository.AuthRepository] webapi 域都通过此判定。
  */
 val ApiEnvelope<*>.isOk: Boolean
@@ -45,62 +45,13 @@ val ApiEnvelope<*>.isOk: Boolean
         return s.intOrNull?.let { it == 1 } ?: (s.booleanOrNull ?: false)
     }
 
-/** GET /api/1.0/web/1.0/qrcode/ 响应 data：扫码会话建立 */
-@Serializable
-data class QrTokenData(
-    val uid: String,
-    val time: Long = 0L,
-    val sign: String = "",
-    @SerialName("qrcode") val qrcodeUrl: String = "",
-)
-
-/** GET /get/status/ 响应 data。
- *
- *  115 实际返回的字段（实测 + Lumen 推测）：
- *    - status   : Int  0=等待扫码, 1=已扫码待确认, 2=已确认, -1=已取消
- *    - version  : String  服务端版本 hash（轮询不带 sign/time 但服务端会回）
- *    - msg      : String  状态描述文本
- *    - uid      : String?  扫码用户 ID（status=2 时返回）
- *    - userName : String?  扫码用户昵称（status=2 时返回）
- *
- *  注：status=1 时本字段通常只含 status/version/msg；userInfo 不在轮询里，
- *      需要在 status=2 后调 POST /app/1.0/{app}/1.0/login/qrcode/ 拿。
- */
-@Serializable
-data class QrStatusData(
-    val status: Int = 0,
-    val version: String = "",
-    val msg: String = "",
-    val uid: String? = null,
-    @SerialName("user_name") val userName: String? = null,
-)
-
-/** POST /app/1.0/{app}/1.0/login/qrcode/ 响应 data（用户点确认后回包）。
- *
- *  关键字段：
- *    - cookie : Map<String, String>?  115 登录 cookies（**这是核心**，直接用作后续请求的 Cookie 头）
- *      实际是 JSON 对象 `{"UID":"...","CID":"...","SEID":"...","KID":"..."}`；
- *      用 Map 接，让 [com.starvault.data.remote.cloud115.ScanLoginManager.fetchLoginResult]
- *      拼接成 "UID=...; CID=...; SEID=...; KID=..."。
- *
- *  可选字段（115 不一定回，全部 nullable + 默认 null）：
- *    - userId / userName / device : 扫码用户信息
- */
-@Serializable
-data class LoginResultData(
-    val cookie: Map<String, String>? = null,
-    @SerialName("user_id") val userId: Long? = null,
-    @SerialName("user_name") val userName: String? = null,
-    val device: String? = null,
-)
-
-/* ─────────────────── Profile / Storage webapi DTO ─────────────────── */
+// ─────────────────── Profile / Storage webapi DTO ───────────────────
 
 /**
  * GET /users/userinfo 响应 data（115 网页端「我的」页同源接口）。
  *
  *  关键字段：
- *    - userId   : Long     115 user_id（与扫码落 DataStore 的 uid 一致，用于交叉校验）
+ *    - userId   : Long     115 user_id（与登录落 DataStore 的 uid 一致，用于交叉校验）
  *    - userName : String?  昵称（StorageCard 标题用）
  *    - userFace : String?  头像 URL（中等尺寸；Profile 屏暂不展示，先存）
  *
@@ -149,6 +100,7 @@ data class SizeInfo(
  *    "rt_space_info": { ... }   // 实时空间（暂不展示）
  *  }
  *  ```
+ * （注：上面 JSON 示例仅做字段说明；运行时由 kotlinx-serialization 反序列化）
  *
  *  Profile 屏展示用的扁平字段由 [usedPct] / [totalLabel] / [remainingGb] / [trashGb]
  *  派生（VM 端 compute 后写入 ProfileUiState.Storage），不在这里预先映射。
@@ -158,8 +110,8 @@ data class SizeInfo(
 @Serializable
 data class SpaceSummuryData(
     @SerialName("space_summury") val spaceSummury: SpaceSummuryInner = SpaceSummuryInner(),
-    /** 115 实际是混合 Map：RAR/EXE/DOC/... 是 SizeInfo 对象，
-     *  `work_count_times` 是 Long，`type_nums` 是嵌套 Map。所以用 JsonElement 兼容。 */
+    // 115 实际是混合 Map：RAR/EXE/DOC/... 是 SizeInfo 对象，
+    // work_count_times 是 Long，type_nums 是嵌套 Map。所以用 JsonElement 兼容。
     @SerialName("type_summury") val typeSummury: Map<String, JsonElement> = emptyMap(),
 )
 

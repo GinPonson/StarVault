@@ -87,6 +87,8 @@ dependencies {
     implementation(libs.retrofit.kotlinx.ser)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // QR 编码（OpenAuthManager 把 115 返回的 qrcodeUrl 字符串渲染成 Bitmap 给 LoginScreen）
+    implementation(libs.zxing.core)
     // Media3 视频播放（PreviewVideo 用，播放 115 m3u8 流）
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)

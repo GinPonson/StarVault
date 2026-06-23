@@ -1,9 +1,9 @@
 package com.starvault.data.repository
 
-import android.graphics.Bitmap
-import com.starvault.data.local.auth.Cloud115AuthStore
+import com.starvault.data.local.auth.OpenAuthStore
 import com.starvault.data.remote.cloud115.ApiEnvelope
-import com.starvault.data.remote.cloud115.ScanLoginManager
+import com.starvault.data.remote.cloud115.OpenAuthManager
+import com.starvault.data.remote.cloud115.OpenAuthApiService
 import com.starvault.data.remote.cloud115.SpaceSummuryData
 import com.starvault.data.remote.cloud115.SpaceSummuryInner
 import com.starvault.data.remote.cloud115.SpaceSummuryResponse
@@ -24,40 +24,58 @@ import org.junit.Test
 import kotlinx.serialization.json.JsonPrimitive
 import retrofit2.Response
 
+/**
+ * AuthRepository 测试 — 替换旧版，覆盖 OAuth 时代的 signOut + pollForToken delegation + fetchUserInfo。
+ *
+ * 替换点：
+ *  - Cloud115AuthStore → OpenAuthStore
+ *  - ScanLoginManager → OpenAuthManager
+ *  - signOut 测试新增 revokeToken 断言
+ *  - signIn 测试名 → pollForToken delegates to authManager
+ */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AuthRepositoryTest {
-    private val fakeBitmap: Bitmap = mockk(relaxed = true)
+    private val fakeBitmap = mockk<android.graphics.Bitmap>(relaxed = true)
 
     @Test
-    fun `signOut clears auth store`() = runTest {
-        val store = mockk<Cloud115AuthStore>(relaxed = true)
-        val mgr = mockk<ScanLoginManager>(relaxed = true)
+    fun `signOut revokes refresh token then clears local store`() = runTest {
+        val store = mockk<OpenAuthStore>(relaxed = true)
+        coEvery { store.refreshToken() } returns "rt_yyy"
+        val mgr = mockk<OpenAuthManager>(relaxed = true)
         val userApi = mockk<UserApiService>(relaxed = true)
-        val repo = AuthRepository(store, mgr, userApi, TestScope(UnconfinedTestDispatcher()))
 
+        val repo = AuthRepository(store, mgr, userApi, TestScope(UnconfinedTestDispatcher()))
         repo.signOut()
 
+        // 决策 #11：revoke 失败也要 clear；这里只验顺序
+        coVerify { mgr.revokeToken("rt_yyy") }
         coVerify { store.clear() }
     }
 
     @Test
-    fun `signIn delegates to scanManager with same qr`() = runTest {
-        val store = mockk<Cloud115AuthStore>(relaxed = true)
-        val mgr = mockk<ScanLoginManager>(relaxed = true)
+    fun `pollForToken delegates to authManager with same deviceCode`() = runTest {
+        val store = mockk<OpenAuthStore>(relaxed = true)
+        val mgr = mockk<OpenAuthManager>(relaxed = true)
         val userApi = mockk<UserApiService>(relaxed = true)
-        val qr = ScanLoginManager.QRCodeData("u1", 100L, "s1", fakeBitmap)
-        coEvery { mgr.signIn(qr, any()) } returns flowOf(ScanLoginManager.ScanStatus.Waiting(fakeBitmap))
+        val dc = OpenAuthManager.DeviceCodeData(
+            uid          = "u1",
+            sign         = "s1",
+            qrcodeUrl    = "https://115.com/scan/dg-u1",
+            codeVerifier = OpenAuthApiService.CODE_VERIFIER,
+            bitmap       = fakeBitmap,
+        )
+        coEvery { mgr.pollForToken(dc, any()) } returns flowOf(OpenAuthManager.AuthStatus.Waiting(fakeBitmap))
 
         val repo = AuthRepository(store, mgr, userApi, TestScope(UnconfinedTestDispatcher()))
-        repo.signIn(qr).toList()  // 触发 collect
+        repo.pollForToken(dc).toList()  // 触发 collect
 
-        coVerify { mgr.signIn(qr, any()) }
+        coVerify { mgr.pollForToken(dc, any()) }
     }
 
     @Test
     fun `fetchUserInfo assembles UserInfo from both endpoints when both succeed`() = runTest {
-        val store = mockk<Cloud115AuthStore>(relaxed = true)
-        val mgr = mockk<ScanLoginManager>(relaxed = true)
+        val store = mockk<OpenAuthStore>(relaxed = true)
+        val mgr = mockk<OpenAuthManager>(relaxed = true)
         val userApi = mockk<UserApiService>(relaxed = true)
         coEvery { userApi.getUserBaseInfo() } returns Response.success(
             ApiEnvelope(state = JsonPrimitive(1), data = UserBaseInfoData(userId = 12345L, userName = "alice", userFace = null))
@@ -87,8 +105,8 @@ class AuthRepositoryTest {
 
     @Test
     fun `fetchUserInfo returns success with empty base when only space summury succeeds`() = runTest {
-        val store = mockk<Cloud115AuthStore>(relaxed = true)
-        val mgr = mockk<ScanLoginManager>(relaxed = true)
+        val store = mockk<OpenAuthStore>(relaxed = true)
+        val mgr = mockk<OpenAuthManager>(relaxed = true)
         val userApi = mockk<UserApiService>(relaxed = true)
         coEvery { userApi.getUserBaseInfo() } throws RuntimeException("network down")
         coEvery { userApi.getSpaceSummury() } returns Response.success(
@@ -112,8 +130,8 @@ class AuthRepositoryTest {
 
     @Test
     fun `fetchUserInfo returns failure when both endpoints fail`() = runTest {
-        val store = mockk<Cloud115AuthStore>(relaxed = true)
-        val mgr = mockk<ScanLoginManager>(relaxed = true)
+        val store = mockk<OpenAuthStore>(relaxed = true)
+        val mgr = mockk<OpenAuthManager>(relaxed = true)
         val userApi = mockk<UserApiService>(relaxed = true)
         coEvery { userApi.getUserBaseInfo() } throws RuntimeException("user info down")
         coEvery { userApi.getSpaceSummury() } throws RuntimeException("space down")

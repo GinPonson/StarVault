@@ -4,6 +4,7 @@ import com.starvault.core.ServiceLocator
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
+import com.starvault.data.repository.PagedFiles
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -60,7 +61,8 @@ class FilesViewModelTest {
     fun `selectType filters totalCount to non-folder matching types`() = runTest {
         val repo = mockk<FilesRepository>()
         coEvery { repo.listFolder(any()) } returns Result.success(
-            listOf(folder("f1", "手机相册"), video("v1", "a.mp4"), audio("a1", "b.mp3"))
+            PagedFiles(items = listOf(folder("f1", "手机相册"), video("v1", "a.mp4"), audio("a1", "b.mp3")),
+                       offset = 0, limit = 50, totalCount = 3, hasMore = false)
         )
         val vm = FilesViewModel(repo)
         // 等 init loadJob 完成（UnconfinedTestDispatcher 直接同步推进）
@@ -89,7 +91,10 @@ class FilesViewModelTest {
     @Test
     fun `toggleSelect adds then removes id`() = runTest {
         val repo = mockk<FilesRepository>()
-        coEvery { repo.listFolder(any()) } returns Result.success(listOf(folder("f1", "手机相册")))
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = listOf(folder("f1", "手机相册")),
+                       offset = 0, limit = 50, totalCount = 1, hasMore = false)
+        )
         val vm = FilesViewModel(repo)
         testScheduler.advanceUntilIdle()
 
@@ -103,7 +108,10 @@ class FilesViewModelTest {
     @Test
     fun `clearSelection empties set`() = runTest {
         val repo = mockk<FilesRepository>()
-        coEvery { repo.listFolder(any()) } returns Result.success(listOf(folder("f1", "x"), folder("f2", "y")))
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = listOf(folder("f1", "x"), folder("f2", "y")),
+                       offset = 0, limit = 50, totalCount = 2, hasMore = false)
+        )
         val vm = FilesViewModel(repo)
         testScheduler.advanceUntilIdle()
 
@@ -118,7 +126,9 @@ class FilesViewModelTest {
     @Test
     fun `setFolder with different cid triggers repo refetch`() = runTest {
         val repo = mockk<FilesRepository>()
-        coEvery { repo.listFolder(any()) } returns Result.success(emptyList())
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = emptyList(), offset = 0, limit = 50, totalCount = 0, hasMore = false)
+        )
         val vm = FilesViewModel(repo)
         testScheduler.advanceUntilIdle()
         // init 已调过一次 listFolder("0")
@@ -132,7 +142,10 @@ class FilesViewModelTest {
     @Test
     fun `setFolder with same cid when already in Success is no-op`() = runTest {
         val repo = mockk<FilesRepository>()
-        coEvery { repo.listFolder(any()) } returns Result.success(listOf(folder("f1", "x")))
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = listOf(folder("f1", "x")),
+                       offset = 0, limit = 50, totalCount = 1, hasMore = false)
+        )
         val vm = FilesViewModel(repo)
         testScheduler.advanceUntilIdle()
         coVerify(exactly = 1) { repo.listFolder("0") }
@@ -146,7 +159,9 @@ class FilesViewModelTest {
     @Test
     fun `refresh re-fetches current cid`() = runTest {
         val repo = mockk<FilesRepository>()
-        coEvery { repo.listFolder(any()) } returns Result.success(emptyList())
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = emptyList(), offset = 0, limit = 50, totalCount = 0, hasMore = false)
+        )
         val vm = FilesViewModel(repo)
         testScheduler.advanceUntilIdle()
         coVerify(exactly = 1) { repo.listFolder("0") }

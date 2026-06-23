@@ -5,6 +5,7 @@ import com.android.ide.common.rendering.api.SessionParams
 import com.starvault.data.model.FileType
 import com.starvault.theme.StarVaultTheme
 import com.starvault.ui.files.FileEntry
+import com.starvault.ui.files.FolderCrumb
 import com.starvault.ui.files.FilesScreen
 import com.starvault.ui.files.FilesUiState
 import com.starvault.ui.files.ViewMode
@@ -41,6 +42,7 @@ class FilesScreenshotTest {
         selectedIds: Set<String> = emptySet(),
     ) = FilesUiState.Success(
         folderId = null,
+        folderPath = listOf(FolderCrumb(cid = "0", name = "我的文件")),
         all = mockFiles,
         activeType = null,
         viewMode = viewMode,
