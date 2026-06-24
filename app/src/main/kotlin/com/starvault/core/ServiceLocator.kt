@@ -12,11 +12,13 @@ import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.remote.cloud115.OpenFileApiService
 import com.starvault.data.remote.cloud115.OpenUserApiService
 import com.starvault.data.remote.cloud115.StatusPollApi
+import com.starvault.data.remote.cloud115.Token401Interceptor
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
 import okhttp3.OkHttpClient
 
 /**
@@ -70,9 +72,31 @@ object ServiceLocator {
     /**
      * 共享 OkHttpClient：Cloud115ApiClient 用（API 请求） + Coil 用（缩略图 GET，带 Bearer）。
      * 这样缩略图请求自动带 115 Bearer（thumb.115.com 签名 URL 必须登录态）。
+     *
+     * 拦截器链路：browserLikeHeader + AuthHeader + Token401(40140124 自动 refresh)。
      */
     lateinit var okHttpClient: OkHttpClient
         private set
+
+    /**
+     * 独立 refresh 专用 OkHttpClient：只挂浏览器伪装头，**不**挂 Bearer / Token401。
+     * - Bearer:refresh API 走 client_id + refresh_token 表单鉴权，不需要 Authorization 头
+     * - Token401:避免 refresh API 自身过期时递归死循环
+     */
+    lateinit var refreshClient: OkHttpClient
+        private set
+
+    /**
+     * refresh API（[OpenAuthApiService.refreshToken]）实例，挂在 [refreshClient] 上。
+     */
+    lateinit var refreshApi: OpenAuthApiService
+        private set
+
+    /**
+     * 进程级 Mutex：串行化所有 40140124 触发的 refresh，避免 N 个并发请求各自 refresh。
+     * 暴露为 val（不是 lateinit var）因为 Mutex() 无副作用、无 init 依赖。
+     */
+    val refreshMutex: Mutex = Mutex()
 
     /**
      * 长轮询 OkHttpClient：65s read timeout，独立持有（不与 30s 共享连接池）。
@@ -106,8 +130,20 @@ object ServiceLocator {
         tokenStore = OpenAuthStore(appContext)
         val tokenProvider = tokenStore::accessTokenBlocking
 
-        // 2 个 OkHttpClient：常规 30s 给 API/Coil，长轮询 65s 给 status 端点
-        okHttpClient     = Cloud115ApiClient.buildOkHttpClient(tokenProvider = tokenProvider)
+        // 3 个 OkHttpClient:
+        // - refreshClient   : 独立,只挂浏览器头,调 /open/authTokenRefresh 用
+        // - okHttpClient    : 主链路,挂 Bearer + Token401(40140124 自动 refresh)
+        // - statusPollClient: 长轮询 65s,挂 Bearer(不挂 Token401,status 端点不会被误判)
+        refreshClient   = Cloud115ApiClient.buildBrowserLikeClient()
+        refreshApi      = Cloud115ApiClient.openAuthApiService(refreshClient)
+        okHttpClient    = Cloud115ApiClient.buildOkHttpClient(
+            tokenProvider        = tokenProvider,
+            token401Interceptor  = Token401Interceptor(
+                tokenStore = tokenStore,
+                refreshApi = refreshApi,
+                mutex      = refreshMutex,
+            ),
+        )
         statusPollClient = Cloud115ApiClient.buildLongPollOkHttpClient(tokenProvider = tokenProvider)
 
         openAuthApi   = Cloud115ApiClient.openAuthApiService(okHttpClient)

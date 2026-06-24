@@ -65,13 +65,39 @@ object Cloud115ApiClient {
             .addInterceptor(AuthHeaderInterceptor(tokenProvider))
 
     /**
-     * 构建常规 30s 超时 OkHttpClient（proapi + OAuth POST 端点）。
+     * 独立 refresh 专用 client(只挂浏览器头,**不**挂 Bearer / Token401):
+     *  - 调 `/open/authTokenRefresh` 用 client_id + refresh_token 鉴权,不需要 Bearer
+     *  - 不挂 Token401Interceptor:避免 refresh API 自身过期时递归死循环
      *
-     * @param tokenProvider 同步 lambda，从 [OpenAuthStore.accessTokenBlocking] 注入；
-     *                       未登录时返回 null（不注入 Authorization 头）
+     * 共用 [buildOkHttpClient] 的 30s 超时策略(网络请求),但走独立 OkHttpClient 实例
+     * (不共享连接池)以隔离连接状态。
      */
-    fun buildOkHttpClient(tokenProvider: () -> String?): OkHttpClient =
+    fun buildBrowserLikeClient(): OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor(browserLikeHeaderInterceptor())
+            .build()
+
+    /**
+     * 构建常规 30s 超时 OkHttpClient(proapi + OAuth POST 端点 + 401 自动 refresh)。
+     *
+     * 拦截器链路(执行顺序 = add 顺序,响应逆序):
+     *  1. browserLikeHeaderInterceptor  (Referer/Origin/Android UA,downurl 签名必需)
+     *  2. AuthHeaderInterceptor          (注入 Bearer access_token)
+     *  3. token401Interceptor            (响应阶段:40140124 → refresh → 重发)
+     *
+     * @param tokenProvider 同步 lambda,从 [OpenAuthStore.accessTokenBlocking] 注入;
+     *                       未登录时返回 null(不注入 Authorization 头)
+     * @param token401Interceptor 由 ServiceLocator 注入的 [Token401Interceptor] 实例
+     */
+    fun buildOkHttpClient(
+        tokenProvider: () -> String?,
+        token401Interceptor: Interceptor,
+    ): OkHttpClient =
         baseBuilder(tokenProvider)
+            .addInterceptor(token401Interceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -101,7 +127,12 @@ object Cloud115ApiClient {
 
     /** open 域 [OpenAuthApiService] 工厂（独立 client，用于单元测试）。 */
     fun openAuthApiService(tokenProvider: () -> String?): OpenAuthApiService =
-        openAuthRetrofit(buildOkHttpClient(tokenProvider)).create(OpenAuthApiService::class.java)
+        openAuthRetrofit(
+            buildOkHttpClient(
+                tokenProvider = tokenProvider,
+                token401Interceptor = NOOP_TOKEN_401_INTERCEPTOR,
+            )
+        ).create(OpenAuthApiService::class.java)
 
     /** open 域 [OpenAuthApiService] 工厂（共享 OkHttpClient，ServiceLocator 用）。 */
     fun openAuthApiService(client: OkHttpClient): OpenAuthApiService =
@@ -139,7 +170,12 @@ object Cloud115ApiClient {
 
     /** proapi 域 [OpenFileApiService] 工厂（独立 client，用于单元测试）。 */
     fun openFileApiService(tokenProvider: () -> String?): OpenFileApiService =
-        openApiRetrofit(buildOkHttpClient(tokenProvider)).create(OpenFileApiService::class.java)
+        openApiRetrofit(
+            buildOkHttpClient(
+                tokenProvider = tokenProvider,
+                token401Interceptor = NOOP_TOKEN_401_INTERCEPTOR,
+            )
+        ).create(OpenFileApiService::class.java)
 
     /** proapi 域 [OpenFileApiService] 工厂（共享 OkHttpClient）。 */
     fun openFileApiService(client: OkHttpClient): OpenFileApiService =
@@ -147,7 +183,12 @@ object Cloud115ApiClient {
 
     /** proapi 域 [OpenUserApiService] 工厂（独立 client）。 */
     fun openUserApiService(tokenProvider: () -> String?): OpenUserApiService =
-        openApiRetrofit(buildOkHttpClient(tokenProvider)).create(OpenUserApiService::class.java)
+        openApiRetrofit(
+            buildOkHttpClient(
+                tokenProvider = tokenProvider,
+                token401Interceptor = NOOP_TOKEN_401_INTERCEPTOR,
+            )
+        ).create(OpenUserApiService::class.java)
 
     /** proapi 域 [OpenUserApiService] 工厂（共享 OkHttpClient）。 */
     fun openUserApiService(client: OkHttpClient): OpenUserApiService =
@@ -173,4 +214,11 @@ object Cloud115ApiClient {
             .build()
         chain.proceed(req)
     }
+
+    /**
+     * Noop 401 拦截器：单元测试 / 工厂链用,不触发任何 40140124 处理逻辑。
+     *
+     * 生产代码用 ServiceLocator 注入的 [Token401Interceptor] 真品。
+     */
+    private val NOOP_TOKEN_401_INTERCEPTOR = Interceptor { chain -> chain.proceed(chain.request()) }
 }

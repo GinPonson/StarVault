@@ -117,7 +117,31 @@ class OpenAuthStore(private val context: Context) {
         }
     }
 
-    /** 清空本地 token（signOut 用）。调用方应先调 revokeToken 再调此方法。 */
+    /**
+     * Refresh 成功后写回新 token 三件套,保留 uid/userName/vipLevelName。
+     *
+     * 调用方:`Token401Interceptor` 收到 40140124 时,同步阻塞走完 refresh 拿到新 at/rt 后调用。
+     * 同步接口(拦截器要 runBlocking),所以本方法内部不挂起外层工作。
+     *
+     * @param accessToken  新的 Bearer 鉴权串(必填)
+     * @param refreshToken 新的 refresh_token(必填,115 每次 refresh 会轮换 rt)
+     * @param expiresIn    115 返回的 expires_in(秒),转 expiresAtMs = nowMs + expiresIn*1000
+     */
+    suspend fun saveRefreshedTokens(
+        accessToken: String,
+        refreshToken: String,
+        expiresIn: Long,
+    ) {
+        val expiresAtMs = System.currentTimeMillis() + expiresIn * 1000L
+        store.edit { p ->
+            p[accessTokenKey]  = accessToken
+            p[refreshTokenKey] = refreshToken
+            p[expiresAtMsKey]  = expiresAtMs
+            // uid / userName / vipLevelName 保留不动 — 115 不会在 refresh 响应里塞
+        }
+    }
+
+    /** 清空本地 token(signOut 用)。调用方应先调 revokeToken 再调此方法。 */
     suspend fun clear() {
         store.edit { it.clear() }
     }
