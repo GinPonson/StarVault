@@ -10,6 +10,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.starvault.component.BottomNavBar
+import com.starvault.component.ToastHost
 import com.starvault.core.ServiceLocator
 import com.starvault.nav.Route
 import com.starvault.nav.StarVaultNavHost
@@ -48,6 +49,8 @@ fun StarVaultApp() {
 
     Scaffold(
         bottomBar = { if (showBottomBar) BottomNavBar(nav = nav, destination = destination) },
+        // 全局 ToastHost 挂 Scaffold 的 snackbarHost slot(避免双 host 冲突)
+        snackbarHost = { ToastHost() },
         // Scaffold 默认 surface；指定 design tokens 的 bg 与全屏底色一致（#FAFAFA）
         containerColor = StarVaultTheme.colors.bg,
     ) { padding ->
