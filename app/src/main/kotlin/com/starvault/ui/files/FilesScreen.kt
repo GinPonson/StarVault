@@ -518,7 +518,7 @@ private fun FileList(
     // 关键：用 hasMore/isLoadingMore 作 derivedStateOf 的 calculation key——这样当 hasMore
     // 或 isLoadingMore 变化（切目录 / loadMore 完成）时 State 会被重新生成，捕获到**当前**的
     // 值；否则老的 `remember { derivedStateOf { ... } }` 会固定捕获首次组合时的值，导致切目录后
-    // 旧 hasMore=false 一直生效、新 hasMore=true 永远不生效（用户报的"只加载 50 条"就是这个）。
+    // hasMore=false 时停止加载；true 时继续（用户报的"只加载 50 条"即此分支）。
     // 同时把 listState 也作为 key：listState 本身在切目录时是同一个实例（rememberLazyListState
     // 只创建一次），但其内部 layoutInfo 仍是 State<T>，scroll 时自动触发 derivedStateOf 重算。
     val shouldLoadMore by remember(hasMore, isLoadingMore, listState) {
@@ -650,7 +650,7 @@ private fun FileGrid(
     val c = StarVaultTheme.colors
     val gridState = rememberLazyGridState()
     // 关键：同 FileList 一样把 hasMore/isLoadingMore/gridState 放进 remember 的 key，
-    // 否则切目录后旧 closure 捕获 stale hasMore=false，新 hasMore=true 永远不生效。
+    // 否则切目录后 closure 捕获 stale hasMore=false，导致无法继续加载。
     val shouldLoadMore by remember(hasMore, isLoadingMore, gridState) {
         derivedStateOf {
             if (!hasMore || isLoadingMore) return@derivedStateOf false

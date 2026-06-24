@@ -42,8 +42,7 @@ sealed interface ProfileUiState {
  *
  *  - usedPct / totalLabel / remainingGb 来自 proapi /open/user/info 的 rt_space_info（真）
  *  - trashGb 来自 /open/user/info 不返回 rb(recycle bin),保持 mock
- *  - breakdowns 来自旧 webapi /user/space_summury 的 type_summury(8 类),OAuth Open 平台
- *    未开放该字段,故 breakdownsIsMock=true 永久占位
+ *  - breakdowns 当前来自 mock(8 类 type_summury;OAuth Open 平台暂未开放该字段)
  *  - breakdownsIsMock=false 表示接的是真接口；true 仅为 0 网络/无数据兜底
  *  - userName 用于标题 "云端空间 — Alice",为空时仅显示 "云端空间"
  *  - vipLevelName 来自 /open/user/info 的 vip_info.level_name;"" → 不显示 VIP 徽章

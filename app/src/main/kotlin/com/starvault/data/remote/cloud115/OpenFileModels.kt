@@ -18,9 +18,7 @@ import kotlinx.serialization.json.intOrNull
  * 不复用 webapi 的字段名(如 `n / pc / sha / ico`),统一用 proapi 的
  * (`file_name / pick_code / sha1 / file_type / file_id`),即使语义相同。
  *
- * 注:**文件列表** (/open/ufile/files + /open/ufile/search) 沿用 webapi 旧 shape
- * (folder 用 cid/file 用 fid),115 没改字段名。所以 [FileListResponse] / [ParsedFileItem]
- * 跟 webapi 共用。
+ * 注:**文件列表** (/open/ufile/files + /open/ufile/search) 当前 shape 见下方字段
  */
 
 // ─────────────────── /open/ufile/files + /open/ufile/search 响应(沿用 webapi 同款) ───────────────────

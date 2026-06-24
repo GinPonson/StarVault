@@ -16,8 +16,6 @@ import java.util.concurrent.TimeUnit
  *  - PASSPORT_API_BASE_URL : passportapi.115.com/   (OAuth refresh + revoke 域)
  *  - OPEN_API_BASE_URL   : proapi.115.com/          (OAuth Bearer 业务域:`/open/ufile/...`、`/open/folder/...`、`/open/video/...`、`/open/user/info`)
  *
- *  **不再有 webapi.115.com** — OAuth Bearer 迁移完成,所有端点已迁到 proapi / passportapi / qrcodeapi。
- *
  *  3 个 OkHttpClient（按超时策略分）：
  *  - 常规 30s client     : proapi + qrcodeapi + passportapi POST 端点
  *  - long-poll 65s client : qrcodeapi /open/get/status/ 长轮询（115 会挂 30~60s）
@@ -54,7 +52,6 @@ object Cloud115ApiClient {
      *  - `/open/upload/...`  : 上传(Phase 2)
      *
      * **这是 OAuth Bearer token 的合法域**（p115client/client.py:2573 / 4256 / 3100 + OpenListTeam/115-sdk-go/const.go）。
-     * webapi.115.com 已废弃,OAuth Bearer 在那里不被接受。
      */
     const val OPEN_API_BASE_URL = "https://proapi.115.com/"
 

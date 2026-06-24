@@ -30,10 +30,6 @@ import retrofit2.Response
  *  - signOut 顺序(revoke → clear)
  *  - pollForToken 透传到 authManager
  *  - fetchUserInfo 单端点组装(/open/user/info 直接给 base+space+vip)
- *
- * 替换历史:
- *  - UserApiService → OpenUserApiService(响应 shape 简化,合并到单端点)
- *  - 双端点(userInfo + spaceSummury)→ 单端点(userInfo)带 rt_space_info + vip_info
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AuthRepositoryTest {

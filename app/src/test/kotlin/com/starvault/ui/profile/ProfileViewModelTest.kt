@@ -37,8 +37,6 @@ import retrofit2.Response
  *  - 失败路径:signOut 抛异常 → 发 [Effect.Error] 给 Route 端 Snackbar
  *  - fetchUserInfo 成功 → state.storage 字段被 rt_space_info / vip_info 覆盖
  *  - fetchUserInfo 失败 → 发 [Effect.Error]
- *
- * 替换历史:Cloud115AuthStore → OpenAuthStore;UserApiService → OpenUserApiService。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModelTest {

@@ -9,7 +9,7 @@ import okhttp3.Response
  * token 由 [tokenProvider] 实时提供（DataStore Flow.first() + runBlocking）。
  * token 为空时**不加** Authorization 头，避免给未登录请求发无意义 header。
  *
- * 共用一个 OkHttpClient：承担 `webapi.115.com` + `qrcodeapi.115.com` + 115 CDN 三种 host。
+ * 共用一个 OkHttpClient：承担 `qrcodeapi.115.com` + 115 CDN 两种 host。
  *  - webapi / qrcodeapi/open : token 是必须的，否则 401
  *  - 115 CDN                  : token 多余无害，签名 URL + Referer/Origin/UA 才是关键
  *

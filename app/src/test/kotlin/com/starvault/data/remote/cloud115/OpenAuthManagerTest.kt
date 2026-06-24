@@ -22,7 +22,7 @@ import retrofit2.Response
 /**
  * OpenAuthManager 测试 — 覆盖 OAuth 设备码 3 步流的状态机。
  *
- * 替换 [ScanLoginManagerTest],测试 [OpenAuthManager] 的核心行为:
+ * 测试 [OpenAuthManager] 的核心行为:
  *  1. requestDeviceCode 业务 state!=1 → failure
  *  2. requestDeviceCode 业务成功 → success(uid/time/sign/qrcode 全在)
  *  3. pollForToken deadline 已过 → 立即 Expired

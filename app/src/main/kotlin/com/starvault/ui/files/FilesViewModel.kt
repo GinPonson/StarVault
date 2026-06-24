@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
  * Files 屏 ViewModel — 接 115 webapi /files 真实数据。
  *
  *  - init { loadFolder("0") } : 启动即拉根目录
- *  - setFolder(cid) : 跳进子文件夹；切换时取消旧 loadJob + 清选中
+ *  - setFolder(cid) : 跳进子文件夹；切换时取消 in-flight loadJob + 清选中
  *  - refresh() : 当前目录重新拉（pull-to-refresh 触发）
  *  - selectType / changeViewMode / toggleSelect / clearSelection / bulk 仍走本地态（不上行）
  *
@@ -252,8 +252,8 @@ class FilesViewModel(
     }
 
     /**
-     * 保留旧 Success 列表渲染，加 pendingLoad=true 让 UI 显示顶部细进度条。
-     * 没有旧 Success（init 首次加载）时不动作，仍由 loadFolder 切到 Loading。
+     * 保留当前 Success 列表渲染，加 pendingLoad=true 让 UI 显示顶部细进度条。
+     * init 首次加载无 Success 时不动作，仍由 loadFolder 切到 Loading。
      */
     private fun markPending() {
         val s = _state.value as? FilesUiState.Success ?: return

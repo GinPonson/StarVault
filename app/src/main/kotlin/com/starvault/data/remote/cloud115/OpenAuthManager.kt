@@ -79,7 +79,7 @@ class OpenAuthManager(
     )
 
     /**
-     * 轮询事件（替换 ScanStatus，删掉 cookies 字段，加 token 字段）。
+     * 轮询事件。
      */
     sealed class AuthStatus {
         data class Waiting(val bitmap: Bitmap) : AuthStatus()

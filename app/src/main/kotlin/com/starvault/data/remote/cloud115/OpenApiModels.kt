@@ -11,7 +11,6 @@ import kotlinx.serialization.json.intOrNull
  * 115 API 统一响应壳（同时兼容两套 115 域的 state 约定）。
  *
  *  - open 域（qrcodeapi.115.com/open/...）：`state: 0/1` (Int)
- *  - webapi 域（webapi.115.com）        ：`state: true/false` (Boolean)
  *
  *  字段差异（webapi 用 `error` + `errno` 表示失败，open 用 `code` + `message`）：
  *  - message : open 失败文本

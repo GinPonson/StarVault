@@ -19,8 +19,7 @@ import kotlinx.coroutines.launch
  *
  *  - init { }: 立即申请设备码（requestDeviceCode），成功后开 120s expire countdown + 启动 polling
  *  - 状态机：复用 [LoginUiState] 4 态；与 [OpenAuthManager.AuthStatus] 6 态 1:1 映射
- *  - [refresh]: 取消旧 polling，重新申请设备码
- *  - 替换历史：旧的 ScanStatus(cookies) → 新的 AuthStatus(access_token/refresh_token)
+ *  - [refresh]: 取消 polling，重新申请设备码
  */
 class LoginViewModel(
     private val authRepository: AuthRepository = ServiceLocator.authRepository,
