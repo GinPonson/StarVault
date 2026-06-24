@@ -44,7 +44,8 @@ class PreviewImageViewModel(
             val metadata = repo.fetchMetadata(fileId)
             metadata.fold(
                 onSuccess = { meta ->
-                    val url = repo.fetchImageOriginalUrl(meta.pickCode)
+                    // proapi downurl 响应是 Map<file_id, item>,跟 OpenList 一致:resp[obj.GetID()]
+                    val url = repo.fetchImageOriginalUrl(fileId = meta.fid, pickCode = meta.pickCode)
                     url.fold(
                         onSuccess = { u ->
                             _state.value = PreviewUiState.Success(meta, u)

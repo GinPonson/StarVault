@@ -3,22 +3,25 @@ package com.starvault.data.remote.cloud115
 import retrofit2.Response
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
-import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.Query
 
 /**
- * 115 开放平台 OAuth 设备码流（device-code flow）的 Retrofit 接口。
+ * 115 开放平台 OAuth 设备码流的 Retrofit 接口（业务端点）。
  *
- * 替换 [ScanApiService] 的 3 个扫码端点。
- * base URL 在 [Cloud115ApiClient.openAuthRetrofit] 中配为 https://qrcodeapi.115.com/
- * （与旧的 SCAN_BASE_URL 同域，URL 复用一个域名）。
+ * 状态轮询端点（`get/status/`）独立成 [StatusPollApi]，
+ * 因为它需要 65s read timeout，不能复用这里的 30s client。
+ * 两个接口共享 baseUrl `https://qrcodeapi.115.com/`，仅超时策略不同。
  *
- * PKCE 形态：
- *  - `client_id`           固定 `100195125`（媒体播放器）
- *  - `code_challenge`      固定 `md5("0"*64) = EOq2AI1WQs9Cq9KqQfhHyw==`
- *  - `code_challenge_method` = `md5`（与 p115client 默认一致）
- *  - `code_verifier`       轮询时回传 `"0"*64`
+ * 三步流程：
+ *  1. POST open/authDeviceCode       → 拿 uid/time/sign/qrcode（[requestDeviceCode]）
+ *  2. GET  get/status/  (long-poll)  → status==2 时继续；见 [StatusPollApi]
+ *  3. POST open/deviceCodeToToken    → 换真 access_token / refresh_token（[deviceCodeToToken]）
+ *
+ * PKCE 形态（与 p115client `_default_code_*` 一致，见 p115client/const.py:73-76）：
+ *  - `client_id`             固定 `100195125`（媒体播放器）
+ *  - `code_challenge`        固定 `md5("0"*64) = EOq2AI1WQs9Cq9KqQfhHyw==`
+ *  - `code_challenge_method` = `md5`
+ *  - `code_verifier`         换 token 时回传 `"0"*64`
  *  - secret 永不入 DataStore：只在 [OpenAuthManager] 内单次会话内传递
  */
 interface OpenAuthApiService {
@@ -27,7 +30,7 @@ interface OpenAuthApiService {
      * 申请设备码。
      *
      * 表单字段（client_id/code_challenge/method）走默认值，调用方无需手动传。
-     * @return 成功 → data.uid / qrcode / sign 给轮询与 QR 渲染用
+     * @return 成功 → data.uid/time/qrcode/sign 给轮询与 QR 渲染用
      */
     @FormUrlEncoded
     @POST("open/authDeviceCode")
@@ -38,21 +41,18 @@ interface OpenAuthApiService {
     ): Response<ApiEnvelope<DeviceCodeResponse>>
 
     /**
-     * 轮询扫码状态。
+     * 用设备码换真 access_token（status==2 后调用）。
      *
-     * 用户在 115 App 扫码 + 点确认之前 → data 为 null 或 access_token 缺失；
-     * 用户确认后 → data.access_token 存在 → 终止轮询。
-     *
-     * @param uid          来自 requestDeviceCode.data.uid
-     * @param sign         来自 requestDeviceCode.data.sign
-     * @param codeVerifier 永不入库，写死 "0"*64
+     * @param uid          来自 [DeviceCodeResponse.uid]
+     * @param codeVerifier PKCE verifier（固定 `"0"*64`，调用方传 [CODE_VERIFIER]）
+     * @return 成功 → data.access_token / refresh_token / user_id / user_name
      */
-    @GET("open/authDeviceCode")
-    suspend fun pollDeviceCode(
-        @Query("uid") uid: String,
-        @Query("sign") sign: String,
-        @Query("code_verifier") codeVerifier: String = CODE_VERIFIER,
-    ): Response<ApiEnvelope<TokenPollResponse>>
+    @FormUrlEncoded
+    @POST("open/deviceCodeToToken")
+    suspend fun deviceCodeToToken(
+        @Field("uid") uid: String,
+        @Field("code_verifier") codeVerifier: String = CODE_VERIFIER,
+    ): Response<ApiEnvelope<DeviceCodeToTokenResponse>>
 
     /**
      * 刷新 access_token。
@@ -82,7 +82,7 @@ interface OpenAuthApiService {
         /** 媒体播放器 open 应用 — 2026-06 实测可用。 */
         const val CLIENT_ID = "100195125"
 
-        /** md5("0"*64) = EOq2AI1WQs9Cq9KqQfhHyw==，对应 code_verifier = "0"*64。 */
+        /** md5("0"*64) 对应 verifier。 */
         const val CODE_VERIFIER =
             "00000000000000000000000000000000" +
             "00000000000000000000000000000000"

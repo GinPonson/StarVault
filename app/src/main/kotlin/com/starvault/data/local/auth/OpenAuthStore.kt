@@ -26,7 +26,7 @@ private val Context.tokensDataStore: DataStore<Preferences>
  *  - accessToken  : Bearer 鉴权串；非空即视为已登录
  *  - refreshToken : 用于 signOut 调 /open/authTokenRevoke，**不入 OkHttp 拦截器**
  *  - expiresAtMs  : 过期时间戳（毫秒）；过期只是兜底，正常走 lazy refresh
- *  - uid / userName / usedSpace / totalSpace : Profile 屏展示用
+ *  - uid / userName / vipLevelName : Profile 屏展示用（uid 也用于交叉校验）
  *
  * 设计要点：
  *  - accessToken 单独暴露为 Flow<String?>，供 [com.starvault.data.repository.AuthRepository]
@@ -45,8 +45,7 @@ class OpenAuthStore(private val context: Context) {
     private val expiresAtMsKey  = longPreferencesKey("expires_at_ms")
     private val uidKey          = longPreferencesKey("uid")
     private val userNameKey     = stringPreferencesKey("user_name")
-    private val usedSpaceKey    = longPreferencesKey("used_space")
-    private val totalSpaceKey   = longPreferencesKey("total_space")
+    private val vipLevelKey     = stringPreferencesKey("vip_level_name")
 
     // ─── 同步读 accessToken（给 OkHttp Interceptor 用）─────────────────────
     /**
@@ -68,6 +67,7 @@ class OpenAuthStore(private val context: Context) {
             expiresAtMs  = p[expiresAtMsKey] ?: 0L,
             uid          = p[uidKey] ?: 0L,
             userName     = p[userNameKey].orEmpty(),
+            vipLevelName = p[vipLevelKey].orEmpty(),
         )
     }
 
@@ -78,6 +78,7 @@ class OpenAuthStore(private val context: Context) {
         val expiresAtMs: Long,
         val uid: Long,
         val userName: String,
+        val vipLevelName: String,
     )
 
     /**
@@ -90,13 +91,12 @@ class OpenAuthStore(private val context: Context) {
     /**
      * 一次性落库 OAuth 三件套 + 用户信息。
      *
-     * @param accessToken  Bearer 鉴权串（必填）
-     * @param refreshToken refresh_token（必填，给 signOut revoke 用）
-     * @param expiresIn    115 返回的 expires_in（秒），内部转 expiresAtMs = nowMs + expiresIn*1000
-     * @param uid          115 user_id
-     * @param userName     115 用户昵称
-     * @param usedSpace    已用空间（Profile 屏展示），默认 0
-     * @param totalSpace   总空间，默认 0
+     * @param accessToken   Bearer 鉴权串（必填）
+     * @param refreshToken  refresh_token（必填，给 signOut revoke 用）
+     * @param expiresIn     115 返回的 expires_in（秒），内部转 expiresAtMs = nowMs + expiresIn*1000
+     * @param uid           115 user_id
+     * @param userName      115 用户昵称
+     * @param vipLevelName  115 VIP 等级名（"年费VIP"/"超级VIP"...）；空字符串 = 普通用户
      */
     suspend fun saveTokens(
         accessToken: String,
@@ -104,8 +104,7 @@ class OpenAuthStore(private val context: Context) {
         expiresIn: Long,
         uid: Long,
         userName: String,
-        usedSpace: Long = 0L,
-        totalSpace: Long = 0L,
+        vipLevelName: String = "",
     ) {
         val expiresAtMs = System.currentTimeMillis() + expiresIn * 1000L
         store.edit { p ->
@@ -114,8 +113,7 @@ class OpenAuthStore(private val context: Context) {
             p[expiresAtMsKey]  = expiresAtMs
             p[uidKey]          = uid
             p[userNameKey]     = userName
-            p[usedSpaceKey]    = usedSpace
-            p[totalSpaceKey]   = totalSpace
+            p[vipLevelKey]     = vipLevelName
         }
     }
 

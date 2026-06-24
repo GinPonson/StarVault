@@ -1,8 +1,8 @@
 package com.starvault.data.repository
 
 import com.starvault.data.model.FileType
-import com.starvault.data.remote.cloud115.FileApiService
 import com.starvault.data.remote.cloud115.FileListResponse
+import com.starvault.data.remote.cloud115.OpenFileApiService
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -37,7 +37,7 @@ import kotlinx.serialization.json.jsonObject
  *  正确做法是单次请求让 115 自己混合返回，parseRaw 内部按 `fid` 字段判别 shape。
  */
 class FilesRepository(
-    private val api: FileApiService,
+    private val api: OpenFileApiService,
 ) {
     /**
      * 列出某目录的子项（单页）。
@@ -168,30 +168,30 @@ class FilesRepository(
      */
     private fun parseRaw(element: JsonElement): ParsedFileItem? {
         val obj = runCatching { element.jsonObject }.getOrNull() ?: return null
-        val hasFid = "fid" in obj
-        val name = obj.stringOrNull("n") ?: return null
-        val parentCid = obj.stringOrNull("cid") ?: "0"
+        // 兼容 proapi(fn/pid/fs/upt/thumb) + webapi(n/cid/s/tp/u)两种返回形态
+        val name = obj.stringOrNull("fn") ?: obj.stringOrNull("n") ?: return null
+        val fid = obj.stringOrNull("fid") ?: return null
+        val parentId = obj.stringOrNull("pid") ?: obj.stringOrNull("cid") ?: "0"
         val pc = obj.stringOrNull("pc") ?: ""
 
-        return if (hasFid) {
-            // ───── 文件 ─────
-            val fid = obj.stringOrNull("fid") ?: return null
-            val sizeBytes = obj.longOrZero("s")
+        // 判别 file/folder:文件有 ico / sha1 / fs,文件夹都没有
+        val isFile = obj.stringOrNull("ico") != null ||
+                     obj.stringOrNull("sha1") != null ||
+                     obj["fs"] != null
+
+        return if (isFile) {
+            val sizeBytes = obj.longOrZero("fs") ?: obj.longOrZero("s") ?: 0L
             val ico = obj.stringOrNull("ico") ?: ""
             val fc = obj.intOrZero("fc")
             val playLong = obj.intOrZero("play_long")
-            val sha1 = obj.stringOrNull("sha") ?: ""
-            val mtime = obj.longOrZero("tp")
-            // 115 webapi /files 响应 `u` 字段：图片/视频缩略图 URL（带 ?s=&t= 签名）
-            // folder 无此字段；doc/zip 等类型也可能为空
-            // URL 后缀反爬：
-            //  - `_100`/`_250` 等数字后缀 → 17KB 固定占位图（115 反爬诱饵，**不要**用）
-            //  - `_0` 或无后缀 → 真实原图；Coil 用 ContentScale.Crop 缩到 40dp 渲染
-            val thumbnailUrl = (obj.stringOrNull("u") ?: "")
-                .replace(Regex("_\\d+(?=\\?)"), "_0")
+            val sha1 = obj.stringOrNull("sha1") ?: obj.stringOrNull("sha") ?: ""
+            val mtime = obj.longOrZero("upt") ?: obj.longOrZero("tp") ?: 0L
+            // 缩略图 URL:proapi `thumb`,webapi `u`;都带 115 签名
+            val rawThumb = obj.stringOrNull("thumb") ?: obj.stringOrNull("u") ?: ""
+            val thumbnailUrl = rawThumb.replace(Regex("_\\d+(?=\\?)"), "_0")
             ParsedFileItem(
                 id = fid,
-                parentId = parentCid,
+                parentId = parentId,
                 name = name,
                 ico = ico,
                 sizeBytes = sizeBytes,
@@ -204,12 +204,12 @@ class FilesRepository(
                 thumbnailUrl = thumbnailUrl,
             )
         } else {
-            // ───── 文件夹 ─────
-            val folderCid = obj.stringOrNull("cid") ?: return null
-            val mtime = obj.longOrZero("tp")
+            val mtime = obj.longOrZero("upt") ?: obj.longOrZero("tp") ?: 0L
+            // 文件夹 id:webapi 用 cid;proapi 也回 fid(且 fid != pid)
+            val folderId = fid
             ParsedFileItem(
-                id = folderCid,
-                parentId = parentCid,
+                id = folderId,
+                parentId = parentId,
                 name = name,
                 pickCode = pc,
                 mtimeSec = mtime,

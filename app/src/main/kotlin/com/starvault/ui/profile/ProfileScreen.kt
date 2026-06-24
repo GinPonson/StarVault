@@ -154,12 +154,28 @@ private fun StorageCard(storage: Storage) {
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             // 标题：userName 非空时拼 "云端空间 — Alice"（em dash + 空格）；空时仅 "云端空间"
             val title = if (storage.userName.isNotBlank()) "云端空间 — ${storage.userName}" else "云端空间"
             Text(text = title, style = t.micro, color = c.muted)
+            // VIP 徽章:vipLevelName 非空时显示(金 amber pill),来自 proapi /open/user/info 的 vip_info.level_name
+            if (storage.vipLevelName.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color(0xFFFEF3C7))                                // amber-100
+                        .border(0.5.dp, Color(0xFFF59E0B), RoundedCornerShape(999.dp)) // amber-500
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "👑 ${storage.vipLevelName}",
+                        style = t.micro,
+                        color = Color(0xFFB45309),                                     // amber-700
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
         Row(

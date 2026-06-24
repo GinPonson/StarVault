@@ -41,6 +41,9 @@ internal fun profilePreviewSuccess(): ProfileUiState.Success = ProfileUiState.Su
         ),
         remainingGb = "761.6 GB",
         trashGb = "2.1 GB",
+        userName = "",
+        vipLevelName = "年费VIP",      // Preview 加 VIP 徽章,展示 StorageCard 右侧 pill
+        breakdownsIsMock = true,
     ),
     wallpaper = Wallpaper(enabled = false, subText = "让相册成为会动的壁纸"),
     commonRows = listOf(

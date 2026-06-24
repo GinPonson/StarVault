@@ -38,20 +38,24 @@ sealed interface ProfileUiState {
 
 /* ───────────────────── 子模型 ───────────────────── */
 
-/** 存储大卡：环 + 多条 breakdown + 剩余。
+/** 存储大卡：环 + 多条 breakdown + 剩余 + VIP 徽章。
  *
- *  - usedPct / totalLabel / remainingGb / trashGb 来自 webapi /user/space_summury（真）
- *  - breakdowns 来自 webapi /user/space_summury 的 type_summury（真，8 类：PIC/AVI/MUS/DOC/BOOK/RAR/EXE/OTHER）
+ *  - usedPct / totalLabel / remainingGb 来自 proapi /open/user/info 的 rt_space_info（真）
+ *  - trashGb 来自 /open/user/info 不返回 rb(recycle bin),保持 mock
+ *  - breakdowns 来自旧 webapi /user/space_summury 的 type_summury(8 类),OAuth Open 平台
+ *    未开放该字段,故 breakdownsIsMock=true 永久占位
  *  - breakdownsIsMock=false 表示接的是真接口；true 仅为 0 网络/无数据兜底
- *  - userName 用于标题 "云端空间 — Alice"，为空时仅显示 "云端空间"
+ *  - userName 用于标题 "云端空间 — Alice",为空时仅显示 "云端空间"
+ *  - vipLevelName 来自 /open/user/info 的 vip_info.level_name;"" → 不显示 VIP 徽章
  */
 data class Storage(
     val usedPct: Int,              // 71
     val totalLabel: String,        // "1 TB"
     val breakdowns: List<Breakdown>,
     val remainingGb: String,       // "761.6 GB"
-    val trashGb: String,           // "2.1 GB"
+    val trashGb: String,           // "2.1 GB" (mock)
     val userName: String = "",         // "" → StorageCard 标题仅显示 "云端空间"
+    val vipLevelName: String = "",     // "" → 不显示 VIP 徽章;"年费VIP" 等
     val breakdownsIsMock: Boolean = true,  // true → fallback 状态（无网络/解析失败）
 )
 

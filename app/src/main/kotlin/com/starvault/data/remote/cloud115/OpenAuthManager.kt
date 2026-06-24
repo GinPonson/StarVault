@@ -12,22 +12,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import java.net.SocketTimeoutException
 
 /**
  * 115 开放平台 OAuth 设备码流编排器。
  *
  * 替换 [ScanLoginManager]（旧的 Cookie 扫码流）。
  *
- * 流程（旧的 4 步 → 新的 2 步）：
- *  1. [requestDeviceCode]  POST /open/authDeviceCode
- *                          → 拿 uid / qrcodeUrl（"https://115.com/scan/dg-<uid>"）
+ * 三步流程：
+ *  1. [requestDeviceCode] POST /open/authDeviceCode
+ *                          → 拿 uid / time / qrcodeUrl（"https://115.com/scan/dg-<uid>"）
  *                          → 用 zxing 在本地把 qrcodeUrl 渲染成 QR Bitmap
- *  2. [pollForToken]       GET /open/authDeviceCode?uid=...&sign=...&code_verifier="0"*64
- *                          → 用户在 115 App 扫码 + 确认后，data.access_token 存在 → Authorized
+ *  2. [pollForToken]       GET /get/status/  (long-poll)
+ *                          → status=0 继续等；status=1 emit Scanned 一次；
+ *                          → status=2 调 deviceCodeToToken 换真 token → emit Authorized
+ *  3. (内部) exchangeForToken POST /open/deviceCodeToToken
  *
  * 状态机（6 态）：
- *  Waiting(bitmap) → 用户未扫码，不发新 event，保持 Waiting
- *  Scanned(...)    → OAuth 流里实际上"用户已扫码但未确认"也用同一 Waiting（115 不区分中间态）
+ *  Waiting(bitmap) → status=0，不发新 event（UI 不闪烁）
+ *  Scanned(...)    → status=1，emit 一次（提示用户去 115 App 点确认）
  *  Authorized(...) → 拿到 tokens + uid + userName，调用方落 DataStore + 跳 Home
  *  Denied          → 用户拒绝授权
  *  Expired         → 5 分钟 QR 过期
@@ -45,6 +48,7 @@ import kotlinx.coroutines.withContext
  */
 class OpenAuthManager(
     private val api: OpenAuthApiService,
+    private val statusApi: StatusPollApi,
 ) {
 
     companion object {
@@ -60,13 +64,15 @@ class OpenAuthManager(
      * 设备码会话一次性的所有数据。
      *
      *  - uid         : 轮询回传
+     *  - time        : 服务端时间（秒），轮询时也要回传给 status 端点
      *  - sign        : 轮询签名
      *  - qrcodeUrl   : 形如 "https://115.com/scan/dg-xxx"，由 115 App 扫码识别
-     *  - codeVerifier: 永不入库（写死 "0"*64，仅在内存里传给 pollForToken）
+     *  - codeVerifier: 永不入库（写死 "0"*64，仅在内存里传给 deviceCodeToToken）
      *  - bitmap      : 已渲染好的 QR 位图，UI 拿来直接显示
      */
     data class DeviceCodeData(
         val uid: String,
+        val time: Long = 0L,
         val sign: String,
         val qrcodeUrl: String,
         val codeVerifier: String,
@@ -135,10 +141,11 @@ class OpenAuthManager(
             val bitmap = encodeQrBitmap(data.qrcode)
                 ?: return@withContext Result.failure(IllegalStateException("QR 渲染失败"))
 
-            Log.i(TAG, "device code ready, uid=${data.uid.take(8)}..., qrcodeUrl=${data.qrcode}")
+            Log.i(TAG, "device code ready, uid=${data.uid.take(8)}..., time=${data.time}, qrcodeUrl=${data.qrcode}")
             Result.success(
                 DeviceCodeData(
                     uid = data.uid,
+                    time = data.time,
                     sign = data.sign,
                     qrcodeUrl = data.qrcode,
                     codeVerifier = OpenAuthApiService.CODE_VERIFIER,
@@ -186,15 +193,20 @@ class OpenAuthManager(
     }
 
     /**
-     * 轮询直到 token 就绪 / 用户拒绝 / 过期 / 错误。
+     * 轮询 status 直到 token 就绪 / 用户拒绝 / 过期 / 错误。
+     *
+     * 三步流程：
+     *  1. GET /get/status/ 长轮询
+     *     - status=0（未扫/未确认）→ 不发新 event，保持 Waiting
+     *     - status=1（已扫未确认） → emit Scanned 一次（避免抖动）
+     *     - status=2（已确认）     → 调 deviceCodeToToken 换 token
+     *  2. POST /open/deviceCodeToToken（仅 status=2 时）
+     *  3. emit Authorized(accessToken, refreshToken, ...)
      *
      * 关键点：
      *  - 每次 poll 前检查 deadline，超时立刻 emit Expired（不等下次 poll）
-     *  - "已扫码但未确认" 在 115 open 流里没有独立 status；115 维持 state=1 data=null
-     *    直到用户点确认。**此阶段我们不发任何 event**（保持 Waiting，UI 端不变）
-     *  - 用户拒绝时 115 通常返回 state=1 + data=null 持续一段时间直到过期，
-     *    不返回 status=-1。这里只能靠 deadline 兜底为 Expired；UI 文案统一改为
-     *    "二维码已过期，请刷新"（保持兼容）
+     *  - SocketTimeoutException 特判为"长轮询正常超时" → 不 emit Error，继续 loop
+     *  - 其它 Exception → emit Error 后继续 loop（不退出，给用户重试机会）
      *
      * @param deviceCode 来自 [requestDeviceCode] 的成功返回
      * @param deadline   绝对时间戳（毫秒）；默认 5 分钟后
@@ -206,6 +218,7 @@ class OpenAuthManager(
         // 起始：先发一条 Waiting（带 bitmap）让 UI 立刻渲染
         emit(AuthStatus.Waiting(deviceCode.bitmap))
 
+        var scannedEmitted = false  // status==1 只 emit 一次，避免抖动
         while (true) {
             // 1) 过期检测：先于网络调用，避免过期后还浪费一次 HTTP
             if (System.currentTimeMillis() >= deadline) {
@@ -213,46 +226,85 @@ class OpenAuthManager(
                 return@flow
             }
 
-            // 2) 一次 poll
+            // 2) 一次 long-poll
             try {
-                val resp = api.pollDeviceCode(
-                    uid          = deviceCode.uid,
-                    sign         = deviceCode.sign,
-                    codeVerifier = deviceCode.codeVerifier,
+                val resp = statusApi.getStatus(
+                    uid         = deviceCode.uid,
+                    time        = deviceCode.time,
+                    sign        = deviceCode.sign,
+                    cacheBuster = System.currentTimeMillis(),
                 )
-                if (!resp.isSuccessful) {
-                    emit(AuthStatus.Error("HTTP ${resp.code()}"))
-                    delay(POLLING_INTERVAL_MS); continue
-                }
                 val env = resp.body()
                 if (env == null || !env.isOk) {
-                    emit(AuthStatus.Error(env?.message ?: env?.error ?: "查询失败"))
+                    emit(AuthStatus.Error(env?.message ?: env?.error ?: "状态查询失败"))
                     delay(POLLING_INTERVAL_MS); continue
                 }
 
-                val data = env.data
-                val accessToken = data?.accessToken
-                if (accessToken.isNullOrBlank()) {
-                    // 用户尚未确认 — 不发新 event，保持 Waiting（UI 不闪烁）
-                } else {
-                    // 拿到 tokens，终止轮询
-                    emit(
-                        AuthStatus.Authorized(
-                            accessToken  = accessToken,
-                            refreshToken = data.refreshToken.orEmpty(),
-                            expiresIn    = data.expiresIn ?: 7200L,
-                            uid          = data.userId ?: 0L,
-                            userName     = data.userName.orEmpty(),
+                when (env.data?.status ?: 0) {
+                    0 -> { /* 未扫 / 未确认 — 不发新 event，保持 Waiting（UI 不闪烁） */ }
+                    1 -> if (!scannedEmitted) {
+                        emit(AuthStatus.Scanned("", "请在 115 App 中点击「确认登录」"))
+                        scannedEmitted = true
+                    }
+                    2 -> {
+                        // 已确认 → 换真 token，终止轮询
+                        val tok = exchangeForToken(deviceCode)
+                        return@flow tok.fold(
+                            onSuccess = { data ->
+                                emit(
+                                    AuthStatus.Authorized(
+                                        accessToken  = data.accessToken.orEmpty(),
+                                        refreshToken = data.refreshToken.orEmpty(),
+                                        expiresIn    = data.expiresIn ?: 7200L,
+                                        uid          = data.userId ?: 0L,
+                                        userName     = data.userName.orEmpty(),
+                                    )
+                                )
+                            },
+                            onFailure = { e ->
+                                Log.e(TAG, "deviceCodeToToken failed", e)
+                                emit(AuthStatus.Error(e.message ?: "换 token 失败"))
+                            },
                         )
-                    )
-                    return@flow
+                    }
+                    else -> {
+                        emit(AuthStatus.Error("未知 status=${env.data?.status}"))
+                        delay(POLLING_INTERVAL_MS); continue
+                    }
                 }
+            } catch (e: SocketTimeoutException) {
+                // 长轮询正常超时（65s read timeout 已到，但服务端没回），按"还在等"处理
+                Log.d(TAG, "status long-poll timeout, keep waiting")
             } catch (e: Exception) {
                 Log.w(TAG, "polling exception", e)
                 emit(AuthStatus.Error(e.message ?: "轮询异常"))
             }
             delay(POLLING_INTERVAL_MS)
         }
+    }
+
+    /**
+     * 用设备码换真 access_token（status==2 后调一次）。
+     *
+     * @return Result.success(DeviceCodeToTokenResponse) / Result.failure(异常)
+     */
+    private suspend fun exchangeForToken(
+        dc: DeviceCodeData,
+    ): Result<DeviceCodeToTokenResponse> = try {
+        val resp = api.deviceCodeToToken(uid = dc.uid, codeVerifier = dc.codeVerifier)
+        if (!resp.isSuccessful) {
+            Result.failure(IllegalStateException("POST /open/deviceCodeToToken HTTP ${resp.code()}"))
+        } else {
+            val data = resp.body()?.takeIf { it.isOk }?.data
+            if (data == null || data.accessToken.isNullOrBlank()) {
+                Result.failure(
+                    IllegalStateException("换 token 业务失败: ${resp.body()?.message ?: "unknown"}")
+                )
+            } else Result.success(data)
+        }
+    } catch (e: Throwable) {
+        Log.e(TAG, "deviceCodeToToken threw", e)
+        Result.failure(e)
     }
 
     /**

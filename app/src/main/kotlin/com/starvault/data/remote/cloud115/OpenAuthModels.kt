@@ -20,7 +20,7 @@ import kotlinx.serialization.Serializable
  *
  * 字段映射：
  *  - uid       : 设备码会话 ID，轮询时回传
- *  - time      : 服务端时间（秒）
+ *  - time      : 服务端时间（秒），[StatusPollApi] 轮询时也要回传
  *  - sign      : 轮询签名
  *  - qrcode    : 形如 "https://115.com/scan/dg-<uid>" 的跳转链接（不是图片 URL）
  *  - expiresIn : 设备码 TTL（秒），可选，115 不一定回
@@ -35,18 +35,34 @@ data class DeviceCodeResponse(
 )
 
 /**
- * GET /open/authDeviceCode（轮询）的 data 字段。
+ * GET /get/status/ 长轮询的 data 字段。
  *
  * 字段映射：
- *  - accessToken / refreshToken : 必须存在才能落库，缺失视为"用户尚未确认"继续轮询
+ *  - status : 0=未扫/未确认（空 data 也按 0 处理），1=已扫未确认，2=已确认 → 触发 deviceCodeToToken
+ *  - msg    : 服务端附带消息，可选
+ *
+ * 注：115 在用户未扫码时可能返回 `data: {}`（空对象），kotlinx.serialization 会用默认值填充，
+ * 此时 `status = 0`，调用方按 "继续等" 处理（不发新 event）。
+ */
+@Serializable
+data class StatusPollResponse(
+    val status: Int = 0,
+    val msg: String? = null,
+)
+
+/**
+ * POST /open/deviceCodeToToken 的 data 字段（真 token 来源）。
+ *
+ * 字段映射：
+ *  - accessToken / refreshToken : 必须存在才能落库，缺失视为 "换 token 业务失败"
  *  - expiresIn    : 秒，相对值；存库时转 expiresAtMs = nowMs + expiresIn*1000
  *  - scope / tokenType : 调试用
  *  - userId / userName : 115 用户信息
  *
- * 任意必填字段缺失时由调用方决定继续轮询还是终止流。
+ * 三步流专用：status==2 后调 deviceCodeToToken 拿真 token 时使用。
  */
 @Serializable
-data class TokenPollResponse(
+data class DeviceCodeToTokenResponse(
     @SerialName("access_token")  val accessToken: String? = null,
     @SerialName("refresh_token") val refreshToken: String? = null,
     @SerialName("expires_in")    val expiresIn: Long? = null,

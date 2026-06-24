@@ -45,85 +45,73 @@ val ApiEnvelope<*>.isOk: Boolean
         return s.intOrNull?.let { it == 1 } ?: (s.booleanOrNull ?: false)
     }
 
-// ─────────────────── Profile / Storage webapi DTO ───────────────────
+// ─────────────────── User DTO (OAuth /open/user/info) ───────────────────
 
 /**
- * GET /users/userinfo 响应 data（115 网页端「我的」页同源接口）。
+ * GET /open/user/info 响应 data（OAuth Bearer 鉴权专用）。
  *
- *  关键字段：
- *    - userId   : Long     115 user_id（与登录落 DataStore 的 uid 一致，用于交叉校验）
- *    - userName : String?  昵称（StorageCard 标题用）
- *    - userFace : String?  头像 URL（中等尺寸；Profile 屏暂不展示，先存）
+ *  字段对照官方文档(https://www.yuque.com/115yun/open/ot1litggzxa1czww):
+ *  - userId       : string   115 user_id(OAuth 登录响应里也有,与 DataStore.uid 一致)
+ *  - userName     : string   昵称
+ *  - userFaceS/M/L: string   三档头像 URL(暂不展示,先解析留作后续 Settings 用)
+ *  - rtSpaceInfo  : object   实时空间(all_total/all_remain/all_use)— Profile 屏容量条用
+ *  - vipInfo      : object   VIP 等级 + 过期(Profile 屏右上角徽章用)
  *
- *  115 实际回包可能还有 vip_info / rt_space_info 等冗余字段，
- *  [Json.ignoreUnknownKeys] 配在 [Cloud115ApiClient] 里会安全忽略。
+ *  其它冗余字段由 [Json.ignoreUnknownKeys] 安全忽略。
  */
 @Serializable
 data class UserBaseInfoData(
     @SerialName("user_id") val userId: Long = 0L,
     @SerialName("user_name") val userName: String? = null,
-    @SerialName("user_face") val userFace: String? = null,
-)
-
-/** 单个尺寸项（all_total / files / rb 等的子结构）。 */
-@Serializable
-data class SizeInfo(
-    val size: Double = 0.0,                   // 115 返回 Double（如 54410546868129.555）
-    @SerialName("size_format") val sizeFormat: String = "",
-    val percent: Double = 0.0,
-    val count: Int? = null,                   // type_summury 里每类有 count
-    val pecent: Double? = null,               // 115 typo: pecent 而非 percent（type_summury 里）
+    @SerialName("user_face_s") val userFaceS: String? = null,
+    @SerialName("user_face_m") val userFaceM: String? = null,
+    @SerialName("user_face_l") val userFaceL: String? = null,
+    @SerialName("rt_space_info") val rtSpaceInfo: RtSpaceInfo? = null,
+    @SerialName("vip_info") val vipInfo: VipInfo? = null,
 )
 
 /**
- * POST /user/space_summury 响应 data（**注意 115 路径 + 部分字段都有拼写错误**）。
+ * 实时空间概要（来自 /open/user/info 的 rt_space_info 节点）。
  *
- *  实际响应结构（实测）：
+ *  实测响应（2026-06 AVD 真机 + 媒体播放器 AppID）：
  *  ```
- *  {
- *    "state": true,
- *    "space_summury": {
- *      "all_total":  { "size": ..., "size_format": "49.49 TB" },
- *      "all_remain": { "size": ..., "size_format": "48.09 TB" },
- *      "files":      { "size": ..., "size_format": "1.33 TB" },
- *      "photo":      { "size": ..., "size_format": "59.11 GB" },
- *      "offine":     { ... },   // 115 typo: "offine" 而非 "offline"
- *      "note":       { ... },
- *      "rb":         { ... },   // rb = recycle bin 回收站
- *      "receive":    { ... },
- *    },
- *    "type_summury": {          // 按文件类型分布（8 类：RAR/EXE/DOC/MUS/PIC/AVI/BOOK/OTHER + 元数据）
- *      "RAR":  { "count": 20, "size": ..., "size_format": "1.58 GB" },
- *      "EXE":  { ... },
- *      ...
- *    },
- *    "rt_space_info": { ... }   // 实时空间（暂不展示）
+ *  "rt_space_info": {
+ *    "all_total":  { "size": 54410546868129, "size_format": "49.49TB" },
+ *    "all_remain": { "size": 52831660016420, "size_format": "48.05TB" },
+ *    "all_use":    { "size":  1578886851709, "size_format": "1.44TB" }
  *  }
  *  ```
- * （注：上面 JSON 示例仅做字段说明；运行时由 kotlinx-serialization 反序列化）
  *
- *  Profile 屏展示用的扁平字段由 [usedPct] / [totalLabel] / [remainingGb] / [trashGb]
- *  派生（VM 端 compute 后写入 ProfileUiState.Storage），不在这里预先映射。
- *
- *  设计 5 行 breakdown（视频/图片/文档/音频/其他）≠ 实际 8 类，breakdownsIsMock 标 true。
+ *  取代旧的 webapi POST /user/space_summury（OAuth Open 平台未开放 type_summury 8 类细分）。
+ *  Profile 屏容量条用 `all_total` / `all_remain`；VIP 徽章用 [VipInfo]。
  */
 @Serializable
-data class SpaceSummuryData(
-    @SerialName("space_summury") val spaceSummury: SpaceSummuryInner = SpaceSummuryInner(),
-    // 115 实际是混合 Map：RAR/EXE/DOC/... 是 SizeInfo 对象，
-    // work_count_times 是 Long，type_nums 是嵌套 Map。所以用 JsonElement 兼容。
-    @SerialName("type_summury") val typeSummury: Map<String, JsonElement> = emptyMap(),
+data class RtSpaceInfo(
+    @SerialName("all_total")  val allTotal: SizeInfo = SizeInfo(),
+    @SerialName("all_remain") val allRemain: SizeInfo = SizeInfo(),
+    @SerialName("all_use")    val allUse: SizeInfo = SizeInfo(),
 )
 
+/** VIP 等级 + 过期时间戳（来自 /open/user/info 的 vip_info 节点）。
+ *
+ *  字段对照官方文档(https://www.yuque.com/115yun/open/ot1litggzxa1czww):
+ *  - level_name : string  原石会员 / 尝鲜VIP / 体验VIP / 月费VIP / 年费VIP / 年费VIP高级版 / 年费VIP特级版 / 超级VIP / 长期VIP
+ *  - expire     : int     过期时间戳(unix 秒);用 Int 装(2038 年前够用),负数或 0 = 永久/无数据
+ */
 @Serializable
-data class SpaceSummuryInner(
-    @SerialName("all_total") val allTotal: SizeInfo = SizeInfo(),
-    @SerialName("all_remain") val allRemain: SizeInfo = SizeInfo(),
-    @SerialName("all_use") val allUse: SizeInfo = SizeInfo(),
-    val files: SizeInfo = SizeInfo(),
-    val photo: SizeInfo = SizeInfo(),
-    @SerialName("offine") val offine: SizeInfo = SizeInfo(),   // 115 typo
-    val note: SizeInfo = SizeInfo(),
-    val rb: SizeInfo = SizeInfo(),                              // 回收站
-    val receive: SizeInfo = SizeInfo(),
+data class VipInfo(
+    @SerialName("level_name") val levelName: String? = null,
+    val expire: Int? = null,
+)
+
+/**
+ * 单个尺寸项（all_total / all_remain / all_use 的子结构）。
+ *
+ *  proapi /open/user/info 返回的 size 是 Long 类型整数（不是 Double）。
+ *  用 Long 存，避免 49.49TB 转 Double 精度丢失。
+ */
+@Serializable
+data class SizeInfo(
+    val size: Long = 0L,
+    @SerialName("size_format") val sizeFormat: String = "",
 )
