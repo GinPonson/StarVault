@@ -67,9 +67,9 @@ import okhttp3.OkHttpClient
  *  - 底部操作栏：surface 白底 + 1dp `border` 分隔线 + 三等宽 OutlinedButton
  *  - 顶 / 底栏共用 [uiVisible]，[AnimatedVisibility] fadeIn/fadeOut 切换
  *
- *  Media3 + 115 cookie 桥接：
- *  - 用 [OkHttpDataSource.Factory] 包装 [ServiceLocator.okHttpClient]（含 115 Cookie 拦截器）
- *  - Media3 拉 m3u8 主索引 + 分片都自动带 cookie
+ *  Media3 + 115 Bearer 桥接：
+ *  - 用 [OkHttpDataSource.Factory] 包装 [ServiceLocator.okHttpClient]，由拦截器自动注入 115 Bearer + 浏览器伪装头
+ *  - Media3 拉 m3u8 主索引 + 分片都自动带 115 Bearer
  *  - ExoPlayer 实例由 Composable 持有，dispose 时 [Player.release] 防泄漏
  *
  *  状态机：错误回调 → 自定义 error slot 显示。
@@ -111,7 +111,7 @@ fun PreviewVideoScreen(
  *
  *  关键依赖：
  *  - [OkHttpDataSource.Factory] 复用 ServiceLocator 的 [OkHttpClient]，让 Media3 拉的
- *    m3u8 主索引 / 分片都带 115 Cookie（115 m3u8 签名 URL 必须登录态）
+ *    m3u8 主索引 / 分片都带 115 Bearer（115 m3u8 签名 URL 必须登录态）
  *
  *  顶 / 底栏通过 BoxScope 扩展函数（[TopInfoBar] / [BottomActionBar]）挂在外层 Box 的
  *  TopCenter / BottomCenter，这是 [BoxScope.align] 唯一能用的调用场景。
@@ -124,7 +124,7 @@ private fun VideoContent(
     val context = LocalContext.current
     val uiVisible = remember { mutableStateOf(true) }
 
-    // 1. ExoPlayer 实例：依赖 ServiceLocator.okHttpClient（已带 115 Cookie 拦截器）
+    // 1. ExoPlayer 实例：依赖 ServiceLocator.okHttpClient，由 115 Bearer 拦截器自动注入 token
     val player = remember(state.mediaUrl) {
         val okHttpClient: OkHttpClient = ServiceLocator.okHttpClient
         val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)

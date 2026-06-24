@@ -10,7 +10,7 @@ import retrofit2.http.Query
  *
  * **OAuth Bearer 鉴权专用**(参考 p115client/client.py:2541 / 2935 / 4256 + OpenListTeam/115-sdk-go/const.go)。
  *
- *  全部端点统一走 Bearer 鉴权,不再走 webapi Cookie 域。webapi.115.com 已经从 ServiceLocator 移除。
+ *  全部端点统一走 Bearer 鉴权,调用 proapi.115.com 域。
  *
  *  端点列表(全部 proapi):
  *  - /open/ufile/files          GET   目录文件列表(混合)

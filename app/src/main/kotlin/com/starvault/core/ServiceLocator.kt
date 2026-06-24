@@ -29,11 +29,6 @@ import okhttp3.OkHttpClient
  *
  * 简单到不需要 Lazy / synchronization：MainActivity.onCreate 早于任何 ViewModel 构造。
  *
- * 替换历史（决策 #9）：Cookie 时代 → OAuth 时代
- *  - `authStore: Cloud115AuthStore`  → `tokenStore: OpenAuthStore`
- *  - `scanApi: ScanApiService`      → `openAuthApi: OpenAuthApiService` + `statusPollApi: StatusPollApi`
- *  - `scanManager: ScanLoginManager`→ `authManager: OpenAuthManager`
- *
  * 两个 OkHttpClient：
  *  - `okHttpClient`     : 30s 常规超时（proapi + qrcodeapi POST 端点 + Coil）
  *  - `statusPollClient` : 65s 长轮询（115 get/status/）
@@ -53,7 +48,6 @@ object ServiceLocator {
      * proapi open 域文件端点(供 [FilesRepository] + [MediaPreviewRepository] 用)。
      *
      * 全部走 OAuth Bearer 鉴权,包括 listFiles / searchFiles / getInfo / downurl / videoPlay。
-     * webapi 域已经迁完,整个文件域不再走 Cookie。
      *
      * 复用同一个 [okHttpClient](Bearer 注入 + 浏览器伪装头 + Android UA),只换 baseUrl。
      */

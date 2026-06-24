@@ -6,13 +6,12 @@ import kotlinx.serialization.Serializable
 /**
  * 115 开放平台 OAuth 设备码流的 DTO 集合。
  *
- * 替换 [ScanModels] 中扫码专用的 `QrTokenData` / `QrStatusData` / `LoginResultData`。
  * 端点契约见 plan §2。
  *
  * 设计要点：
  *  - 所有字段尽量 nullable + 默认 null，避免 115 偶尔缺字段时反序列化失败
  *  - snake_case → camelCase 走 `@SerialName`
- *  - 与 `ScanModels.ApiEnvelope<T>` 复用同一外层壳（state=1 即成功）
+ *  - 与 [OpenApiModels.ApiEnvelope] 复用同一外层壳（state=1 即成功）
  */
 
 /**

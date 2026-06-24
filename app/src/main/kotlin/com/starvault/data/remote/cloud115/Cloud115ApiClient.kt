@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit
  *
  *  使用方式：每个 base URL 一个 [Retrofit] 实例,OkHttpClient 按超时策略分两类。
  *
- *  替换历史：[CookieInterceptor] → [AuthHeaderInterceptor];[scanApiService] → [openAuthApiService] / [statusPollApiService];webapi /files → proapi /open/ufile/files。
  */
 object Cloud115ApiClient {
 

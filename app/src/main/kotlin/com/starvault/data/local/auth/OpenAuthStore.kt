@@ -12,15 +12,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 
-// DataStore 实例 — name 由旧的 "cloud115_auth" 改为 "cloud115_tokens"，
-// 与 Cookie 时代隔离，老用户重新登录一次即可（无迁移代码）。
+// DataStore 实例 — name = "cloud115_tokens",存取 OAuth tokens + 用户信息。
 private val Context.tokensDataStore: DataStore<Preferences>
         by preferencesDataStore(name = "cloud115_tokens")
 
 /**
  * 115 OAuth tokens + 用户信息持久化。
- *
- * 替换 [Cloud115AuthStore]（旧 store 存的是 Cookie 串）。
  *
  * 关键字段：
  *  - accessToken  : Bearer 鉴权串；非空即视为已登录
@@ -33,7 +30,6 @@ private val Context.tokensDataStore: DataStore<Preferences>
  *    派生 authState 用
  *  - 同步读 accessToken 用 [accessTokenBlocking]，供 OkHttp Interceptor 同步接口用
  *  - refreshToken 仅暴露 suspend 接口，避免被拦截器误用
- *  - 不做 "cookiesKey → accessTokenKey" 数据迁移；老用户重新扫码登录一次
  */
 class OpenAuthStore(private val context: Context) {
 

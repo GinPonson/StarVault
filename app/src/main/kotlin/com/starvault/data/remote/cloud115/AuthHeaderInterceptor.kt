@@ -6,8 +6,6 @@ import okhttp3.Response
 /**
  * 注入 115 OAuth Bearer token 到所有请求的 Authorization 头。
  *
- * 替换 [CookieInterceptor]（旧的 Cookie 注入拦截器）。
- *
  * token 由 [tokenProvider] 实时提供（DataStore Flow.first() + runBlocking）。
  * token 为空时**不加** Authorization 头，避免给未登录请求发无意义 header。
  *

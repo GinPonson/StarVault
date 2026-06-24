@@ -105,7 +105,7 @@ data class ParsedFileItem(
     /**
      * 115 缩略图 URL(/open/ufile/files 响应 `u` 字段)。
      *  - 仅 IMAGE / VIDEO 类文件有值(folder 永远为空)
-     *  - URL 含 115 签名 (`?s=...&t=...`),带登录态 Cookie 直接 GET 即可
+     *  - URL 含 115 签名 (`?s=...&t=...`),带 115 Bearer 直接 GET 即可(OkHttp 拦截器自动注入)
      *  - 路径格式:`thumb.115.com/thumb/{sha1 头 1/2/4/8 char 分段}/{sha1}_100`
      */
     val thumbnailUrl: String = "",
