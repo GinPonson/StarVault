@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
  *  - storage.trashGb 走 mock（OAuth Open 平台未开放 rb 字段）
  *  - storage.breakdowns 永远走 mock（type_summury 8 类不在 Open 平台开放范围）
  *
- *  - [onSignOut] 真接 [AuthRepository.signOut] → DataStore 清 cookies →
+ *  - [onSignOut] 真接 [AuthRepository.signOut] → DataStore 清 token →
  *    authState 切 Unauthenticated → NavHost 自动跳回 Login（无需手动 nav.popUp）
  *
  *  signOut / fetchUserInfo 错误（极少见 — DataStore.clear 抛 IOException / proapi 失败）

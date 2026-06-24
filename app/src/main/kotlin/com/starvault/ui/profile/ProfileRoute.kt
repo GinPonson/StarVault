@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
  * @param nav Nav 控制器（点击 row 后跳详情 / 跳到 Wallpaper）
  * @param vm  注入 ViewModel
  *
- * 退出登录：onLogout → vm.onSignOut() → DataStore 清 cookies → authState 切
+ * 退出登录：onLogout → vm.onSignOut() → DataStore 清 token → authState 切
  * Unauthenticated → NavHost 自动从 Home 栈 pop 到 Login（**不**在 Route 手动 nav）。
  * 失败时（极少见 — DataStore.clear 抛 IOException）通过 Snackbar 提示。
  */
