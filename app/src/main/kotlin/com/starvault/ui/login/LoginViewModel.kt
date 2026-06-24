@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.repository.AuthRepository
 import kotlinx.coroutines.Job
@@ -56,6 +57,8 @@ class LoginViewModel(
                     startExpireCountdown()
                 }
                 .onFailure { e ->
+                    // 失败：保留 Error 占位屏，toast 提示具体原因
+                    ToastBus.error(e.message ?: "二维码服务不可达，请稍后重试")
                     _state.value = LoginUiState.Error(
                         message = e.message ?: "二维码服务不可达，请稍后重试",
                         expireSeconds = 0,

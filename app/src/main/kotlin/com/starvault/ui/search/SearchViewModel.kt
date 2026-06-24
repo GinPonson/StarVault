@@ -3,6 +3,7 @@ package com.starvault.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.data.repository.FilesRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -99,6 +100,8 @@ class SearchViewModel(
                 )
             }
         }.onFailure { e ->
+            // 失败：保留 Error 占位屏，toast 提示具体原因
+            ToastBus.error(e.message ?: "搜索失败")
             _state.value = SearchUiState.Error(q, e.message ?: "搜索失败")
         }
     }
@@ -135,6 +138,8 @@ class SearchViewModel(
                 .onFailure {
                     val current = _state.value as? SearchUiState.Success ?: return@onFailure
                     if (current.query != currentQuery) return@onFailure
+                    // 失败不弹 Error 屏（已有结果可用），仅清 isLoadingMore；toast 由 ToastBus 提示
+                    ToastBus.error("加载更多失败")
                     _state.value = current.copy(isLoadingMore = false)
                 }
         }

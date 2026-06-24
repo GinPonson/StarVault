@@ -3,6 +3,7 @@ package com.starvault.ui.files
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
@@ -245,7 +246,8 @@ class FilesViewModel(
                 .onFailure {
                     val current = _state.value as? FilesUiState.Success ?: return@onFailure
                     if (current.folderId != currentCid) return@onFailure
-                    // 失败不弹 Error 屏（已有列表可用），仅清 isLoadingMore；UI 列表底部可考虑 toast
+                    // 失败不弹 Error 屏（已有列表可用），仅清 isLoadingMore；toast 由 ToastBus 提示用户
+                    ToastBus.error("加载更多失败")
                     _state.value = current.copy(isLoadingMore = false)
                 }
         }
@@ -297,7 +299,8 @@ class FilesViewModel(
                 )
             }
             .onFailure { e ->
-                // 失败：清空旧列表，进 Error 态；如有旧列表保留会更复杂，先简化
+                // 失败：清空旧列表，进 Error 态（占位）；toast 由 ToastBus 给出具体原因
+                ToastBus.error(e.message ?: "文件列表加载失败")
                 _state.value = FilesUiState.Error(
                     message = e.message ?: "文件列表加载失败",
                 )
