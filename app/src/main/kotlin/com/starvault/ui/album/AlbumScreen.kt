@@ -548,74 +548,111 @@ private fun FolderSheet(
                     }
                 }
             }
-            HorizontalDivider(color = c.border, thickness = 1.dp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
-            Text(
-                text = "最近使用",
-                style = t.micro,
-                color = c.muted,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                recents.forEach { r ->
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(c.bg)
-                            .border(1.dp, c.border, RoundedCornerShape(999.dp))
-                            .clickable { onSelect(r.id) }
-                            .height(32.dp)
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(r.color),
-                        )
-                        Text(r.name, style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = c.fg)
-                    }
-                }
-            }
-            HorizontalDivider(color = c.border, thickness = 1.dp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onNew)
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Plus,
-                    contentDescription = "新建相册",
-                    tint = c.accent,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text("新建相册", style = t.body, color = c.accent)
-            }
+            FolderSheetDivider()
+            FolderSheetRecents(recents = recents, onSelect = onSelect)
+            FolderSheetDivider()
+            FolderSheetNewEntry(onNew = onNew)
         }
         // cancel
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(top = 12.dp)
-                .clip(RoundedCornerShape(100.dp))
-                .background(c.bg)
-                .clickable(onClick = onClose)
-                .height(48.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("取消", style = t.body, color = c.accent)
+        FolderSheetFooter(onClose = onClose)
+    }
+}
+
+/** FolderSheet 列表分割线（24dp 水平 padding）。 */
+@Composable
+private fun FolderSheetDivider() {
+    HorizontalDivider(
+        color = StarVaultTheme.colors.border,
+        thickness = 1.dp,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+    )
+}
+
+/** FolderSheet 中的"最近使用"分段：标题 + pill 形快捷入口。 */
+@Composable
+private fun FolderSheetRecents(
+    recents: List<AlbumFolder>,
+    onSelect: (String) -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Text(
+        text = "最近使用",
+        style = t.micro,
+        color = c.muted,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        recents.forEach { r ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(c.bg)
+                    .border(1.dp, c.border, RoundedCornerShape(999.dp))
+                    .clickable { onSelect(r.id) }
+                    .height(32.dp)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(r.color),
+                )
+                Text(r.name, style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = c.fg)
+            }
         }
+    }
+}
+
+/** FolderSheet 中的"新建相册"行。 */
+@Composable
+private fun FolderSheetNewEntry(onNew: () -> Unit) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onNew)
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Plus,
+            contentDescription = "新建相册",
+            tint = c.accent,
+            modifier = Modifier.size(16.dp),
+        )
+        Text("新建相册", style = t.body, color = c.accent)
+    }
+}
+
+/** FolderSheet 底部"取消"按钮。 */
+@Composable
+private fun FolderSheetFooter(onClose: () -> Unit) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 12.dp)
+            .clip(RoundedCornerShape(100.dp))
+            .background(c.bg)
+            .clickable(onClick = onClose)
+            .height(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("取消", style = t.body, color = c.accent)
     }
 }
 

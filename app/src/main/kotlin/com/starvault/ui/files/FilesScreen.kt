@@ -675,75 +675,100 @@ private fun FileGrid(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(files, key = { it.id }, contentType = { "FileGridCell" }) { f ->
-            val sel = f.id in selectedIds
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(c.surface)
-                    .border(
-                        width = 1.dp,
-                        color = if (sel) c.accent else c.border,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    .background(if (sel) c.accentSoft else c.surface)
-                    .clickable(onClick = { onOpen(f) })
-                    .padding(8.dp),
-            ) {
-                Column {
-                    Box {
-                        FileThumb(type = f.type, size = 40, fillMaxWidth = true, thumbnailUrl = f.thumbnailUrl)
-                        if (sel) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .background(c.accent),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Check,
-                                    contentDescription = "已选",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(12.dp),
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = f.name,
-                        style = t5(),
-                        color = c.fg,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = f.metaSegments.joinToString(" · "),
-                        style = androidx.compose.ui.text.TextStyle(fontSize = 10.5.sp, color = c.muted),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            GridItem(
+                file = f,
+                selected = f.id in selectedIds,
+                onOpen = { onOpen(f) },
+            )
         }
         // 网格底部加载指示器：跨整行 2 列
         if (isLoadingMore && hasMore) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "load_more_footer") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.size(width = 24.dp, height = 2.dp),
-                    )
-                }
+                GridLoadingFooter()
             }
         }
+    }
+}
+
+/** 单个网格项：选中边框 + 缩略图（叠加对勾）+ name + meta。 */
+@Composable
+private fun GridItem(
+    file: FileEntry,
+    selected: Boolean,
+    onOpen: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(c.surface)
+            .border(
+                width = 1.dp,
+                color = if (selected) c.accent else c.border,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .background(if (selected) c.accentSoft else c.surface)
+            .clickable(onClick = onOpen)
+            .padding(8.dp),
+    ) {
+        Column {
+            Box {
+                FileThumb(type = file.type, size = 40, fillMaxWidth = true, thumbnailUrl = file.thumbnailUrl)
+                if (selected) GridCheckBadge()
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = file.name,
+                style = t5(),
+                color = c.fg,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = file.metaSegments.joinToString(" · "),
+                style = androidx.compose.ui.text.TextStyle(fontSize = 10.5.sp, color = c.muted),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** 网格项右上角的"已选"蓝底白勾徽标。 */
+@Composable
+private fun GridCheckBadge() {
+    val c = StarVaultTheme.colors
+    Box(
+        modifier = Modifier
+            .padding(8.dp)
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(c.accent),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Check,
+            contentDescription = "已选",
+            tint = Color.White,
+            modifier = Modifier.size(12.dp),
+        )
+    }
+}
+
+/** 网格底部跨行的加载进度指示器。 */
+@Composable
+private fun GridLoadingFooter() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        LinearProgressIndicator(
+            modifier = Modifier.size(width = 24.dp, height = 2.dp),
+        )
     }
 }
 
@@ -820,30 +845,10 @@ private fun FileThumb(
     if (thumbnailUrl.isNullOrBlank()) {
         if (type == FileType.FOLDER) {
             // ──── folder 无 URL：保留灰色 FOLDER 渐变 + 白 icon（设计意图）────
-            Box(
-                modifier = baseMod.background(brush),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
-                )
-            }
+            ThumbBox(baseMod, brush, icon, fillMaxWidth, isFolder = true)
         } else {
             // ──── 其他类型无 URL：灰底 + 灰 icon（统一 loading 视觉）────
-            Box(
-                modifier = baseMod.background(Color(0xFFFAFAFA)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFFA1A1AA),
-                    modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
-                )
-            }
+            ThumbBox(baseMod, brush = null, icon, fillMaxWidth, isFolder = false)
         }
         return
     }
@@ -871,32 +876,79 @@ private fun FileThumb(
     }
 
     Box(modifier = baseMod.background(Color(0xFFFAFAFA))) {
-        coil3.compose.SubcomposeAsyncImage(
-            model = request,
+        ThumbImage(request, fillMaxWidth)
+    }
+}
+
+/**
+ * 无 URL 时的缩略图 Box：folder 走渐变 + 白 icon；其他类型走灰底 + 灰 icon。
+ */
+@Composable
+private fun ThumbBox(
+    baseMod: Modifier,
+    brush: Brush?,
+    icon: ImageVector,
+    fillMaxWidth: Boolean,
+    isFolder: Boolean,
+) {
+    val mod = if (brush != null) baseMod.background(brush) else baseMod.background(Color(0xFFFAFAFA))
+    val tint = if (isFolder) Color.White else Color(0xFFA1A1AA)
+    Box(
+        modifier = mod,
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            loading = {
-                // loading slot 留空，外层 Box #FAFAFA 灰底透出
-            },
-            error = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFFE4E4E7)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.BrokenImage,
-                        contentDescription = "缩略图加载失败",
-                        tint = Color(0xFF52525B),
-                        modifier = Modifier.size(if (fillMaxWidth) 36.dp else 20.dp),
-                    )
-                }
-            },
-            success = { state ->
-                SubcomposeAsyncImageContent()
-            },
+            tint = tint,
+            modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
+        )
+    }
+}
+
+/**
+ * 有 URL 时的 Coil 异步缩略图，三态（loading / error / success）。
+ */
+@Composable
+private fun ThumbImage(request: ImageRequest, fillMaxWidth: Boolean) {
+    coil3.compose.SubcomposeAsyncImage(
+        model = request,
+        contentDescription = null,
+        modifier = Modifier.fillMaxSize(),
+        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        loading = {
+            // loading slot 留空，外层 Box #FAFAFA 灰底透出
+            ThumbLoading()
+        },
+        error = {
+            ThumbError(fillMaxWidth)
+        },
+        success = { state ->
+            SubcomposeAsyncImageContent()
+        },
+    )
+}
+
+/** 加载中占位（loading slot 留空透出外层灰底）。 */
+@Composable
+private fun ThumbLoading() {
+    // intentionally empty — 外层 Box #FAFAFA 灰底透出
+}
+
+/** 加载失败占位：`#E4E4E7` 深灰底 + `#52525B` 裂图 icon。 */
+@Composable
+private fun ThumbError(fillMaxWidth: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFE4E4E7)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.BrokenImage,
+            contentDescription = "缩略图加载失败",
+            tint = Color(0xFF52525B),
+            modifier = Modifier.size(if (fillMaxWidth) 36.dp else 20.dp),
         )
     }
 }

@@ -85,7 +85,6 @@ fun ShareScreen(
     modifier: Modifier = Modifier,
 ) {
     val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
     Box(modifier = modifier.fillMaxSize().background(c.bg)) {
         // 1) 背景：8 行 file-row stub（模糊用 brightness + alpha 模拟）
         BlurredFileRowsBg()
@@ -118,29 +117,7 @@ fun ShareScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            // header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(text = "分享与转存", style = t.title, color = c.fg)  // 20sp
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onClose),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Close,
-                        contentDescription = "关闭",
-                        tint = c.muted,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
+            ShareScreenHeader(onClose = onClose)
 
             // file card
             FileCard(file = state.file)
@@ -152,36 +129,104 @@ fun ShareScreen(
 
             // 三个 tab 内容
             val ready = state as? ShareUiState.Ready
-            when (state.activeTab) {
-                ShareTab.Link -> LinkTabContent(
-                    state = ready,
-                    onAccessType = onAccessType,
-                    onRegenCode = onRegenCode,
-                    onExpires = onExpires,
-                    onForbidTransfer = onForbidTransfer,
-                    onVipOnly = onVipOnly,
-                    onLoginRequired = onLoginRequired,
-                    onCopy = onCopy,
-                )
-                ShareTab.Save -> SaveTabPlaceholder()
-                ShareTab.Send -> SendTabPlaceholder()
-            }
+            ShareScreenContent(
+                state = state,
+                ready = ready,
+                onAccessType = onAccessType,
+                onRegenCode = onRegenCode,
+                onExpires = onExpires,
+                onForbidTransfer = onForbidTransfer,
+                onVipOnly = onVipOnly,
+                onLoginRequired = onLoginRequired,
+                onCopy = onCopy,
+            )
 
             Spacer(Modifier.height(8.dp))
 
-            // CTA
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(c.accent)
-                    .clickable(onClick = onCta),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text = "立即转存到我的网盘", style = t.subtitle, color = c.accentOn)
-            }
+            ShareScreenFooter(onCta = onCta)
         }
+    }
+}
+
+/**
+ * Share 屏 sheet 顶部 header："分享与转存" 标题 + 右侧 X 关闭按钮。
+ */
+@Composable
+private fun ShareScreenHeader(onClose: () -> Unit) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = "分享与转存", style = t.title, color = c.fg)  // 20sp
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onClose),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Close,
+                contentDescription = "关闭",
+                tint = c.muted,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+    Spacer(Modifier.height(16.dp))
+}
+
+/**
+ * Share 屏 sheet 中部内容：根据 activeTab 渲染 Link / Save / Send 三 tab 的内容。
+ */
+@Composable
+private fun ShareScreenContent(
+    state: ShareUiState,
+    ready: ShareUiState.Ready?,
+    onAccessType: () -> Unit,
+    onRegenCode: () -> Unit,
+    onExpires: () -> Unit,
+    onForbidTransfer: () -> Unit,
+    onVipOnly: () -> Unit,
+    onLoginRequired: () -> Unit,
+    onCopy: () -> Unit,
+) {
+    when (state.activeTab) {
+        ShareTab.Link -> LinkTabContent(
+            state = ready,
+            onAccessType = onAccessType,
+            onRegenCode = onRegenCode,
+            onExpires = onExpires,
+            onForbidTransfer = onForbidTransfer,
+            onVipOnly = onVipOnly,
+            onLoginRequired = onLoginRequired,
+            onCopy = onCopy,
+        )
+        ShareTab.Save -> SaveTabPlaceholder()
+        ShareTab.Send -> SendTabPlaceholder()
+    }
+}
+
+/**
+ * Share 屏 sheet 底部 CTA："立即转存到我的网盘"。
+ */
+@Composable
+private fun ShareScreenFooter(onCta: () -> Unit) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(c.accent)
+            .clickable(onClick = onCta),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = "立即转存到我的网盘", style = t.subtitle, color = c.accentOn)
     }
 }
 

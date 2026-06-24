@@ -91,35 +91,17 @@ fun WallpaperScreen(
                 }
             }
             is WallpaperUiState.Success -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    TopBar(onBack)
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        SwitchCard(
-                            enabled = state.enabled,
-                            onToggle = onToggleEngine,
-                        )
-                        if (state.enabled) {
-                            EngineSections(
-                                mode = state.mode,
-                                album = state.album,
-                                display = state.display,
-                                liveWallpaper = state.liveWallpaper,
-                                onPickMode = onPickMode,
-                                onPickAlbum = onPickAlbum,
-                                onPickDisplay = onPickDisplay,
-                                onToggleLiveWallpaper = onToggleLiveWallpaper,
-                            )
-                        }
-                        Spacer(Modifier.height(40.dp))
-                    }
-                    if (state.enabled) {
-                        FooterBar(onSwitchNow = onSwitchNow)
-                    }
-                }
+                WallpaperHeader(onBack = onBack)
+                WallpaperContent(
+                    state = state,
+                    onToggleEngine = onToggleEngine,
+                    onToggleLiveWallpaper = onToggleLiveWallpaper,
+                    onPickMode = onPickMode,
+                    onPickAlbum = onPickAlbum,
+                    onPickDisplay = onPickDisplay,
+                    onSwitchNow = onSwitchNow,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
                 // Sheet（任意类型）
                 if (state.sheet !is WallpaperSheetState.Closed) {
@@ -160,10 +142,11 @@ fun WallpaperScreen(
     }
 }
 
-/* ───────────────────── TopBar ───────────────────── */
-
+/**
+ * Wallpaper 屏顶部 header：back + "壁纸引擎" 标题（无右侧 toggle）。
+ */
 @Composable
-private fun TopBar(onBack: () -> Unit) {
+private fun WallpaperHeader(onBack: () -> Unit) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
     Row(
@@ -187,6 +170,50 @@ private fun TopBar(onBack: () -> Unit) {
         }
         Text(text = "壁纸引擎", style = t.subtitle, color = c.fg, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.size(40.dp))
+    }
+}
+
+/**
+ * Wallpaper 屏 Success 状态下的主体：SwitchCard + EngineSections + FooterBar。
+ */
+@Composable
+private fun WallpaperContent(
+    state: WallpaperUiState.Success,
+    onToggleEngine: () -> Unit,
+    onToggleLiveWallpaper: () -> Unit,
+    onPickMode: () -> Unit,
+    onPickAlbum: () -> Unit,
+    onPickDisplay: () -> Unit,
+    onSwitchNow: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            SwitchCard(
+                enabled = state.enabled,
+                onToggle = onToggleEngine,
+            )
+            if (state.enabled) {
+                EngineSections(
+                    mode = state.mode,
+                    album = state.album,
+                    display = state.display,
+                    liveWallpaper = state.liveWallpaper,
+                    onPickMode = onPickMode,
+                    onPickAlbum = onPickAlbum,
+                    onPickDisplay = onPickDisplay,
+                    onToggleLiveWallpaper = onToggleLiveWallpaper,
+                )
+            }
+            Spacer(Modifier.height(40.dp))
+        }
+        if (state.enabled) {
+            FooterBar(onSwitchNow = onSwitchNow)
+        }
     }
 }
 
