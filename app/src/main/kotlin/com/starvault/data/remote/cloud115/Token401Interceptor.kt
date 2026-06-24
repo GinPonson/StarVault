@@ -130,7 +130,7 @@ internal class Token401Interceptor(
         val tokenBefore = tokenStore.accessTokenBlocking()
         val tokenNow = tokenStore.accessTokenBlocking()
         if (tokenBefore != null && tokenBefore != tokenNow && !tokenNow.isNullOrBlank()) {
-            Log.d(TAG, "double-check: token already refreshed by sibling, reuse")
+            Log.v(TAG, "double-check: token already refreshed by sibling, reuse")
             return tokenNow
         }
 
@@ -192,6 +192,7 @@ internal class Token401Interceptor(
     private fun parseErrorCode(body: String): Long? = try {
         Json.parseToJsonElement(body).jsonObject["code"]?.jsonPrimitive?.content?.toLongOrNull()
     } catch (e: Throwable) {
+        Log.d(TAG, "parseErrorCode failed", e)
         null
     }
 

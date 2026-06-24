@@ -1,5 +1,6 @@
 package com.starvault.ui.profile
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
@@ -52,7 +53,7 @@ class ProfileViewModel(
             authRepository.fetchUserInfo()
                 .onSuccess { userInfo -> applyUserInfo(userInfo) }
                 .onFailure { e ->
-                    println("[ProfileViewModel] fetchUserInfo failed: ${e.message}")
+                    Log.w(TAG, "fetchUserInfo failed", e)
                     _effect.trySend(Effect.Error(e.message ?: "用户信息加载失败"))
                 }
         }
@@ -113,7 +114,7 @@ class ProfileViewModel(
         }
     }
 
-    /** 退出登录：调 [AuthRepository.signOut] 清 cookies。NavHost 监听到 authState 切 Unauthenticated 会自动跳 Login。
+    /** 退出登录：调 [AuthRepository.signOut] 清本地 token。NavHost 监听到 authState 切 Unauthenticated 会自动跳 Login。
      *
      *  实现为 suspend → 由 Route 端用 rememberCoroutineScope().launch 触发，UI 不阻塞。
      */
@@ -122,10 +123,7 @@ class ProfileViewModel(
             authRepository.signOut()
             // 成功：什么都不做，NavHost 自动跳
         } catch (e: Throwable) {
-            // catch Throwable 而非 Exception：android.util.Log 在 JVM unit test 下会抛
-            // UnsatisfiedLinkError（Error 子类），绕过 Exception catch 导致测试 fail
-            // 这里用 println 兜底：生产靠 logcat，测试靠 stdout
-            println("[ProfileViewModel] signOut failed: ${e.message}")
+            Log.w(TAG, "signOut failed", e)
             _effect.trySend(Effect.Error(e.message ?: "退出登录失败"))
         }
     }
@@ -174,5 +172,9 @@ class ProfileViewModel(
             commonRows = commonRows,
             settingRows = settingRows,
         )
+    }
+
+    private companion object {
+        const val TAG = "ProfileViewModel"
     }
 }

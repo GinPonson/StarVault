@@ -9,7 +9,10 @@ import com.starvault.data.remote.cloud115.UserBaseInfoData
 import com.starvault.data.remote.cloud115.VipInfo
 import com.starvault.data.repository.AuthRepository
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -42,12 +45,18 @@ class ProfileViewModelTest {
 
     @Before
     fun setUp() {
+        // ProfileViewModel 用 android.util.Log.w;JVM unit test 下 stub 掉,免抛 UnsatisfiedLinkError
+        mockkStatic(android.util.Log::class)
+        every { android.util.Log.w(any(), any<String>()) } returns 0
+        every { android.util.Log.w(any(), any<String>(), any()) } returns 0
+
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkStatic(android.util.Log::class)
     }
 
     @Test

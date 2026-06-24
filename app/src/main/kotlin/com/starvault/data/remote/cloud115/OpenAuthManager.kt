@@ -17,8 +17,6 @@ import java.net.SocketTimeoutException
 /**
  * 115 开放平台 OAuth 设备码流编排器。
  *
- * 替换 [ScanLoginManager]（旧的 Cookie 扫码流）。
- *
  * 三步流程：
  *  1. [requestDeviceCode] POST /open/authDeviceCode
  *                          → 拿 uid / time / qrcodeUrl（"https://115.com/scan/dg-<uid>"）
@@ -275,7 +273,7 @@ class OpenAuthManager(
                 }
             } catch (e: SocketTimeoutException) {
                 // 长轮询正常超时（65s read timeout 已到，但服务端没回），按"还在等"处理
-                Log.d(TAG, "status long-poll timeout, keep waiting")
+                Log.v(TAG, "status long-poll timeout, keep waiting")
             } catch (e: Exception) {
                 Log.w(TAG, "polling exception", e)
                 emit(AuthStatus.Error(e.message ?: "轮询异常"))
