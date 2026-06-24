@@ -3,6 +3,7 @@ package com.starvault.data.repository
 import com.starvault.data.local.auth.OpenAuthStore
 import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.remote.cloud115.OpenUserApiService
+import com.starvault.data.remote.cloud115.requireSuccessful
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -124,9 +125,7 @@ open class AuthRepository(
      *  - 成功 → [UserInfo]
      */
     suspend fun fetchUserInfo(): Result<UserInfo> = runCatching {
-        val resp = openUserApi.userInfo()
-        if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-        val body = resp.body() ?: throw IllegalStateException("empty body")
+        val body = openUserApi.userInfo().requireSuccessful()
         if (body.state != true) {
             throw IllegalStateException(body.error ?: body.message ?: "state=${body.state} errno=${body.errno ?: body.errNo ?: -1}")
         }

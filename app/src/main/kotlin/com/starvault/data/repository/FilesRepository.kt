@@ -4,6 +4,7 @@ import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.FileListResponse
 import com.starvault.data.remote.cloud115.OpenFileApiService
 import com.starvault.data.remote.cloud115.ParsedFileItem
+import com.starvault.data.remote.cloud115.requireSuccessful
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -63,13 +64,11 @@ class FilesRepository(
         asc: Int = DEFAULT_ASC,
     ): Result<PagedFiles> {
         return runCatching {
-            val resp = api.listFiles(
+            val body = api.listFiles(
                 cid = cid, offset = offset, limit = limit,
                 showDir = 1, fcMix = 1,
                 order = order, asc = asc,
-            )
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-            val body = resp.body() ?: throw IllegalStateException("empty body")
+            ).requireSuccessful()
             if (!body.isOk) {
                 val msg = body.error ?: "errno=${body.errNo ?: body.errno ?: -1} cid=$cid"
                 throw IllegalStateException(msg)
@@ -107,7 +106,7 @@ class FilesRepository(
         asc: Int = DEFAULT_ASC,
     ): Result<PagedFiles> {
         return runCatching {
-            val resp = api.searchFiles(
+            val body = api.searchFiles(
                 searchValue = searchValue,
                 offset = offset,
                 limit = limit,
@@ -115,9 +114,7 @@ class FilesRepository(
                 asc = asc,
                 showDir = 1,
                 fcMix = 1,
-            )
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-            val body = resp.body() ?: throw IllegalStateException("empty body")
+            ).requireSuccessful()
             if (!body.isOk) {
                 val msg = body.error ?: "errno=${body.errNo ?: body.errno ?: -1}"
                 throw IllegalStateException(msg)

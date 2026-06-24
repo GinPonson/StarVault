@@ -1,6 +1,7 @@
 package com.starvault.data.repository
 
 import com.starvault.data.remote.cloud115.OpenFileApiService
+import com.starvault.data.remote.cloud115.requireSuccessful
 
 /**
  * 媒体预览仓库:把 IMAGE / VIDEO 文件的 fid → 原图 URL / m3u8 URL 打通。
@@ -45,9 +46,7 @@ class MediaPreviewRepository(
      */
     suspend fun fetchMetadata(fid: String): Result<MediaMetadata> {
         return runCatching {
-            val resp = api.getInfo(fileId = fid)
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-            val body = resp.body() ?: throw IllegalStateException("empty body")
+            val body = api.getInfo(fileId = fid).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "code=${body.code} fid=$fid")
             }
@@ -94,9 +93,7 @@ class MediaPreviewRepository(
      */
     suspend fun fetchImageOriginalUrl(fileId: String, pickCode: String): Result<String> {
         return runCatching {
-            val resp = api.downloadUrl(pickCode = pickCode)
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-            val body = resp.body() ?: throw IllegalStateException("empty body")
+            val body = api.downloadUrl(pickCode = pickCode).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
             }
@@ -124,9 +121,7 @@ class MediaPreviewRepository(
      */
     suspend fun fetchVideoM3u8Url(pickCode: String): Result<String> {
         return runCatching {
-            val resp = api.videoPlay(pickCode = pickCode)
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code()}")
-            val body = resp.body() ?: throw IllegalStateException("empty body")
+            val body = api.videoPlay(pickCode = pickCode).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
             }
