@@ -4,15 +4,12 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.UserInfo
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -28,7 +25,7 @@ import kotlinx.coroutines.launch
  *    authState 切 Unauthenticated → NavHost 自动跳回 Login（无需手动 nav.popUp）
  *
  *  signOut / fetchUserInfo 错误（极少见 — DataStore.clear 抛 IOException / proapi 失败）
- *  通过 [effect] 发 [Effect.Error],让 Route 端用 Snackbar 展示。
+ *  通过 [ToastBus.error] 投递,由全局 ToastHost 渲染为 Snackbar。
  */
 class ProfileViewModel(
     private val authRepository: AuthRepository = ServiceLocator.authRepository,
@@ -37,24 +34,18 @@ class ProfileViewModel(
     private val _state = MutableStateFlow<ProfileUiState>(mockState())
     val state: StateFlow<ProfileUiState> = _state.asStateFlow()
 
-    /** 一次性事件（Snackbar / Toast）。
-     *  用 Channel(UNLIMITED) 而非 SharedFlow：UNLIMITED capacity + trySend 永不挂起；
-     *  且 Channel 是 queue 语义，subscriber 启动后从 queue 头取，不会像 SharedFlow replay=0 那样丢值。 */
-    private val _effect = Channel<Effect>(capacity = Int.MAX_VALUE, onBufferOverflow = BufferOverflow.SUSPEND)
-    val effect: Flow<Effect> = _effect.receiveAsFlow()
-
     init {
         loadUserInfo()
     }
 
-    /** 从 proapi /open/user/info 拉 user info + rt_space_info + vip_info，merge 进 mock state。失败 fallback mock + Snackbar。 */
+    /** 从 proapi /open/user/info 拉 user info + rt_space_info + vip_info，merge 进 mock state。失败 fallback mock + ToastBus。 */
     private fun loadUserInfo() {
         viewModelScope.launch {
             authRepository.fetchUserInfo()
                 .onSuccess { userInfo -> applyUserInfo(userInfo) }
                 .onFailure { e ->
                     Log.w(TAG, "fetchUserInfo failed", e)
-                    _effect.trySend(Effect.Error(e.message ?: "用户信息加载失败"))
+                    ToastBus.error(e.message ?: "用户信息加载失败")
                 }
         }
     }
@@ -118,19 +109,16 @@ class ProfileViewModel(
      *
      *  实现为 suspend → 由 Route 端用 rememberCoroutineScope().launch 触发，UI 不阻塞。
      */
-    suspend fun onSignOut() {
-        try {
-            authRepository.signOut()
-            // 成功：什么都不做，NavHost 自动跳
-        } catch (e: Throwable) {
-            Log.w(TAG, "signOut failed", e)
-            _effect.trySend(Effect.Error(e.message ?: "退出登录失败"))
+    fun onSignOut() {
+        viewModelScope.launch {
+            try {
+                authRepository.signOut()
+                // 成功：什么都不做，NavHost 自动跳
+            } catch (e: Throwable) {
+                Log.w(TAG, "signOut failed", e)
+                ToastBus.error(e.message ?: "退出登录失败")
+            }
         }
-    }
-
-    /** 一次性 UI 事件。 */
-    sealed interface Effect {
-        data class Error(val message: String) : Effect
     }
 
     /* ─────────────────── mock state ─────────────────── */

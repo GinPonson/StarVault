@@ -1,5 +1,6 @@
 package com.starvault.ui.profile
 
+import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.OpenAuthApiService
 import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.remote.cloud115.OpenUserApiService
@@ -11,13 +12,15 @@ import com.starvault.data.repository.AuthRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.mockkStatic
+import io.mockk.unmockkObject
 import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -25,7 +28,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
@@ -48,6 +50,10 @@ class ProfileViewModelTest {
         every { android.util.Log.w(any(), any<String>()) } returns 0
         every { android.util.Log.w(any(), any<String>(), any()) } returns 0
 
+        // ProfileViewModel 用 ToastBus.error 投递错误;stub 避免走真 Channel
+        mockkObject(ToastBus)
+        every { ToastBus.error(any()) } returns Unit
+
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
@@ -55,6 +61,7 @@ class ProfileViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         unmockkStatic(android.util.Log::class)
+        unmockkObject(ToastBus)
     }
 
     @Test
@@ -71,14 +78,11 @@ class ProfileViewModelTest {
     fun `onSignOut success does not emit any effect`() = runTest {
         val repo = FakeAuthRepository()  // 默认 userApi 走成功 stub,init 阶段不 emit Error
         val vm = ProfileViewModel(repo)
-        val collected = mutableListOf<ProfileViewModel.Effect>()
-        val collectJob = launch { vm.effect.collect { collected.add(it) } }
 
         vm.onSignOut()
         testScheduler.advanceUntilIdle()
-        collectJob.cancel()
 
-        assertTrue("success should not emit any effect; got=$collected", collected.isEmpty())
+        verify(exactly = 0) { ToastBus.error(any()) }
     }
 
     @Test
@@ -86,17 +90,12 @@ class ProfileViewModelTest {
         val errMsg = "disk full"
         val repo = FakeAuthRepository(throwOnSignOut = RuntimeException(errMsg))
         val vm = ProfileViewModel(repo)
-        val collected = mutableListOf<ProfileViewModel.Effect>()
-        val collectJob = launch { vm.effect.collect { collected.add(it) } }
 
         vm.onSignOut()
         testScheduler.advanceUntilIdle()
-        collectJob.cancel()
 
         // 只有 onSignOut 抛错 → emit 1 个 Error(init 阶段 userApi 走成功 stub,不会 emit)
-        assertEquals(1, collected.size)
-        assertTrue(collected.first() is ProfileViewModel.Effect.Error)
-        assertEquals(errMsg, (collected.first() as ProfileViewModel.Effect.Error).message)
+        verify(exactly = 1) { ToastBus.error(errMsg) }
     }
 
     @Test
@@ -138,15 +137,11 @@ class ProfileViewModelTest {
         coEvery { userApi.userInfo() } throws RuntimeException("boom")
         val repo = FakeAuthRepository(userApi = userApi)
         val vm = ProfileViewModel(repo)
-        val collected = mutableListOf<ProfileViewModel.Effect>()
-        val collectJob = launch { vm.effect.collect { collected.add(it) } }
 
         testScheduler.advanceUntilIdle()
-        collectJob.cancel()
 
         // 至少有 1 个 Error effect(message 含 "boom")
-        val errEffects = collected.filterIsInstance<ProfileViewModel.Effect.Error>()
-        assertTrue("expected at least 1 Error effect, got=$collected", errEffects.isNotEmpty())
+        verify(atLeast = 1) { ToastBus.error(match { it.contains("boom") }) }
     }
 }
 
