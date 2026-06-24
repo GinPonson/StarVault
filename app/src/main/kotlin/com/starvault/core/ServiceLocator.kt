@@ -27,7 +27,11 @@ import okhttp3.OkHttpClient
  * 不引 Hilt / Koin（Phase 1 原则）。MainActivity.onCreate 时 init 一次，全程单例。
  * 所有 ViewModel 通过 [ServiceLocator] 拿依赖。
  *
- * 简单到不需要 Lazy / synchronization：MainActivity.onCreate 早于任何 ViewModel 构造。
+ * ## Init 顺序契约（强约束）
+ *
+ * 所有 `lateinit var` 都依赖 [init] 在 [MainActivity.onCreate] 同步完成,再有任何 ViewModel
+ * 构造。单模块单线程,加 `@Volatile` + `private set` 防止外部写、确保可见性。
+ * 如果未来 [init] 改成异步或被多次调用,会立即抛 `UninitializedPropertyAccessException`。
  *
  * 两个 OkHttpClient：
  *  - `okHttpClient`     : 30s 常规超时（proapi + qrcodeapi POST 端点 + Coil）
