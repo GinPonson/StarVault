@@ -460,14 +460,6 @@ private fun FileList(
                 }
             }
             is HomeUiState.Loading -> Unit   // 占位不渲染
-            is HomeUiState.Error -> {
-                Text(
-                    text = state.message,
-                    style = t.body,
-                    color = c.danger,
-                    modifier = Modifier.padding(vertical = 24.dp),
-                )
-            }
         }
         Spacer(Modifier.height(80.dp))   // 给 FAB 留空间
     }

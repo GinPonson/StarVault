@@ -3,6 +3,7 @@ package com.starvault.ui.preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.data.repository.MediaPreviewRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,12 +47,14 @@ class PreviewVideoViewModel(
                             _state.value = PreviewUiState.Success(meta, u)
                         },
                         onFailure = { e ->
-                            _state.value = PreviewUiState.Error(e.message ?: "无法获取播放地址")
+                            // 失败：_state 保持 Loading,仅 ToastBus 提示
+                            ToastBus.error(e.message ?: "无法获取播放地址")
                         },
                     )
                 },
                 onFailure = { e ->
-                    _state.value = PreviewUiState.Error(e.message ?: "文件不存在或已删除")
+                    // 失败：_state 保持 Loading,仅 ToastBus 提示
+                    ToastBus.error(e.message ?: "文件不存在或已删除")
                 },
             )
         }

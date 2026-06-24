@@ -77,22 +77,4 @@ class ShareScreenshotTest {
             )
         }
     }
-
-    @Test fun share_error() = paparazzi.snapshot {
-        StarVaultTheme {
-            ShareScreen(
-                state = ShareUiState.Error(message = "文件不存在或已被删除"),
-                onClose = {},
-                onTab = {},
-                onAccessType = {},
-                onRegenCode = {},
-                onExpires = {},
-                onForbidTransfer = {},
-                onVipOnly = {},
-                onLoginRequired = {},
-                onCopy = {},
-                onCta = {},
-            )
-        }
-    }
 }

@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
  *            → Error（请求失败，message 来自异常）
  *
  *  错误策略：
- *    网络/解析失败 → FilesUiState.Error(message)；UI 屏已有 Error 分支处理
+ *    网络/解析失败 → _state 不动,仅 ToastBus.error(message)；UI 屏不显示 Error 占位
  *    partial-success（仅文件夹或仅文件成功）由 [FilesRepository] 内部消化，对 UI 是正常 Success
  */
 class FilesViewModel(
@@ -299,11 +299,9 @@ class FilesViewModel(
                 )
             }
             .onFailure { e ->
-                // 失败：清空旧列表，进 Error 态（占位）；toast 由 ToastBus 给出具体原因
+                // 失败：_state 不动(可能保持 Loading 或保留旧 Success),错误仅走 ToastBus
+                // 屏不被错误占位 —— 用户看到原列表/loading,Snackbar 提示原因
                 ToastBus.error(e.message ?: "文件列表加载失败")
-                _state.value = FilesUiState.Error(
-                    message = e.message ?: "文件列表加载失败",
-                )
             }
     }
 

@@ -54,19 +54,4 @@ class HomeScreenshotTest {
             )
         }
     }
-
-    @Test fun home_error() = paparazzi.snapshot {
-        StarVaultTheme {
-            HomeScreen(
-                state = HomeUiState.Error(message = "网络不通，请检查后重试"),
-                onTagClick = {},
-                onAllTagClick = {},
-                onSortClick = {},
-                onFabClick = {},
-                onFileClick = {},
-                onFileMore = {},
-                onQuickClick = {},
-            )
-        }
-    }
 }

@@ -9,7 +9,7 @@ import com.starvault.data.model.TransferStatus
  *
  *  - Loading   : 占位
  *  - Success   : 全部 transfer 列表（按 status 自动分组给 3 个 tab 渲染）
- *  - Error     : 拉取失败
+ *  - Error     : 拉取失败(Phase 1 mock 不再使用,改走 ToastBus 错误提示)
  *
  * 三个 tab 状态过滤（与 HTML `.tab` 一一对应）：
  *  - Active   : RUNNING + PAUSED  （"进行中"，含暂停的以便用户恢复）
@@ -46,18 +46,6 @@ sealed interface TransfersUiState {
         override val upSpeedBps: Long = 0L,
         override val downSpeedBps: Long = 0L,
     ) : TransfersUiState
-
-    data class Error(
-        val message: String,
-        override val activeTab: TransfersTab = TransfersTab.Active,
-    ) : TransfersUiState {
-        override val all: List<Transfer> = emptyList()
-        override val totalActive: Int = 0
-        override val totalDone: Int = 0
-        override val totalOffline: Int = 0
-        override val upSpeedBps: Long = 0L
-        override val downSpeedBps: Long = 0L
-    }
 }
 
 enum class TransfersTab(val label: String) {

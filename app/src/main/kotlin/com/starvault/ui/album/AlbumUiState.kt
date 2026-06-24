@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
  *
  *  - Loading : 占位
  *  - Success : 相册 + 子目录 chip + 日期分组 + 照片网格
- *  - Error   : 拉取失败
+ *  - Error   : 拉取失败(Phase 1 mock 不再使用,改走 ToastBus 错误提示)
  */
 sealed interface AlbumUiState {
 
@@ -21,10 +21,6 @@ sealed interface AlbumUiState {
         val activeSubTab: SubTabId,
         val dateGroups: List<DateGroup>,
         val folderSheet: FolderSheetState,
-    ) : AlbumUiState
-
-    data class Error(
-        val message: String,
     ) : AlbumUiState
 }
 

@@ -111,14 +111,6 @@ fun FilesScreen(
                     Text("加载中…", style = t.body, color = c.muted)
                 }
             }
-            is FilesUiState.Error -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(top = 100.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(state.message, style = t.body, color = c.danger)
-                }
-            }
             is FilesUiState.Success -> {
                 Column(modifier = Modifier.fillMaxSize()) {
                     FilesAppBar(

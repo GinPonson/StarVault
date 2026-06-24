@@ -10,7 +10,7 @@ import com.starvault.data.model.TagColor
  *
  *  - Loading       首次进入：占位空列表，避免 row 闪一下空状态
  *  - Success       正常态：files 列表 + 当前 tag 过滤器（null = 全部）
- *  - Error         取数据失败（Phase 1 mock 不可达，预留）
+ *  - Error         取数据失败(Phase 1 mock 不再使用,改走 ToastBus 错误提示)
  *
  * 排序策略：固定按 mtime desc 排（与 HTML "排序：最近 ▾" 默认一致），
  * 真实接入 115 后可由 ViewModel 暴露 sortKey 字段控制。
@@ -37,14 +37,6 @@ sealed interface HomeUiState {
         override val activeTag: FileTag? = null,
         override val relTimes: Map<String, String> = emptyMap(),
     ) : HomeUiState
-
-    data class Error(
-        val message: String,
-        override val activeTag: FileTag? = null,
-        override val relTimes: Map<String, String> = emptyMap(),
-    ) : HomeUiState {
-        override val files: List<FileItem> = emptyList()
-    }
 }
 
 /**

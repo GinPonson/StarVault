@@ -87,7 +87,6 @@ fun PreviewImageScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Error   -> ErrorBlock(message = state.message, onBack = onBack)
             is PreviewUiState.Success -> {
                 val uiVisible = ImageContent(state = state, onBack = onBack)
 
@@ -209,7 +208,7 @@ private fun ImageContent(
                     CircularProgressIndicator(color = StarVaultTheme.colors.accent)
                 }
             },
-            error = { ErrorBlock(message = "原图加载失败", onBack = onBack) },
+            error = { /* 屏不显示错误占位;由 VM 失败路径 ToastBus.error 提示 */ },
         )
     }
 
@@ -389,43 +388,5 @@ private fun OutlinedActionButton(
 private fun LoadingBlock() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = StarVaultTheme.colors.accent)
-    }
-}
-
-/**
- * 错误块（浅色主题：muted 灰 icon + muted 灰文字 + accent 实心按钮）。
- */
-@Composable
-private fun ErrorBlock(message: String, onBack: () -> Unit) {
-    val c = StarVaultTheme.colors
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            painter = painterResource(id = android.R.drawable.ic_menu_report_image),
-            contentDescription = null,
-            tint = c.muted,
-            modifier = Modifier.size(48.dp),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            message,
-            color = c.muted,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(16.dp))
-        Box(
-            modifier = Modifier
-                .height(40.dp)
-                .background(c.accent)
-                .padding(horizontal = 24.dp)
-                .pointerInput(Unit) { detectTapGestures(onTap = { onBack() }) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("返回", color = c.accentOn, fontSize = 14.sp)
-        }
     }
 }

@@ -24,7 +24,6 @@ class TransfersViewModel : ViewModel() {
         _state.value = when (val s = _state.value) {
             is TransfersUiState.Success -> s.copy(activeTab = tab)
             is TransfersUiState.Loading -> s.copy(activeTab = tab)
-            is TransfersUiState.Error   -> s.copy(activeTab = tab)
         }
     }
 

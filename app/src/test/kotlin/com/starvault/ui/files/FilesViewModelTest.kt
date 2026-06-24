@@ -1,13 +1,18 @@
 package com.starvault.ui.files
 
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.PagedFiles
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -37,11 +42,15 @@ class FilesViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // VM 失败时调 ToastBus.error;stub 避免走真 Channel
+        mockkObject(ToastBus)
+        every { ToastBus.error(any()) } returns Unit
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkObject(ToastBus)
     }
 
     private fun folder(id: String, name: String) = ParsedFileItem(
@@ -172,14 +181,18 @@ class FilesViewModelTest {
     }
 
     @Test
-    fun `repo failure emits Error state`() = runTest {
+    fun `repo failure keeps Success state untouched and toasts`() = runTest {
         val repo = mockk<FilesRepository>()
         coEvery { repo.listFolder(any()) } returns Result.failure(RuntimeException("network down"))
         val vm = FilesViewModel(repo)
         testScheduler.advanceUntilIdle()
 
+        // 失败时 _state 不动(init 时 VM 先 set Loading → set Success(空列表) → 失败保留 Success 不动)
+        // 屏不显示 Error 占位,看到的是空列表(无错误提示)
         val s = vm.state.value
-        assertTrue("expected Error, got $s", s is FilesUiState.Error)
-        assertEquals("network down", (s as FilesUiState.Error).message)
+        assertTrue("expected Success, got $s", s is FilesUiState.Success)
+        assertTrue("expected empty list, got ${(s as FilesUiState.Success).all.size}", s.all.isEmpty())
+        // 错误通过 ToastBus.error 提示
+        verify(exactly = 1) { ToastBus.error("network down") }
     }
 }

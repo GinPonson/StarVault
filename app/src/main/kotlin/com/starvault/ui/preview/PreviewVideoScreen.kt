@@ -52,6 +52,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
 import com.starvault.theme.StarVaultTheme
 import okhttp3.OkHttpClient
 
@@ -91,7 +92,6 @@ fun PreviewVideoScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Error   -> ErrorBlock(message = state.message, onBack = onBack)
             is PreviewUiState.Success -> VideoContent(
                 state = state,
                 onBack = onBack,
@@ -140,12 +140,14 @@ private fun VideoContent(
             }
     }
 
-    // 2. 错误监听：Media3 拉流失败时回 VM 通知（这里只用本地状态显示）
+    // 2. 错误监听：Media3 拉流失败时走 ToastBus 一次性提示（不再屏占位）
     var playerError by remember { mutableStateOf<String?>(null) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                playerError = error.message ?: "视频播放失败"
+                val msg = error.message ?: "视频播放失败"
+                playerError = msg
+                ToastBus.error(msg)
             }
         }
         player.addListener(listener)
@@ -184,11 +186,9 @@ private fun VideoContent(
             },
         )
 
-        // 错误覆盖层（盖在 PlayerView 上面）
-        // playerError 在 != null 分支内被 smart-cast 为 String,无需 !!
-        playerError?.let { err ->
-            ErrorBlock(message = err, onBack = onBack)
-        }
+        // player 错误:用 ToastBus 一次性 Snackbar 提示(已在 DisposableEffect 中 send),
+        // 这里 no-op 渲染(屏已被 PlayerView 占满,不显示 ErrorBlock 屏占位)
+        playerError?.let { /* 错误已发 ToastBus,屏不渲染占位 */ }
 
         // 顶 / 底信息栏：参考 Google Photos 风格（白底 vs 视频黑底强对比）
         TopInfoBar(
@@ -367,43 +367,5 @@ private fun OutlinedActionButton(
 private fun LoadingBlock() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = StarVaultTheme.colors.accent)
-    }
-}
-
-/**
- * 错误块（浅色主题：muted 灰 icon + muted 灰文字 + accent 实心按钮）。
- */
-@Composable
-private fun ErrorBlock(message: String, onBack: () -> Unit) {
-    val c = StarVaultTheme.colors
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            painter = painterResource(id = android.R.drawable.ic_menu_report_image),
-            contentDescription = null,
-            tint = c.muted,
-            modifier = Modifier.size(48.dp),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            message,
-            color = c.muted,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(16.dp))
-        Box(
-            modifier = Modifier
-                .height(40.dp)
-                .background(c.accent)
-                .padding(horizontal = 24.dp)
-                .pointerInput(Unit) { detectTapGestures(onTap = { onBack() }) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("返回", color = c.accentOn, fontSize = 14.sp)
-        }
     }
 }

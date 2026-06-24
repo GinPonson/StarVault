@@ -64,10 +64,4 @@ class ProfileScreenshotTest {
             ProfileScreen(state = mockSuccess)
         }
     }
-
-    @Test fun profile_error() = paparazzi.snapshot {
-        StarVaultTheme {
-            ProfileScreen(state = ProfileUiState.Error(message = "用户信息获取失败"))
-        }
-    }
 }

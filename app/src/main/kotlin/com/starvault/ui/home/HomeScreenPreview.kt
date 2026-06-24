@@ -80,21 +80,6 @@ fun HomeLoadingPreview() = StarVaultTheme {
     )
 }
 
-@Preview(name = "Home/Error",    showBackground = true, widthDp = 412, heightDp = 900)
-@Composable
-fun HomeErrorPreview() = StarVaultTheme {
-    HomeScreen(
-        state = HomeUiState.Error(message = "网络异常，请稍后重试"),
-        onTagClick = {},
-        onAllTagClick = {},
-        onSortClick = {},
-        onFabClick = {},
-        onFileClick = {},
-        onFileMore = {},
-        onQuickClick = {},
-    )
-}
-
 /** 与 ViewModel.homeDesignFiles() 1:1 复刻，供 Preview 使用。*/
 private fun homePreviewFiles(): List<FileItem> = listOf(
     FileItem("h-01", "设计交付 / 2026Q2",            FileType.FOLDER, durationOrCount = "28 项",         mtime = 1_718_000_000_000L, tag = FileTag("工作", TagColor.TAG1)),

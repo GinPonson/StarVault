@@ -7,7 +7,9 @@ import com.starvault.data.model.FileType
  *
  *  - Loading : 占位
  *  - Success : 完整文件列表 + tab 计数 + 视图模式 + 选中集合
- *  - Error   : 拉取失败
+ *
+ *  失败时 `_state` 不动(可能保持 Loading 或保留旧 Success),错误经 [com.starvault.core.ToastBus]
+ *  投递,由全局 ToastHost 渲染为底部 Snackbar —— 屏不显示 Error 占位。
  */
 sealed interface FilesUiState {
 
@@ -54,10 +56,6 @@ sealed interface FilesUiState {
             other = all.count { it.type == FileType.OTHER || it.type == FileType.ZIP },
         )
     }
-
-    data class Error(
-        val message: String,
-    ) : FilesUiState
 }
 
 enum class ViewMode { LIST, GRID }

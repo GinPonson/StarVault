@@ -72,11 +72,6 @@ fun ProfileScreen(
                 Text("加载中…", style = StarVaultTheme.typography.body, color = c.muted)
             }
         }
-        is ProfileUiState.Error -> {
-            Box(modifier = modifier.fillMaxSize().background(c.bg), contentAlignment = Alignment.Center) {
-                Text(state.message, style = StarVaultTheme.typography.body, color = c.danger)
-            }
-        }
         is ProfileUiState.Success -> {
             Column(
                 modifier = modifier

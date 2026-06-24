@@ -78,11 +78,6 @@ fun AlbumScreen(
                     Text("加载中…", style = StarVaultTheme.typography.body, color = c.muted)
                 }
             }
-            is AlbumUiState.Error -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(state.message, style = StarVaultTheme.typography.body, color = c.danger)
-                }
-            }
             is AlbumUiState.Success -> {
                 Column(
                     modifier = Modifier

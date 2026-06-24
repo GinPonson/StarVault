@@ -30,10 +30,6 @@ sealed interface ProfileUiState {
         val commonRows: List<RowItem>,
         val settingRows: List<RowItem>,
     ) : ProfileUiState
-
-    data class Error(
-        val message: String,
-    ) : ProfileUiState
 }
 
 /* ───────────────────── 子模型 ───────────────────── */

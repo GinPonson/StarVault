@@ -8,13 +8,15 @@ import java.util.Locale
 /**
  * Preview 屏的 UI 状态机（IMAGE / VIDEO 共用同一套 sealed）。
  *
- *  三态：
+ *  两态：
  *  - Loading : 初始 / 拉 metadata 或 url 中
  *  - Success : 拿到可播放/可看的资源
- *  - Error   : 文件不存在 / API 失败 / 解码错误
+ *
+ *  失败时 `_state` 不动(保持 Loading),错误经 [com.starvault.core.ToastBus] 投递,
+ *  由全局 ToastHost 渲染为底部 Snackbar —— 屏不显示 Error 占位。
  *
  *  为什么不让 VM 各持一套：两边业务流程同构（getInfo → 拿 URL → 渲染），抽到 shared 让
- *  Route / Screen 都能复用 isLoading / isError 的逻辑分支判断。
+ *  Route / Screen 都能复用 isLoading 的逻辑分支判断。
  */
 sealed interface PreviewUiState {
     val isLoading: Boolean get() = this is Loading
@@ -31,8 +33,6 @@ sealed interface PreviewUiState {
          */
         val mediaUrl: String,
     ) : PreviewUiState
-
-    data class Error(val message: String) : PreviewUiState
 }
 
 /* ─────────────────── 跨 Screen 共用的格式化工具 ─────────────────── */

@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
  *
  *  - Loading : 占位
  *  - Success : 开关 + 4 个 section + footer
- *  - Error   : 拉取失败
+ *  - Error   : 拉取失败(Phase 1 mock 不再使用,改走 ToastBus 错误提示)
  */
 sealed interface WallpaperUiState {
 
@@ -24,10 +24,6 @@ sealed interface WallpaperUiState {
         val albumOptions: List<AlbumRef>,       // sheet 候选
         val childrenOf: Map<String, List<AlbumRef>>,
         val sheet: WallpaperSheetState,
-    ) : WallpaperUiState
-
-    data class Error(
-        val message: String,
     ) : WallpaperUiState
 }
 

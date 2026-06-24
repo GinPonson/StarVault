@@ -7,13 +7,15 @@ import com.starvault.ui.files.FileEntry
 /**
  * 搜索屏 UiState（参考 Lumen `SearchScreen` 风格 + Files 屏 FilesUiState 思路）。
  *
- *  - query 字段贯穿所有状态（即使是 Empty / Error 状态，用户也能继续输入）
+ *  - query 字段贯穿所有状态（即使是 Empty 状态，用户也能继续输入）
  *  - 状态机：
  *    - Idle(query)       : 用户输入但还没搜（空 query / 初始状态）
  *    - Searching(query)  : 正在拉首页
  *    - Success(query, results, ...) : 拉到了
  *    - Empty(query)      : 搜了但无结果
- *    - Error(query, msg) : 拉失败
+ *
+ *  失败时 `_state` 不动(可能保持 Searching 或保留旧 Success),错误经 [com.starvault.core.ToastBus]
+ *  投递,由全局 ToastHost 渲染为底部 Snackbar —— 屏不显示 Error 占位。
  *
  *  设计要点：
  *  - query 不与 UiState 子状态耦合——用户输入时即使 Searching → Idle 切换也无闪烁
@@ -54,12 +56,6 @@ sealed interface SearchUiState {
      *  - UI 显示 "未找到结果" 占位
      */
     data class Empty(override val query: String) : SearchUiState
-
-    /**
-     * 搜索失败（HTTP / 业务 / 网络异常）。
-     *  - UI 显示错误文案 + 返回按钮
-     */
-    data class Error(override val query: String, val message: String) : SearchUiState
 }
 
 /**

@@ -24,7 +24,6 @@ class ShareViewModel : ViewModel() {
         _state.value = when (s) {
             is ShareUiState.Ready -> s.copy(activeTab = tab)
             is ShareUiState.Loading -> s.copy(activeTab = tab)
-            is ShareUiState.Error -> s.copy(activeTab = tab)
         }
     }
 

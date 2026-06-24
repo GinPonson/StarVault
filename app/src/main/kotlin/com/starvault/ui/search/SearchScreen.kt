@@ -96,7 +96,6 @@ fun SearchScreen(
                     onOpen = onOpen,
                 )
                 is SearchUiState.Empty -> EmptyHint(query = state.query)
-                is SearchUiState.Error -> ErrorBlock(message = state.message)
             }
         }
     }
@@ -236,27 +235,6 @@ private fun EmptyHint(query: String) {
                 text = "未找到 \"$query\" 相关结果",
                 style = t.body,
                 color = c.muted,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ErrorBlock(message: String) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "搜索失败",
-                style = t.title,
-                color = c.fg,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = message,
-                style = t.body,
-                color = c.danger,
             )
         }
     }

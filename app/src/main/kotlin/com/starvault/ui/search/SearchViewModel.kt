@@ -100,9 +100,9 @@ class SearchViewModel(
                 )
             }
         }.onFailure { e ->
-            // 失败：保留 Error 占位屏，toast 提示具体原因
+            // 失败：_state 不动(可能保持 Searching),错误仅走 ToastBus
+            // 屏不被错误占位 —— Snackbar 提示原因
             ToastBus.error(e.message ?: "搜索失败")
-            _state.value = SearchUiState.Error(q, e.message ?: "搜索失败")
         }
     }
 

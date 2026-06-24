@@ -85,11 +85,6 @@ fun WallpaperScreen(
                     Text("加载中…", style = StarVaultTheme.typography.body, color = c.muted)
                 }
             }
-            is WallpaperUiState.Error -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(state.message, style = StarVaultTheme.typography.body, color = c.danger)
-                }
-            }
             is WallpaperUiState.Success -> {
                 WallpaperHeader(onBack = onBack)
                 WallpaperContent(

@@ -9,7 +9,7 @@ import com.starvault.data.model.ShareLink
  *
  *  - Loading   : 拉取文件元数据中（背景 row 模糊已显示）
  *  - Ready     : 完整渲染，activeTab 决定显示哪个 tab 内容
- *  - Error     : 文件不存在 / 无权访问
+ *  - Error     : 文件不存在 / 无权访问(Phase 1 mock 不再使用,改走 ToastBus 错误提示)
  *
  * 三个 tab（与 HTML `.tab` 一一对应）：
  *  - Link    : 链接分享（默认，显示 QR + link result + 3 toggle）
@@ -43,12 +43,6 @@ sealed interface ShareUiState {
         val copiedCount: Int = 3,
     ) : ShareUiState
 
-    data class Error(
-        val message: String,
-        override val activeTab: ShareTab = ShareTab.Link,
-    ) : ShareUiState {
-        override val file: FileItem? = null
-    }
 }
 
 enum class ShareTab(val label: String) {

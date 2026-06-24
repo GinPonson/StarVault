@@ -38,7 +38,6 @@ class HomeViewModel : ViewModel() {
         val next = when (current) {
             is HomeUiState.Success -> current.copy(activeTag = tag?.toFileTag())
             is HomeUiState.Loading -> current.copy(activeTag = tag?.toFileTag())
-            is HomeUiState.Error   -> current.copy(activeTag = tag?.toFileTag())
         }
         _state.value = next
     }
