@@ -9,6 +9,11 @@ M1 骨架已完成 — 9 屏 (Login / Home / Player / Share / Transfers / Profil
 全部走 5-file 模式（UiState + ViewModel + Screen + Route + Preview）实现，
 与 design/* 1:1 像素对齐 (Paparazzi baseline 27 张 PNG 回归)。
 
+## 鉴权
+
+115 开放平台 OAuth 设备码流，3 步：`authDeviceCode` → `get/status/` → `deviceCodeToToken`。
+入口：`data/remote/cloud115/OpenAuthManager.kt` + `OpenAuthApiService.kt`（走 proapi / passportapi）。
+
 ## 环境要求
 
 - JDK 21 (Paparazzi 2.0.0-alpha04 plugin runtime 要求；compile target = 17)

@@ -1563,6 +1563,8 @@ class LoginViewModel : ViewModel() {
             .onSuccess { _state.value = LoginUiState.Success }
             .onFailure { _state.value = LoginUiState.Error(it.message ?: "未知错误") }
     }
+
+> OAuth 设备码流：`OpenAuthApiService` + `OpenAuthManager`。
 }
 ```
 
@@ -1625,6 +1627,8 @@ fun LoginScreen(
                 }
                 LoginUiState.Success -> Text("已登录", style = t.subtitle, color = c.success)
             }
+
+> OAuth 设备码流：`OpenAuthApiService` + `OpenAuthManager`。
 
             if (state is LoginUiState.Error) {
                 Spacer(Modifier.height(8.dp))
@@ -3118,6 +3122,8 @@ class LoginScreenshotTest {
     @Test fun login_error() = paparazzi.snapshot {
         StarVaultTheme { LoginScreen(LoginUiState.Error("扫码超时"), {}) }
     }
+
+> OAuth 设备码流：`OpenAuthApiService` + `OpenAuthManager`。
 }
 ```
 
