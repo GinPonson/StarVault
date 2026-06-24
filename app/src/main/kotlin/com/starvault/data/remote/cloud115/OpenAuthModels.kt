@@ -73,9 +73,11 @@ data class DeviceCodeToTokenResponse(
 )
 
 /**
- * POST /open/authTokenRefresh 的 data。
+ * POST /open/refreshToken 的 data(passportapi 域)。
  *
- * 当前不在本期接入 refresh，留接口位便于 Phase 2 接入自动续期。
+ * 字段映射:同 [DeviceCodeToTokenResponse],只是少了 userId/userName。
+ * 当前由 [Token401Interceptor] 拿到后手动解析 JsonObject(避免 strict 类型在
+ * passportapi 失败响应 `data:[]` 上抛反序列化异常)。
  */
 @Serializable
 data class TokenRefreshResponse(

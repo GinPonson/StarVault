@@ -11,16 +11,18 @@ import java.util.concurrent.TimeUnit
 /**
  * 115 网盘 HTTP 客户端工厂。
  *
- *  2 个 base URL（按用途分）：
- *  - OPEN_AUTH_BASE_URL : qrcodeapi.115.com/  (OAuth 设备码 + 状态轮询)
- *  - OPEN_API_BASE_URL  : proapi.115.com/     (OAuth Bearer 设计归属域:`/open/ufile/...`、`/open/folder/...`、`/open/video/...`、`/open/user/info`)
+ *  3 个 base URL（按用途分）：
+ *  - OPEN_AUTH_BASE_URL  : qrcodeapi.115.com/      (OAuth 设备码 + 状态轮询)
+ *  - PASSPORT_API_BASE_URL : passportapi.115.com/   (OAuth refresh + revoke 域)
+ *  - OPEN_API_BASE_URL   : proapi.115.com/          (OAuth Bearer 业务域:`/open/ufile/...`、`/open/folder/...`、`/open/video/...`、`/open/user/info`)
  *
- *  **不再有 webapi.115.com** — OAuth Bearer 迁移完成,所有端点已迁到 proapi / passportapi。
+ *  **不再有 webapi.115.com** — OAuth Bearer 迁移完成,所有端点已迁到 proapi / passportapi / qrcodeapi。
  *
- *  2 个 OkHttpClient（按超时策略分）：
- *  - 常规 30s client    : proapi + qrcodeapi POST 端点
- *  - long-poll 65s client: qrcodeapi /open/get/status/ 长轮询（115 会挂 30~60s）
- *  - 共用拦截器          : browser-like + AuthHeader（Bearer 注入）
+ *  3 个 OkHttpClient（按超时策略分）：
+ *  - 常规 30s client     : proapi + qrcodeapi + passportapi POST 端点
+ *  - long-poll 65s client : qrcodeapi /open/get/status/ 长轮询（115 会挂 30~60s）
+ *  - refresh client       : passportapi 独立 client,不挂 Token401(防 refresh API 自身 401 递归)
+ *  - 共用拦截器           : browser-like + AuthHeader（Bearer 注入）
  *
  *  Bearer token 由 [AuthHeaderInterceptor] 在请求时从 [com.starvault.data.local.auth.OpenAuthStore] 实时读。
  *
@@ -34,7 +36,17 @@ object Cloud115ApiClient {
     const val OPEN_AUTH_BASE_URL = "https://qrcodeapi.115.com/"
 
     /**
-     * proapi open 域（OAuth Bearer 鉴权）。
+     * passportapi open 域（OAuth 鉴权端点:refresh + revoke）。
+     *
+     *  - `/open/refreshToken`    : 拿新 access_token(走 Bearer + refresh_token)
+     *  - `/open/authTokenRevoke` : signOut 用,吊销 refresh_token
+     *
+     * 对齐 OpenList 115-sdk-go const.go:9-12:passportapi 是 OAuth 鉴权端点的合法域。
+     */
+    const val PASSPORT_API_BASE_URL = "https://passportapi.115.com/"
+
+    /**
+     * proapi open 域（OAuth Bearer 业务域）。
      *
      *  - `/open/ufile/...`   : 文件列表 / 搜索 / downurl(原图直链)
      *  - `/open/folder/...`  : get_info(单文件/夹详情)
@@ -65,20 +77,35 @@ object Cloud115ApiClient {
             .addInterceptor(AuthHeaderInterceptor(tokenProvider))
 
     /**
-     * 独立 refresh 专用 client(只挂浏览器头,**不**挂 Bearer / Token401):
-     *  - 调 `/open/authTokenRefresh` 用 client_id + refresh_token 鉴权,不需要 Bearer
+     * 独立 refresh 专用 client(挂浏览器头 + Bearer,**不**挂 Token401):
+     *  - 调 `/open/refreshToken` 走 **passportapi** 域(对齐 OpenList 115-sdk-go const.go:9-12)
+     *  - 需要 Bearer 鉴权(passportapi 端点要 Authorization 头,refresh_token 表单字段不够)
      *  - 不挂 Token401Interceptor:避免 refresh API 自身过期时递归死循环
      *
      * 共用 [buildOkHttpClient] 的 30s 超时策略(网络请求),但走独立 OkHttpClient 实例
      * (不共享连接池)以隔离连接状态。
      */
-    fun buildBrowserLikeClient(): OkHttpClient =
+    fun buildRefreshClient(tokenProvider: () -> String?): OkHttpClient =
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(browserLikeHeaderInterceptor())
+            .addInterceptor(AuthHeaderInterceptor(tokenProvider))
             .build()
+
+    /**
+     * passportapi 域 Retrofit 工厂。
+     *
+     * 共用 [buildRefreshClient]（30s 超时 + Bearer 注入 + 浏览器伪装头）,
+     * baseUrl 切到 `https://passportapi.115.com/`,给 [OpenAuthApiService.refreshToken] /
+     * [OpenAuthApiService.revokeToken] 用。
+     */
+    fun passportApiRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl(PASSPORT_API_BASE_URL)
+        .client(client)
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
 
     /**
      * 构建常规 30s 超时 OkHttpClient(proapi + OAuth POST 端点 + 401 自动 refresh)。
@@ -86,7 +113,7 @@ object Cloud115ApiClient {
      * 拦截器链路(执行顺序 = add 顺序,响应逆序):
      *  1. browserLikeHeaderInterceptor  (Referer/Origin/Android UA,downurl 签名必需)
      *  2. AuthHeaderInterceptor          (注入 Bearer access_token)
-     *  3. token401Interceptor            (响应阶段:40140124 → refresh → 重发)
+     *  3. token401Interceptor            (响应阶段:401 开头或 99 → refresh → 重发)
      *
      * @param tokenProvider 同步 lambda,从 [OpenAuthStore.accessTokenBlocking] 注入;
      *                       未登录时返回 null(不注入 Authorization 头)
@@ -216,7 +243,7 @@ object Cloud115ApiClient {
     }
 
     /**
-     * Noop 401 拦截器：单元测试 / 工厂链用,不触发任何 40140124 处理逻辑。
+     * Noop 401 拦截器:单元测试 / 工厂链用,不触发任何 401 处理逻辑。
      *
      * 生产代码用 ServiceLocator 注入的 [Token401Interceptor] 真品。
      */

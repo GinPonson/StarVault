@@ -59,7 +59,7 @@ open class AuthRepository(
      *  - accessToken 非空 → Authenticated.EMPTY(uid/userName 后续由 persistTokens 触发 stateIn 重发)
      *  - 空 → Unauthenticated
      *
-     * 不做 expiresAtMs 时钟校验:lazy refresh 走 /open/authTokenRefresh(Phase 2)
+     * 不做 expiresAtMs 时钟校验:lazy refresh 走 /open/refreshToken(由 Token401Interceptor 处理)
      * 或 401 → 用户掉登录 → 重扫。本期简单直接。
      */
     val authState: StateFlow<AuthState> = tokenStore.accessTokenFlow

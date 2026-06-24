@@ -39,8 +39,9 @@ import java.net.SocketTimeoutException
  * 5 分钟 QR 过期由调用方 [com.starvault.ui.login.LoginViewModel] 的 expire countdown 决定，
  * 本类不重复计时；仅在 pollForToken 入参 deadline 到期时 emit Expired。
  *
- * 重要：code_verifier 永不入 DataStore。OAuth 流是"客户端先证明自己有 secret"，
- * 这里 secret 固定为 "0"*64（与 p115client 一致），写在 [OpenAuthApiService.CODE_VERIFIER] 里。
+ * 重要:code_verifier 永不入 DataStore。OAuth 流是"客户端先证明自己有 secret",
+ * 这里 secret 固定为 "0"*64(对齐 OpenList 115-sdk-go),写在 [OpenAuthApiService.CODE_VERIFIER] 里。
+ * code_challenge = base64(sha256(verifier))(由 115 服务端验签)。
  *
  * QR 渲染：115 返回的 `qrcode` 字段是跳转 URL（"https://115.com/scan/dg-xxx"），不是图片 URL；
  * 直接 GET 这个 URL 拿到的是 HTML，BitmapFactory 必失败。所以本类在本地用 zxing 把

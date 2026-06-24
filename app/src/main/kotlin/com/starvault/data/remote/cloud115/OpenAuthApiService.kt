@@ -1,5 +1,6 @@
 package com.starvault.data.remote.cloud115
 
+import kotlinx.serialization.json.JsonElement
 import retrofit2.Response
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
@@ -17,12 +18,15 @@ import retrofit2.http.POST
  *  2. GET  get/status/  (long-poll)  → status==2 时继续；见 [StatusPollApi]
  *  3. POST open/deviceCodeToToken    → 换真 access_token / refresh_token（[deviceCodeToToken]）
  *
- * PKCE 形态（与 p115client `_default_code_*` 一致，见 p115client/const.py:73-76）：
+ * PKCE 形态（对齐 OpenList 115-sdk-go auth.go:21-22 — `calCodeChanllenge`）：
  *  - `client_id`             固定 `100195125`（媒体播放器）
- *  - `code_challenge`        固定 `md5("0"*64) = EOq2AI1WQs9Cq9KqQfhHyw==`
- *  - `code_challenge_method` = `md5`
+ *  - `code_challenge`        `base64(sha256(verifier))` = `YOBb0bGVry+UES+nGXpciCiQWIQM58bflpN1a8YlD1U=`
+ *  - `code_challenge_method` = `sha256`
  *  - `code_verifier`         换 token 时回传 `"0"*64`
  *  - secret 永不入 DataStore：只在 [OpenAuthManager] 内单次会话内传递
+ *
+ * refresh 端点走 `passportapi.115.com/open/refreshToken`(115-sdk-go const.go:9-12),
+ * **不**走 proapi(`open/authTokenRefresh` 是 p115client 旧路径,proapi 上 115 不一定代理)。
  */
 interface OpenAuthApiService {
 
@@ -37,7 +41,7 @@ interface OpenAuthApiService {
     suspend fun requestDeviceCode(
         @Field("client_id") clientId: String = CLIENT_ID,
         @Field("code_challenge") codeChallenge: String = CODE_CHALLENGE,
-        @Field("code_challenge_method") method: String = "md5",
+        @Field("code_challenge_method") method: String = "sha256",
     ): Response<ApiEnvelope<DeviceCodeResponse>>
 
     /**
@@ -57,19 +61,28 @@ interface OpenAuthApiService {
     /**
      * 刷新 access_token。
      *
-     * 本期不接，留接口位供 Phase 2 自动续期使用。
+     * 响应 type 用 [JsonElement](**非** [TokenRefreshResponse]) — passportapi refresh 失败时
+     * `data` 字段是 `[]`(空数组),strict kotlinx-serialization 反序列化会抛
+     * "Expected '{' but had '['"。[Token401Interceptor] 拿到 [JsonElement] 后手动判断:
+     *  - 业务成功 + data 是 object → 解析 [TokenRefreshResponse] 取新 at/rt
+     *  - 业务失败 / data 是 array → 视为 refresh 失败
+     *
+     * 端点实际位置:**passportapi.115.com/open/refreshToken**(对齐 OpenList 115-sdk-go const.go:9-12)。
+     * refresh 端点走独立 Retrofit 实例,baseUrl = `https://passportapi.115.com/`,与设备码/换 token
+     * 用的 qrcodeapi 不同。
      */
     @FormUrlEncoded
-    @POST("open/authTokenRefresh")
+    @POST("open/refreshToken")
     suspend fun refreshToken(
-        @Field("client_id") clientId: String = CLIENT_ID,
         @Field("refresh_token") refreshToken: String,
-    ): Response<ApiEnvelope<TokenRefreshResponse>>
+    ): Response<ApiEnvelope<JsonElement>>
 
     /**
      * 服务端吊销 refresh_token。
      *
      * signOut 流程调用。失败由调用方吞掉（fire-and-forget）。
+     *
+     * 端点走 passportapi 域(与 refreshToken 同源);client_id 不传,只传 refresh_token。
      */
     @FormUrlEncoded
     @POST("open/authTokenRevoke")
@@ -82,12 +95,17 @@ interface OpenAuthApiService {
         /** 媒体播放器 open 应用 — 2026-06 实测可用。 */
         const val CLIENT_ID = "100195125"
 
-        /** md5("0"*64) 对应 verifier。 */
+        /** PKCE verifier("0"*64),换 token 时回传。 */
         const val CODE_VERIFIER =
             "00000000000000000000000000000000" +
             "00000000000000000000000000000000"
 
-        /** MD5(CODE_VERIFIER) 的 base64 表达 — 115 PKCE 用法。 */
-        const val CODE_CHALLENGE = "EOq2AI1WQs9Cq9KqQfhHyw=="
+        /**
+         * PKCE challenge = base64(sha256(CODE_VERIFIER))。
+         *
+         * 对齐 OpenList 115-sdk-go auth.go:21-22 `calCodeChanllenge`(sha256,不是 md5)。
+         * server 端验签时也算 sha256 跟 md5(verifier) 比对,二者必须算法一致。
+         */
+        const val CODE_CHALLENGE = "YOBb0bGVry+UES+nGXpciCiQWIQM58bflpN1a8YlD1U="
     }
 }

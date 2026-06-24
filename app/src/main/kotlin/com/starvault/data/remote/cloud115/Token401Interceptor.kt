@@ -5,21 +5,31 @@ import com.starvault.data.local.auth.OpenAuthStore
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.Response
 
 /**
- * 40140124 自动 refresh 拦截器。
+ * 自动 refresh 拦截器(对齐 OpenList 115-sdk-go authRequest 行为)。
  *
  * ## 触发条件
  *
  * 115 OAuth 的 access_token 过期(默认 2h)不会立即触发 HTTP 401,而是业务层返回
- * `state=false + code=40140124`("access_token 签名校验失败(防篡改)" — p115client 错误码表)。
- * 需要在响应阶段识别并触发 refresh。
+ * `state=false + code=401xxxx`("签名校验失败" / "格式错误" / "verify 失败" 等 —
+ * p115client 错误码表,40140123/40140124/40140126 等)。需要在响应阶段识别并触发 refresh。
+ *
+ * 对齐 OpenList 115-sdk-go request.go:42 `Is401Started(code) || code == 99`:
+ *  - **任何 401 开头**的业务码(40140123/40140124/40140126/40199xx/40100000)→ refresh
+ *  - **code == 99** → refresh(通用鉴权错)
+ *  - 其它业务码(state=true 或 非 401)→ 透传
  *
  * ## 流程
  *
- *  1. **peekBody** 8KB 不消耗响应流,扫描 `"code":40140124`
+ *  1. **peekBody** 8KB 不消耗响应流,JSON 解析出 `code` 字段
  *  2. 命中 → 拿 [Mutex] 串行化(避免 N 个并发请求各自 refresh)
  *  3. double-check:其它协程可能已 refresh 完,tokenStore 里的 at 已变 — 直接用
  *  4. 调 [OpenAuthApiService.refreshToken](**走独立 client,不带本拦截器,防递归**)
@@ -28,9 +38,9 @@ import okhttp3.Response
  *
  * ## 边界
  *
- *  - **refresh_token 也过期** → refresh 业务失败,返回原 40140124 resp,UI 报"登录失效",NavHost 跳 Login
+ *  - **refresh_token 也过期** → refresh 业务失败,返回原 401 resp,UI 报"登录失效",NavHost 跳 Login
  *  - **网络断** → refresh 抛异常,Mutex 释放,原 401 resp 返回,UI 报网络错
- *  - **重发后再 40140124** → `X-Token-Retry: 1` header 阻止递归,放弃(极罕见,refresh_token 已被服务端吊销)
+ *  - **重发后再 401** → `X-Token-Retry: 1` header 阻止递归,放弃(极罕见,refresh_token 已被服务端吊销)
  *
  * ## 同步阻塞
  *
@@ -43,7 +53,9 @@ import okhttp3.Response
  * 我们的 ViewModel 在 `viewModelScope`(Dispatchers.Main)发 API,Retrofit/Suspend 切到
  * OkHttp 的 worker 池后才进 interceptor;**主线程不会冻**。
  *
- * 参考:p115client/p115client.py 40140124 = "access_token 签名校验失败(防篡改)"
+ * 参考:
+ *  - OpenList 115-sdk-go utils.go:21-24 `Is401Started`
+ *  - OpenList 115-sdk-go request.go:33-50 `authRequest` 自动 refresh
  *
  * @param tokenStore  DataStore 持久化(同步读 at/rt,suspend 写新 token)
  * @param refreshApi  refresh 端点专用 API(必须走不带本 interceptor 的独立 client)
@@ -57,11 +69,9 @@ internal class Token401Interceptor(
 
     companion object {
         private const val TAG = "Token401Interceptor"
-        /** p115client 错误码:`access_token 签名校验失败(防篡改)` — refresh 触发标志。 */
-        private const val EXPIRED_CODE = 40140124
-        /** peekBody 字节上限;40140124 响应 < 200B,8KB 留 40x 余量。 */
+        /** peekBody 字节上限;401 错误响应 < 200B,8KB 留 40x 余量。 */
         private const val PEEK_BYTES = 8 * 1024L
-        /** 重发请求携带,第二次命中 40140124 时放弃(防递归 + 防死循环)。 */
+        /** 重发请求携带,第二次命中 401 时放弃(防递归 + 防死循环)。 */
         private const val RETRY_HEADER = "X-Token-Retry"
     }
 
@@ -72,18 +82,19 @@ internal class Token401Interceptor(
         // 401 / 5xx:业务层没拿到(走 HTTP 层)→ 不归本拦截器管,原样返回
         if (!resp.isSuccessful) return resp
 
-        // 二次递归防护:重发后还 40140124 → 放弃
+        // 二次递归防护:重发后还 401 → 放弃
         if (req.header(RETRY_HEADER) != null) {
             return resp
         }
 
-        // peekBody 不消耗响应流;只读 8KB 检查业务码
+        // peekBody 不消耗响应流;只读 8KB,JSON 解析 `code` 字段
         val bodyString = resp.peekBody(PEEK_BYTES).string()
-        val isExpired = bodyString.contains("\"code\":$EXPIRED_CODE") ||
-                        bodyString.contains("\"$EXPIRED_CODE\"")
-        if (!isExpired) return resp
+        val code = parseErrorCode(bodyString)
+        if (!isExpiredCode(code)) {
+            return resp
+        }
 
-        Log.w(TAG, "40140124 on ${req.url} → refresh access_token")
+        Log.w(TAG, "code=$code on ${req.url} → refresh access_token")
 
         val newToken = runBlocking {
             mutex.withLock {
@@ -92,8 +103,8 @@ internal class Token401Interceptor(
         }
 
         if (newToken.isNullOrBlank()) {
-            // refresh 失败:返回原 40140124 resp,UI 层报"登录失效"
-            Log.w(TAG, "refresh failed, returning original 40140124 resp")
+            // refresh 失败:返回原 401 resp,UI 层报"登录失效"
+            Log.w(TAG, "refresh failed, returning original $code resp")
             return resp
         }
 
@@ -141,25 +152,55 @@ internal class Token401Interceptor(
             Log.e(TAG, "refresh HTTP ${refreshResp.code()}")
             return null
         }
-        val data = refreshResp.body()?.takeIf { it.isOk }?.data
-        if (data == null) {
-            Log.e(TAG, "refresh biz fail: ${refreshResp.body()?.message}")
+        val env = refreshResp.body() ?: return null
+        if (!env.isOk) {
+            Log.e(TAG, "refresh biz fail: ${env.message}")
             return null
         }
-        val newAt = data.accessToken
-        val newRt = data.refreshToken
+        // data 字段是 JsonElement(非 TokenRefreshResponse),因为 passportapi refresh 失败响应
+        // data 是 [] 空数组,strict 类型不兼容。手动解析 JsonObject:
+        val dataObj = env.data as? JsonObject ?: run {
+            Log.e(TAG, "refresh data is not object: ${env.data}")
+            return null
+        }
+        val newAt = dataObj["access_token"]?.jsonPrimitive?.content
+        val newRt = dataObj["refresh_token"]?.jsonPrimitive?.content
         if (newAt.isNullOrBlank() || newRt.isNullOrBlank()) {
             Log.e(TAG, "refresh response missing access_token / refresh_token")
             return null
         }
+        val expiresIn = dataObj["expires_in"]?.jsonPrimitive?.content?.toLongOrNull() ?: 7200L
 
         // 4) 落库
         tokenStore.saveRefreshedTokens(
             accessToken = newAt,
             refreshToken = newRt,
-            expiresIn = data.expiresIn ?: 7200L,
+            expiresIn = expiresIn,
         )
         Log.i(TAG, "refresh ok, new at=${newAt.take(8)}...")
         return newAt
     }
+
+    /**
+     * 从 peek 出来的 body 字符串解析 `code` 字段。
+     *
+     * 用 kotlinx-serialization 而不是 substring contains:
+     *  - 不依赖 `code` 字段在 JSON 里的具体位置(避免误判)
+     *  - 对 40140124 / 40140123 / 40140126 / 40100000 / 99 都能稳定提取
+     *  - JSON 解析失败 → 返回 null(非 JSON 响应按"非 401"处理)
+     */
+    private fun parseErrorCode(body: String): Long? = try {
+        Json.parseToJsonElement(body).jsonObject["code"]?.jsonPrimitive?.content?.toLongOrNull()
+    } catch (e: Throwable) {
+        null
+    }
+
+    /**
+     * 判断 [code] 是否应该触发 refresh(对齐 OpenList 115-sdk-go `Is401Started || code == 99`):
+     *  - 任何 401 开头的码(40140123/40140124/40140126/40199xx/40100000)
+     *  - code == 99(通用鉴权错)
+     *  - null / 其它 → 不触发
+     */
+    private fun isExpiredCode(code: Long?): Boolean = code != null &&
+        (code == 99L || code.toString().startsWith("401"))
 }

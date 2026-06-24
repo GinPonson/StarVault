@@ -120,7 +120,7 @@ class OpenAuthStore(private val context: Context) {
     /**
      * Refresh 成功后写回新 token 三件套,保留 uid/userName/vipLevelName。
      *
-     * 调用方:`Token401Interceptor` 收到 40140124 时,同步阻塞走完 refresh 拿到新 at/rt 后调用。
+     * 调用方:`Token401Interceptor` 收到 401 开头(或 code==99)时,同步阻塞走完 refresh 拿到新 at/rt 后调用。
      * 同步接口(拦截器要 runBlocking),所以本方法内部不挂起外层工作。
      *
      * @param accessToken  新的 Bearer 鉴权串(必填)
