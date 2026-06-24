@@ -146,7 +146,10 @@ private fun SheetBody(
             }
         } else {
             // ───── 二级菜单：选升降序 ─────
-            val selectedLabel = SORT_FIELDS.firstOrNull { it.field == pickedField }?.label ?: ""
+            // pickedField 是 rememberSaveable 委托属性,Kotlin 不支持 smart-cast
+            // (getter 可能被并发修改),所以用本地 val 一次性 snapshot 出非空值
+            val field = pickedField ?: return@Column
+            val selectedLabel = SORT_FIELDS.firstOrNull { it.field == field }?.label ?: ""
             SortHeader(
                 title = "按$selectedLabel",
                 onBack = { pickedField = null },
@@ -155,14 +158,14 @@ private fun SheetBody(
             SortRow(
                 label = "降序",
                 arrow = "▾",
-                isSelected = pickedField == currentField && currentAsc == 0,
-                onClick = { onPicked(pickedField!!, 0) },
+                isSelected = field == currentField && currentAsc == 0,
+                onClick = { onPicked(field, 0) },
             )
             SortRow(
                 label = "升序",
                 arrow = "▴",
-                isSelected = pickedField == currentField && currentAsc == 1,
-                onClick = { onPicked(pickedField!!, 1) },
+                isSelected = field == currentField && currentAsc == 1,
+                onClick = { onPicked(field, 1) },
             )
         }
     }

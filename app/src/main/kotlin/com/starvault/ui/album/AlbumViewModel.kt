@@ -21,10 +21,13 @@ class AlbumViewModel : ViewModel() {
 
     fun openSheet() {
         val s = _state.value as? AlbumUiState.Success ?: return
+        // recents 是 mock 写死的两个固定 id,用 requireNotNull 替代 !! 便于排错
+        val travel = requireNotNull(albumsById("travel")) { "missing mock album: travel" }
+        val family = requireNotNull(albumsById("family")) { "missing mock album: family" }
         _state.value = s.copy(folderSheet = FolderSheetState.Open(
             albums = allAlbums(),
             childrenOf = childrenMap(),
-            recents = listOf(albumsById("travel")!!, albumsById("family")!!),
+            recents = listOf(travel, family),
             currentId = s.currentAlbum.id,
         ))
     }

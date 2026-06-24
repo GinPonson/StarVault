@@ -37,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -186,8 +185,9 @@ private fun VideoContent(
         )
 
         // 错误覆盖层（盖在 PlayerView 上面）
-        if (playerError != null) {
-            ErrorBlock(message = playerError!!, onBack = onBack)
+        // playerError 在 != null 分支内被 smart-cast 为 String,无需 !!
+        playerError?.let { err ->
+            ErrorBlock(message = err, onBack = onBack)
         }
 
         // 顶 / 底信息栏：参考 Google Photos 风格（白底 vs 视频黑底强对比）
