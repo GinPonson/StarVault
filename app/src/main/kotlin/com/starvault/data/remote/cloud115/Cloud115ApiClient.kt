@@ -224,6 +224,15 @@ object Cloud115ApiClient {
         openApiRetrofit(client).create(OpenUserApiService::class.java)
 
     /**
+     * proapi 域 [OpenUploadApiService] 工厂（共享 OkHttpClient，M2 上传用）。
+     *
+     * 走 [okHttpClient] 主链路：Bearer 注入 + 401 auto-refresh 全复用，
+     * 跟 `openFileApiService(client)` 同模式。
+     */
+    fun openUploadApiService(client: OkHttpClient): OpenUploadApiService =
+        openApiRetrofit(client).create(OpenUploadApiService::class.java)
+
+    /**
      * 浏览器伪装头：Referer/Origin/User-Agent 全用 115 域名 + Android UA，
      * 否则 115 部分端点返回 state=false + 跨域拦截。
      *

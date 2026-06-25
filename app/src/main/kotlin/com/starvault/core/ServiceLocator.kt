@@ -10,6 +10,7 @@ import com.starvault.data.remote.cloud115.Cloud115ApiClient
 import com.starvault.data.remote.cloud115.OpenAuthApiService
 import com.starvault.data.remote.cloud115.OpenAuthManager
 import com.starvault.data.remote.cloud115.OpenFileApiService
+import com.starvault.data.remote.cloud115.OpenUploadApiService
 import com.starvault.data.remote.cloud115.OpenUserApiService
 import com.starvault.data.remote.cloud115.StatusPollApi
 import com.starvault.data.remote.cloud115.Token401Interceptor
@@ -62,6 +63,18 @@ object ServiceLocator {
      * proapi open 域用户端点(供 [AuthRepository.fetchUserInfo] 用)。
      */
     lateinit var openUserApi: OpenUserApiService
+        private set
+
+    /**
+     * proapi open 域上传端点(供 [com.starvault.data.upload.UploadInitClient] 用)。
+     *
+     * 走 proapi + Bearer 主链路;401 自动 refresh 全复用 [okHttpClient] 上的
+     * [Token401Interceptor]。M2 spec §3.1 三端点:
+     *  - GET  /open/upload/get_token
+     *  - POST /open/upload/init
+     *  - POST /open/upload/resume(M3 才用,本 spec 不实现)
+     */
+    lateinit var openUploadApi: OpenUploadApiService
         private set
 
     lateinit var authManager: OpenAuthManager
@@ -151,6 +164,7 @@ object ServiceLocator {
         statusPollApi = Cloud115ApiClient.statusPollApiService(statusPollClient)
         openUserApi   = Cloud115ApiClient.openUserApiService(okHttpClient)
         openFileApi   = Cloud115ApiClient.openFileApiService(okHttpClient)
+        openUploadApi = Cloud115ApiClient.openUploadApiService(okHttpClient)
         authManager   = OpenAuthManager(api = openAuthApi, statusApi = statusPollApi)
         authRepository = AuthRepository(
             tokenStore  = tokenStore,
