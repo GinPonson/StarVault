@@ -1,5 +1,0 @@
-[
-  {"fileId":"f02","url":"https://starvault.example/s/abc123","accessCode":"8848","expiresAt":1722470400},
-  {"fileId":"f04","url":"https://starvault.example/s/def456","accessCode":"1234","expiresAt":null},
-  {"fileId":"f05","url":"https://starvault.example/s/ghi789","accessCode":"5678","expiresAt":1725062400}
-]
