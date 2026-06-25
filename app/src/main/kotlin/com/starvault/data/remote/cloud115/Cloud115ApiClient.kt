@@ -65,10 +65,15 @@ object Cloud115ApiClient {
     }
 
     /**
-     * 共用 Builder：注入浏览器伪装头 + Bearer 拦截器。不同超时在此基础上覆写。
+     * 共用 Builder：注入浏览器伪装头 + Bearer 拦截器 + callTimeout（总超时）。
+     *
+     * callTimeout 覆盖整个 call 生命周期：DNS 解析 + TCP 建连 + TLS 握手 + 请求体写出 + 响应体读入。
+     * 缺它时 OkHttp 内部 `dns.lookup` 在某些系统上会无限重试,导致 `onFailure` 永远不触发,
+     * ViewModel 卡在 Loading。30s 是 connectTimeout/读写超时的上限,不影响正常请求。
      */
     private fun baseBuilder(tokenProvider: () -> String?): OkHttpClient.Builder =
         OkHttpClient.Builder()
+            .callTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(browserLikeHeaderInterceptor())
             .addInterceptor(AuthHeaderInterceptor(tokenProvider))
 
@@ -83,6 +88,7 @@ object Cloud115ApiClient {
      */
     fun buildRefreshClient(tokenProvider: () -> String?): OkHttpClient =
         OkHttpClient.Builder()
+            .callTimeout(30, TimeUnit.SECONDS)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
