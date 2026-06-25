@@ -2,7 +2,9 @@ package com.starvault.screenshot
 
 import app.cash.paparazzi.Paparazzi
 import com.android.ide.common.rendering.api.SessionParams
-import com.starvault.fixtures.FixturePresets
+import com.starvault.data.model.Direction
+import com.starvault.data.model.Transfer
+import com.starvault.data.model.TransferStatus
 import com.starvault.theme.StarVaultTheme
 import com.starvault.ui.transfers.TransfersScreen
 import com.starvault.ui.transfers.TransfersTab
@@ -30,7 +32,7 @@ class TransfersScreenshotTest {
         StarVaultTheme {
             TransfersScreen(
                 state = TransfersUiState.Success(
-                    all = FixturePresets.transfers(),
+                    all = mockTransfers(),
                     activeTab = TransfersTab.Active,
                     upSpeedBps = 524288,
                     downSpeedBps = 5242880,
@@ -50,7 +52,7 @@ class TransfersScreenshotTest {
         StarVaultTheme {
             TransfersScreen(
                 state = TransfersUiState.Success(
-                    all = FixturePresets.transfers(),
+                    all = mockTransfers(),
                     activeTab = TransfersTab.Done,
                 ),
                 onSearch = {},
@@ -68,7 +70,7 @@ class TransfersScreenshotTest {
         StarVaultTheme {
             TransfersScreen(
                 state = TransfersUiState.Success(
-                    all = FixturePresets.transfers(),
+                    all = mockTransfers(),
                     activeTab = TransfersTab.Offline,
                 ),
                 onSearch = {},
@@ -81,4 +83,12 @@ class TransfersScreenshotTest {
             )
         }
     }
+
+    // 4 条覆盖 RUNNING / SUCCESS / PAUSED / FAILED 全状态的 mock
+    private fun mockTransfers(): List<Transfer> = listOf(
+        Transfer("t01", "movie.mp4",   Direction.DOWN, 2_147_483_648, 1_073_741_824, 5_242_880,  TransferStatus.RUNNING, 1_718_100_000),
+        Transfer("t02", "song.flac",   Direction.UP,   52_428_800,     52_428_800,     0,          TransferStatus.SUCCESS, 1_718_000_000),
+        Transfer("t03", "doc.pdf",     Direction.DOWN, 5_242_880,      2_621_440,      0,          TransferStatus.PAUSED,  1_717_900_000),
+        Transfer("t04", "corrupt.avi", Direction.DOWN, 209_715_200,    52_428_800,     0,          TransferStatus.FAILED, 1_717_800_000),
+    )
 }
