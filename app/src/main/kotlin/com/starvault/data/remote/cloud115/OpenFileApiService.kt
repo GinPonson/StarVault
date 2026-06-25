@@ -1,6 +1,8 @@
 package com.starvault.data.remote.cloud115
 
 import retrofit2.Response
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Query
@@ -104,14 +106,15 @@ interface OpenFileApiService {
      * 官方文档:https://www.yuque.com/115yun/open/um8whr91bxb5997o
      * OpenList 同步实现:OpenListTeam/115-sdk-go/fs.go:308-319(DownURL)。
      *
-     * **关键约束 — 必须传 Android UA**:
-     *  115 CDN 端按 UA 签发不同 URL,移动端 UA 才能拿到 CDN 直链。
-     *  OpenList driver 调用方式:`c.client.DownURL(ctx, pc, base.UserAgent)`(driver.go:151)。
-     *  我们用 OkHttp 拦截器自动注入 Android UA(`browserLikeHeaderInterceptor`),
-     *  调用方**不用**显式传 UA——但要确保 OkHttp client 走的是带拦截器的那条链路。
+     * **关键对齐 OpenList**:
+     *  - `pick_code` 必须放在 **form-urlencoded body**(对齐 OpenList `ReqWithForm(SetFormData(...))`)。
+     *    之前用 `@Query` 把它塞 URL query string,115 CDN 端一直挂死不响应(直到 30s callTimeout)。
+     *  - **必须传 Android UA**(对齐 OpenList `ReqWithUA(base.UserAgent)`):115 CDN 按 UA 签发不同 URL,
+     *    移动端 UA 才能拿到 CDN 直链。我们用 OkHttp 拦截器自动注入(`browserLikeHeaderInterceptor`),
+     *    调用方**不用**显式传 UA——但要确保 OkHttp client 走的是带拦截器的那条链路。
      *
      * 参数:
-     *  - pick_code : 文件提取码(必填,从 getInfo 拿)
+     *  - pick_code : 文件提取码(必填,从 getInfo 拿),作为 form field 提交
      *
      * 响应:[OpenDownUrlResponse]:
      *  - data : `Map<file_id, OpenDownUrlItem>`,key 是 file_id(string)
@@ -120,9 +123,10 @@ interface OpenFileApiService {
      * **取数据方式**:OpenList 用 `resp[obj.GetID()]`,我们先有 file_id 再调,直接 `resp.data[fid]`。
      * 如果只有 pickCode 没有 fileId,fallback 取第一个 entry。
      */
+    @FormUrlEncoded
     @POST("open/ufile/downurl")
     suspend fun downloadUrl(
-        @Query("pick_code") pickCode: String,
+        @Field("pick_code") pickCode: String,
     ): Response<OpenDownUrlResponse>
 
     /**
