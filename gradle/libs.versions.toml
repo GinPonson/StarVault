@@ -34,6 +34,9 @@ datastore = "1.1.1"
 # Group ID: com.aliyun.dpa (aliyun-oss is wrong — that's the Aliyun console namespace, not the SDK)
 aliyun-oss = "2.9.9"
 
+# WorkManager (M2 upload background + foreground)
+work-runtime = "2.10.3"
+
 # Testing
 paparazzi = "2.0.0-alpha04"
 junit = "4.13.2"
@@ -82,6 +85,10 @@ zxing-core                 = { module = "com.google.zxing:core", version.ref = "
 # Aliyun OSS Android SDK (M2 upload — 115 = Aliyun OSS storage layer)
 # https://github.com/aliyun/aliyun-oss-android-sdk  README uses `com.aliyun.dpa:oss-android-sdk:+`
 aliyun-oss-android        = { module = "com.aliyun.dpa:oss-android-sdk", version.ref = "aliyun-oss" }
+
+# WorkManager (M2 upload — CoroutineWorker + setProgress)
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work-runtime" }
+androidx-work-testing      = { module = "androidx.work:work-testing", version.ref = "work-runtime" }
 
 # Media playback (Preview 视频 m3u8 流播放)
 media3-exoplayer          = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }

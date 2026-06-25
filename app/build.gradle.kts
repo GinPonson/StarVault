@@ -95,6 +95,8 @@ dependencies {
     implementation(libs.media3.datasource.okhttp)
     // Aliyun OSS Android SDK(M2 upload:115 storage layer = Aliyun OSS,见 spec §3.3)
     implementation(libs.aliyun.oss.android)
+    // WorkManager(M2 upload 后台 + setProgress)
+    implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
@@ -103,6 +105,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockwebserver)
+    testImplementation(libs.androidx.work.testing)
 }
 
 // Gradle 9 + Paparazzi 2.0.0-alpha04 兼容性：禁用 HTML test reports

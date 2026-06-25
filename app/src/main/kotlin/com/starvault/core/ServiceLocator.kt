@@ -17,6 +17,9 @@ import com.starvault.data.remote.cloud115.Token401Interceptor
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
+import com.starvault.data.upload.OssUploader
+import com.starvault.data.upload.UploadInitClient
+import com.starvault.data.uploadworker.UploadExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
@@ -75,6 +78,29 @@ object ServiceLocator {
      *  - POST /open/upload/resume(M3 才用,本 spec 不实现)
      */
     lateinit var openUploadApi: OpenUploadApiService
+        private set
+
+    /**
+     * 上传执行器(Phase 3 注入)— [com.starvault.data.uploadworker.UploadWorker] 通过此
+     * 拿依赖,保持 Worker 本体纯 WorkManager 适配,业务在 [UploadExecutor] 里。
+     */
+    lateinit var uploadInitClient: UploadInitClient
+        private set
+
+    /**
+     * 上传 OSS 编排器(Phase 2 注入)— [UploadExecutor] 通过此调 Aliyun OSS。
+     * 默认用 [com.starvault.data.upload.OssUploader.NullOssOperations](任何调用都抛),
+     * ServiceLocator.init 阶段需要替换成真 [com.starvault.data.upload.AliyunOssOperations] —
+     * 那是 Phase 5 接 [AliyunOssClientFactory] 时的事。
+     */
+    lateinit var ossUploader: OssUploader
+        private set
+
+    /**
+     * 上传执行器(Phase 3)— Worker 业务编排。
+     * 构造在 ServiceLocator.init 末尾,因为依赖 [uploadInitClient] / [ossUploader] / [openUploadApi]。
+     */
+    lateinit var uploadExecutor: UploadExecutor
         private set
 
     lateinit var authManager: OpenAuthManager
@@ -174,6 +200,19 @@ object ServiceLocator {
         )
         filesRepository = FilesRepository(api = openFileApi)
         mediaPreviewRepository = MediaPreviewRepository(api = openFileApi)
+
+        // M2 upload 依赖(Phase 3 引入)
+        uploadInitClient = UploadInitClient(api = openUploadApi)
+        // ossUploader 必须由调用方在 init 末尾注入(Phase 5 引入 AliyunOssClientFactory) —
+        // 这里用 default NullOssOperations 占位,让 ServiceLocator 编译通过。
+        // Phase 5 修改:替换成真 AliyunOssOperations。
+        ossUploader = OssUploader()
+        uploadExecutor = UploadExecutor(
+            uploadInitClient = uploadInitClient,
+            ossUploader = ossUploader,
+            api = openUploadApi,
+        )
+
         // Coil 全局 ImageLoader 注入 OkHttpNetworkFetcher（带 Bearer）
         SingletonImageLoader.setSafe { ctx ->
             ImageLoader.Builder(ctx)
