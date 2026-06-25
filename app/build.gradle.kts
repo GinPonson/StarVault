@@ -93,6 +93,8 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.datasource.okhttp)
+    // Aliyun OSS Android SDK(M2 upload:115 storage layer = Aliyun OSS,见 spec §3.3)
+    implementation(libs.aliyun.oss.android)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

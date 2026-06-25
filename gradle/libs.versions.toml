@@ -30,6 +30,10 @@ media3 = "1.4.1"
 # Local storage
 datastore = "1.1.1"
 
+# Aliyun OSS (M2 upload — 115 storage layer is Aliyun OSS)
+# Group ID: com.aliyun.dpa (aliyun-oss is wrong — that's the Aliyun console namespace, not the SDK)
+aliyun-oss = "2.9.9"
+
 # Testing
 paparazzi = "2.0.0-alpha04"
 junit = "4.13.2"
@@ -74,6 +78,10 @@ coil-network-okhttp        = { module = "io.coil-kt.coil3:coil-network-okhttp", 
 
 # QR encoding (LoginScreen)
 zxing-core                 = { module = "com.google.zxing:core", version.ref = "zxing" }
+
+# Aliyun OSS Android SDK (M2 upload — 115 = Aliyun OSS storage layer)
+# https://github.com/aliyun/aliyun-oss-android-sdk  README uses `com.aliyun.dpa:oss-android-sdk:+`
+aliyun-oss-android        = { module = "com.aliyun.dpa:oss-android-sdk", version.ref = "aliyun-oss" }
 
 # Media playback (Preview 视频 m3u8 流播放)
 media3-exoplayer          = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
