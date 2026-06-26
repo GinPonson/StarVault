@@ -110,6 +110,14 @@ class UploadWorker(
                 }
             }
         } catch (t: Throwable) {
+            // CancellationException = 协程被取消(进程被杀 / WorkManager stop / onCleared)
+            // → 抛 Result.retry() 让 WorkManager 在 backoff 后自动重启(默认 EXPONENTIAL,30s 起步)
+            // → 这是 M2 spec §6 进程崩溃后续传的关键
+            if (t is kotlinx.coroutines.CancellationException) {
+                Log.w(TAG, "UploadWorker cancelled, retry: ${t.message}")
+                setProgress(workDataOf(ProgressKey.Phase to Phase.CANCELED))
+                return Result.retry()
+            }
             Log.w(TAG, "UploadWorker.doWork failed", t)
             setProgress(workDataOf(ProgressKey.Phase to Phase.FAILED))
             Result.failure()

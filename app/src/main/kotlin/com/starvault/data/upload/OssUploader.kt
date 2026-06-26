@@ -2,6 +2,7 @@ package com.starvault.data.upload
 
 import android.content.Context
 import android.util.Log
+import com.alibaba.sdk.android.oss.ClientConfiguration
 import com.alibaba.sdk.android.oss.OSSClient
 import com.alibaba.sdk.android.oss.common.auth.OSSStsTokenCredentialProvider
 import com.alibaba.sdk.android.oss.model.AbortMultipartUploadRequest
@@ -377,6 +378,13 @@ fun ossClientFactory(context: Context, sts: UploadGetTokenResp): OSSClient {
         sts.SecurityToken,
     )
     val endpoint = sts.endpoint.trimEnd('/')
-    // OssClientConfiguration 默认即可(M2 暂不调超时 / 代理)
-    return OSSClient(context, endpoint, credentialProvider)
+    // 关键:必须关 HTTPDNS。Aliyun OSS Android SDK 默认 `httpDnsEnable=true`,
+    // 当 scheme 是 http 时会调 `HttpdnsMini.getIpByHostAsync(host)` 把域名解析成 IP
+    // 并把 IP 塞进 URL 替换 hostname。结果是 URL 变成 `http://120.78.115.77/...`,
+    // 而 network_security_config 只配了 `*.aliyuncs.com` 域名,IP 段不在白名单
+    // → Android 抛 `CLEARTEXT communication to <ip> not permitted`,OSS 请求直接拒。
+    // 关闭 HTTPDNS → URL 保留 hostname → `aliyuncs.com` 域名白名单匹配 → 放行。
+    val conf = ClientConfiguration.getDefaultConf()
+    conf.setHttpDnsEnable(false)
+    return OSSClient(context, endpoint, credentialProvider, conf)
 }

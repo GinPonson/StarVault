@@ -25,7 +25,7 @@ data class UploadFileMeta(
  *
  * 不调 `ContentResolver.getType(...)` — 我们传任何类型(M2 限定 M2 上传不限文件类型)。
  *
- * 用法:在 [UploadRoute] 调 `ActivityResultContracts.GetContent` 拿到 `Uri` 后,
+ * 用法:在 [UploadRoute] 调 `ActivityResultContracts.OpenDocument` 拿到 `Uri` 后,
  * 立刻调 `queryFileMeta(context.contentResolver, uri)` 提取 metadata。
  */
 fun queryFileMeta(resolver: ContentResolver, uri: Uri): UploadFileMeta {

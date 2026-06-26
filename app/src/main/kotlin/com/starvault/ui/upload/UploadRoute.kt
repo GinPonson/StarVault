@@ -1,7 +1,9 @@
 package com.starvault.ui.upload
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -27,12 +29,17 @@ import java.util.UUID
  * Button(onClick = { launch() }) { Text("Upload") }
  * ```
  *
- * ## SAF
- *  - `ActivityResultContracts.GetContent('* / *')` 走系统 picker,不需要 READ_EXTERNAL_STORAGE
- *  - `Uri` 是 `content://` 形式,交给 [UploadWorker] 用 ContentResolver.openInputStream 读
+ * ## SAF ([ActivityResultContracts.OpenDocument])
+ *  - **不能用 GetContent**:GetContent 返回的 URI 是 process-scoped grant,进程被杀后
+ *    WorkManager 在新进程重启 [UploadWorker] 时 `ContentResolver.openInputStream` 会
+ *    `SecurityException`(M2 spec §6 续传路径最大坑)
+ *  - OpenDocument 返回的 URI 带 `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`,
+ *    picker 回调里立刻 [ContentResolver.takePersistableUriPermission] 锁定 grant,
+ *    grant 持久化到 ContentResolver,跨进程仍可读
+ *  - 走 DocumentsUI(支持 folder navigation),不是 GetContent 的简化单选面板
  *
  * ## 转账
- *  - picker 拿到 Uri → queryFileMeta 拿 displayName + size
+ *  - picker 拿到 Uri → takePersistableUriPermission → queryFileMeta 拿 displayName + size
  *  - `UploadWorker.enqueue(ctx, uri, targetCid, displayName, sizeBytes)` 返回 UUID
  *  - `transfersViewModel.observeWork(uuid, displayName, sizeBytes)` 启动 collect
  */
@@ -42,13 +49,27 @@ fun rememberUploadLauncher(
 ): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
+        contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        // 关键:OpenDocument 默认带 FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+        // 这里 take 之后 grant 持久化,即使进程被杀 + WorkManager 在新进程重启 Worker,
+        // ContentResolver.openInputStream 仍能读(GetContent contract 不支持,必抛 SecurityException)
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (e: SecurityException) {
+            // 极少数 picker 不带 persistable flag(罕见,如某些 OEM gallery picker),
+            // 当前 picker 选完用户已看到文件选择完成;继续走,后续 force-stop 重启时
+            // 会落到旧路径的 SecurityException(已知问题,M3+ 切 copy-to-cache 兜底)
+            Log.w(TAG, "takePersistableUriPermission failed for $uri", e)
+        }
         val meta = queryFileMeta(context.contentResolver, uri)
         onResult(meta)
     }
-    return remember(launcher) { { launcher.launch("*/*") } }
+    return remember(launcher) { { launcher.launch(arrayOf("*/*")) } }
 }
 
 /**
@@ -106,3 +127,5 @@ fun enqueueUpload(
         totalBytes = meta.sizeBytes,
     )
 }
+
+private const val TAG = "UploadRoute"
