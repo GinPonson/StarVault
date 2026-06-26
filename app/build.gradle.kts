@@ -106,6 +106,8 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockwebserver)
     testImplementation(libs.androidx.work.testing)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.robolectric)
 }
 
 // Gradle 9 + Paparazzi 2.0.0-alpha04 兼容性：禁用 HTML test reports

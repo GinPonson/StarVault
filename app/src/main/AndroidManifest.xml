@@ -4,6 +4,14 @@
     <!-- 扫码登录需联网调 qrcodeapi.115.com -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- M2 上传 Worker 走 ForegroundInfo(API 26+)+ API 34+ 必须 type=DATA_SYNC -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- 通知(Android 13+ 需要 run-time 申请 POST_NOTIFICATIONS,M2 暂不实现 -->
+    <!-- — Phase 5 接入 UploadRoute 时补 run-time request) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
