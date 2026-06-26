@@ -21,14 +21,15 @@ class OpenUploadModelsTest {
     }
 
     @Test fun `UploadGetTokenResp parses case-sensitive JSON keys`() {
-        // 故意大小写敏感:服务端驼峰 `AccessKeyId` / `AccessKeySecret` / `SecurityToken`
+        // 故意大小写敏感:服务端驼峰 `AccessKeyId` / `AccessKeySecret` / `SecurityToken` / `Expiration`
+        // (Expiration 大写 E — 对齐 115 实际响应,实测 2026-06-26 AVD 抓包)
         val src = """
             {
               "endpoint": "https://oss-cn-shanghai.aliyuncs.com",
               "AccessKeyId": "AKID-test",
               "AccessKeySecret": "SK-test",
               "SecurityToken": "STS-token",
-              "expiration": "2026-06-25T12:00:00Z"
+              "Expiration": "2026-06-25T12:00:00Z"
             }
         """.trimIndent()
         val resp = json.decodeFromString(UploadGetTokenResp.serializer(), src)
@@ -37,7 +38,53 @@ class OpenUploadModelsTest {
         assertEquals("AKID-test", resp.AccessKeyId)
         assertEquals("SK-test", resp.AccessKeySecret)
         assertEquals("STS-token", resp.SecurityToken)
-        assertEquals("2026-06-25T12:00:00Z", resp.expiration)
+        assertEquals("2026-06-25T12:00:00Z", resp.Expiration)
+    }
+
+    @Test fun `UploadGetTokenEnvelope parses wrapped response`() {
+        // 115 proapi 统一返回 envelope `{state, code, message, data}`
+        val src = """
+            {
+              "state": true,
+              "code": 0,
+              "message": "",
+              "data": {
+                "endpoint": "https://oss-cn-shenzhen.aliyuncs.com",
+                "AccessKeyId": "STS.NYfb",
+                "AccessKeySecret": "5sKs",
+                "SecurityToken": "CAIS...",
+                "Expiration": "2026-06-26T03:59:31Z"
+              }
+            }
+        """.trimIndent()
+        val env = json.decodeFromString(UploadGetTokenEnvelope.serializer(), src)
+
+        assertEquals(true, env.state)
+        assertEquals(0, env.code)
+        assertEquals("STS.NYfb", env.data.AccessKeyId)
+        assertEquals("CAIS...", env.data.SecurityToken)
+    }
+
+    @Test fun `UploadInitEnvelope parses wrapped response`() {
+        val src = """
+            {
+              "state": true,
+              "code": 0,
+              "message": "",
+              "data": {
+                "status": 1,
+                "bucket": "fhnfile",
+                "object": "6a3deacfce8589ecce5faca06a7153766c412b10",
+                "callback": {"callback":"http://cb","callback_var":"{}"},
+                "pick_code": "pc"
+              }
+            }
+        """.trimIndent()
+        val env = json.decodeFromString(UploadInitEnvelope.serializer(), src)
+
+        assertEquals(true, env.state)
+        assertEquals(1, env.data.status)
+        assertEquals("fhnfile", env.data.bucket)
     }
 
     @Test fun `UploadInitReq serializes file_size as string not Long`() {

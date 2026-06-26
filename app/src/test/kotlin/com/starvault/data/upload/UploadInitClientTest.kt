@@ -3,6 +3,7 @@ package com.starvault.data.upload
 import com.starvault.data.remote.cloud115.CallbackInfo
 import com.starvault.data.remote.cloud115.OpenUploadApiService
 import com.starvault.data.remote.cloud115.UploadCallback
+import com.starvault.data.remote.cloud115.UploadInitEnvelope
 import com.starvault.data.remote.cloud115.UploadInitResp
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -42,6 +43,10 @@ class UploadInitClientTest {
         pick_code = "pc",
     )
 
+    /** Wrap [UploadInitResp] in envelope (115 proapi 统一 `{state, code, message, data}`)。 */
+    private fun env(r: UploadInitResp) =
+        UploadInitEnvelope(state = true, code = 0, message = "", data = r)
+
     @Test fun `init prefixes U_1_ on target and sends no topupload field`() = runBlocking {
         // init() 内部 target = "U_1_$cid",不暴露 target 参数;调用方只传 cid
         coEvery { api.initUpload(
@@ -53,7 +58,7 @@ class UploadInitClientTest {
             pick_code = "",
             sign_key = "",
             sign_val = "",
-        ) } returns Response.success(stubInit())
+        ) } returns Response.success(env(stubInit()))
 
         val resp = client.init(
             fileName = "a.bin",
@@ -90,7 +95,7 @@ class UploadInitClientTest {
             pick_code = "",
             sign_key = "",
             sign_val = "",
-        ) } returns Response.success(stubInit())
+        ) } returns Response.success(env(stubInit()))
 
         client.init(
             fileName = "x.bin",
@@ -126,7 +131,7 @@ class UploadInitClientTest {
             pick_code = "",
             sign_key = "",
             sign_val = "",
-        ) } returns Response.success(stubInit())
+        ) } returns Response.success(env(stubInit()))
 
         client.init(
             fileName = "f.bin",
@@ -153,7 +158,7 @@ class UploadInitClientTest {
             pick_code = "pc-from-prev",
             sign_key = "K-1",
             sign_val = "RANGE-HASH",
-        ) } returns Response.success(stubInit())
+        ) } returns Response.success(env(stubInit()))
 
         client.reInitForSignCheck(
             fileName = "f.bin",
@@ -192,7 +197,7 @@ class UploadInitClientTest {
             pick_code = "",
             sign_key = "",
             sign_val = "",
-        ) } returns Response.success(stubbed)
+        ) } returns Response.success(env(stubbed))
 
         val resp = client.init(
             fileName = "f.bin",

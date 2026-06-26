@@ -4,14 +4,15 @@ import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.CallbackInfo
 import com.starvault.data.remote.cloud115.OpenUploadApiService
 import com.starvault.data.remote.cloud115.UploadCallback
+import com.starvault.data.remote.cloud115.UploadGetTokenEnvelope
 import com.starvault.data.remote.cloud115.UploadGetTokenResp
+import com.starvault.data.remote.cloud115.UploadInitEnvelope
 import com.starvault.data.remote.cloud115.UploadInitResp
 import com.starvault.data.upload.OssUploader
 import com.starvault.data.upload.Sha1Hashing
 import com.starvault.data.upload.UploadInitClient
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -21,7 +22,6 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -39,6 +39,10 @@ import java.io.IOException
  *  - (c) status=6 → 1(reInit 成功)→ OssUploader.upload 1 次
  *  - (d) status=6 → 6(reInit 仍 verify)→ failure + ToastBus("文件校验失败")
  *  - (e) OssUploader.upload 抛 → failure + ToastBus
+ *
+ * 115 proapi 端点返回统一 envelope `{state, code, message, data}`,所以 mock service
+ * 返回 [UploadInitEnvelope] / [UploadGetTokenEnvelope];executor 拆 envelope 后
+ * 把 `.data` 给 [UploadStateMachine]。
  *
  * UploadWorker 本身只负责 WorkManager 集成(setProgress/setForeground/URI→InputStream),
  * Phase 4 加 Robolectric 后再单测。
@@ -76,6 +80,22 @@ class UploadExecutorTest {
         unmockkStatic(android.util.Log::class)
     }
 
+    // ---------- helpers: envelope-wrapped responses ----------
+
+    private fun initEnvelope(data: UploadInitResp) =
+        UploadInitEnvelope(state = true, code = 0, message = "", data = data)
+
+    private fun tokenEnvelope(data: UploadGetTokenResp) =
+        UploadGetTokenEnvelope(state = true, code = 0, message = "", data = data)
+
+    private fun sampleToken() = UploadGetTokenResp(
+        endpoint = "https://oss-cn-shanghai.aliyuncs.com",
+        AccessKeyId = "AK",
+        AccessKeySecret = "SK",
+        SecurityToken = "STS",
+        Expiration = "2026-06-25T12:00:00Z",
+    )
+
     // ---------- (a) happy path ----------
 
     @Test fun `status 1 happy path calls ossUploader once and returns success`() = runBlocking {
@@ -85,15 +105,9 @@ class UploadExecutorTest {
             callback = UploadCallback.Single(CallbackInfo("http://cb", "")),
             pick_code = "",
         )
-        coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returns Response.success(initResp)
-        coEvery { api.getUploadToken() } returns Response.success(
-            UploadGetTokenResp(
-                endpoint = "https://oss-cn-shanghai.aliyuncs.com",
-                AccessKeyId = "AK", AccessKeySecret = "SK", SecurityToken = "STS",
-                expiration = "2026-06-25T12:00:00Z",
-            )
-        )
-        coEvery { ossUploader.upload(any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returns Response.success(initEnvelope(initResp))
+        coEvery { api.getUploadToken() } returns Response.success(tokenEnvelope(sampleToken()))
+        coEvery { ossUploader.upload(any(), any(), any(), any(), any(), any(), any()) } returns Unit
 
         val input = ByteArrayInputStream(ByteArray(10 * 1024 * 1024))
         val result = executor.run(
@@ -105,7 +119,7 @@ class UploadExecutorTest {
         )
 
         assertTrue("expected UploadOutcome.Success, got: $result", result is UploadOutcome.Success)
-        coVerify(exactly = 1) { ossUploader.upload(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { ossUploader.upload(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     // ---------- (b) 秒传 ----------
@@ -117,7 +131,7 @@ class UploadExecutorTest {
             callback = UploadCallback.Single(CallbackInfo("", "")),
             pick_code = "",
         )
-        coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returns Response.success(initResp)
+        coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returns Response.success(initEnvelope(initResp))
 
         val result = executor.run(
             fileName = "a.bin",
@@ -149,13 +163,11 @@ class UploadExecutorTest {
             pick_code = "pc",
         )
         coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returnsMany listOf(
-            Response.success(firstResp),
-            Response.success(secondResp),
+            Response.success(initEnvelope(firstResp)),
+            Response.success(initEnvelope(secondResp)),
         )
-        coEvery { api.getUploadToken() } returns Response.success(
-            UploadGetTokenResp("https://oss-cn-shanghai.aliyuncs.com", "AK", "SK", "STS", "2026-06-25T12:00:00Z")
-        )
-        coEvery { ossUploader.upload(any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { api.getUploadToken() } returns Response.success(tokenEnvelope(sampleToken()))
+        coEvery { ossUploader.upload(any(), any(), any(), any(), any(), any(), any()) } returns Unit
 
         val result = executor.run(
             fileName = "a.bin",
@@ -168,7 +180,7 @@ class UploadExecutorTest {
         assertTrue("expected Success, got: $result", result is UploadOutcome.Success)
         // 第一次 init + 第二次 reInit,共 2 次 initUpload 调用
         coVerify(exactly = 2) { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) }
-        coVerify(exactly = 1) { ossUploader.upload(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { ossUploader.upload(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     // ---------- (d) sign check 反复 → 文件校验失败 ----------
@@ -183,8 +195,8 @@ class UploadExecutorTest {
         // reInit 仍然 status=6
         val secondResp = firstResp.copy(sign_key = "K2", sign_check = "100-199")
         coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returnsMany listOf(
-            Response.success(firstResp),
-            Response.success(secondResp),
+            Response.success(initEnvelope(firstResp)),
+            Response.success(initEnvelope(secondResp)),
         )
 
         val result = executor.run(
@@ -198,7 +210,7 @@ class UploadExecutorTest {
         assertTrue("expected Failure, got: $result", result is UploadOutcome.Failure)
         verify { ToastBus.error(match { it.contains("校验失败") }) }
         // reInit 没让 OssUploader 被调
-        coVerify(exactly = 0) { ossUploader.upload(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { ossUploader.upload(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     // ---------- (e) OssUploader 抛 → 失败 + toast ----------
@@ -210,11 +222,9 @@ class UploadExecutorTest {
             callback = UploadCallback.Single(CallbackInfo("http://cb", "")),
             pick_code = "",
         )
-        coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returns Response.success(initResp)
-        coEvery { api.getUploadToken() } returns Response.success(
-            UploadGetTokenResp("https://oss-cn-shanghai.aliyuncs.com", "AK", "SK", "STS", "2026-06-25T12:00:00Z")
-        )
-        coEvery { ossUploader.upload(any(), any(), any(), any(), any(), any()) } throws
+        coEvery { api.initUpload(any(), any(), any(), any(), any(), any(), any(), any()) } returns Response.success(initEnvelope(initResp))
+        coEvery { api.getUploadToken() } returns Response.success(tokenEnvelope(sampleToken()))
+        coEvery { ossUploader.upload(any(), any(), any(), any(), any(), any(), any()) } throws
             IOException("simulated OSS error")
 
         val result = executor.run(

@@ -1,13 +1,16 @@
 package com.starvault.data.upload
 
+import android.content.Context
 import android.util.Log
 import com.alibaba.sdk.android.oss.OSSClient
+import com.alibaba.sdk.android.oss.common.auth.OSSStsTokenCredentialProvider
 import com.alibaba.sdk.android.oss.model.AbortMultipartUploadRequest
 import com.alibaba.sdk.android.oss.model.CompleteMultipartUploadRequest
 import com.alibaba.sdk.android.oss.model.InitiateMultipartUploadRequest
 import com.alibaba.sdk.android.oss.model.ObjectMetadata
 import com.alibaba.sdk.android.oss.model.PutObjectRequest
 import com.alibaba.sdk.android.oss.model.UploadPartRequest
+import com.starvault.data.remote.cloud115.UploadGetTokenResp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.io.InputStream
@@ -44,6 +47,11 @@ class OssUploader(
     private val ops: OssOperations = NullOssOperations,
     private val maxRetries: Int = 3,
     private val baseDelayMillis: Long = 1_000L,
+    /**
+     * STS 客户端工厂:production 注入,构造真 [OSSClient] 用 STS 凭证访问 Aliyun OSS。
+     * 单测不传(`null`),用注入的 [ops] (FakeOssOperations) 替代。
+     */
+    private val stsClientFactory: ((UploadGetTokenResp) -> OSSClient)? = null,
 ) {
 
     /**
@@ -51,6 +59,8 @@ class OssUploader(
      *
      * @param callback     115 上传完成后回调的 URL(明文,内部 Base64)
      * @param callbackVar  回调时的自定义 JSON 字符串(明文,内部 Base64)
+     * @param sts          Aliyun OSS STS 凭证;非 null 时构造真 OSSClient 替换默认 [ops]
+     *                     单测时传 null 用注入的 [ops]
      */
     suspend fun upload(
         bucket: String,
@@ -59,10 +69,18 @@ class OssUploader(
         totalBytes: Long,
         callback: String,
         callbackVar: String,
+        sts: UploadGetTokenResp? = null,
     ) {
         val callbackB64 = encodeBase64(callback)
         val callbackVarB64 = encodeBase64(callbackVar)
         val partSize = partSizeFor(totalBytes)
+
+        // STS 注入时构造真 OSSClient(生产路径);测试路径用注入的 ops 计数
+        val activeOps: OssOperations = if (sts != null && stsClientFactory != null) {
+            AliyunOssOperations(stsClientFactory(sts))
+        } else {
+            ops
+        }
 
         // Aliyun SDK UploadPartRequest 只吃 byte[],所以整文件 readBytes 一次
         val allBytes = input.readBytes()
@@ -77,6 +95,7 @@ class OssUploader(
                 allBytes = allBytes,
                 callbackB64 = callbackB64,
                 callbackVarB64 = callbackVarB64,
+                ops = activeOps,
             )
         } else {
             uploadMultipart(
@@ -87,6 +106,7 @@ class OssUploader(
                 partSize = partSize,
                 callbackB64 = callbackB64,
                 callbackVarB64 = callbackVarB64,
+                ops = activeOps,
             )
         }
     }
@@ -97,6 +117,7 @@ class OssUploader(
         allBytes: ByteArray,
         callbackB64: String,
         callbackVarB64: String,
+        ops: OssOperations,
     ) {
         retryOnTransient {
             ops.putObject(
@@ -117,6 +138,7 @@ class OssUploader(
         partSize: Long,
         callbackB64: String,
         callbackVarB64: String,
+        ops: OssOperations,
     ) {
         val uploadId = ops.initMultipart(bucket, key, callbackB64, callbackVarB64)
         val partCount = ((totalBytes + partSize - 1) / partSize).toInt()
@@ -331,4 +353,30 @@ class AliyunOssOperations(
         if (callbackVarBase64.isNotEmpty()) setHeader("x-oss-callback-var", callbackVarBase64)
         if (contentLength > 0) setContentLength(contentLength)
     }
+}
+
+/**
+ * 生产 [OSSClient] 工厂:从 [UploadGetTokenResp] 拿到 STS 凭证,构造真客户端。
+ *
+ * 调用方(典型 [com.starvault.core.ServiceLocator.init])注入到 [OssUploader.stsClientFactory]。
+ *
+ * 凭证有效期:STS 默认 1h,115 上传单文件一般在秒级,无需中途 refresh。
+ * 上传 >1h 时 [OSSStsTokenCredentialProvider] 会在过期后抛 InvalidAccessKeyId,
+ * 由 [OssUploader.retryOnTransient] 重试 3 次后放弃(M3+ 加 STS 自动续)。
+ *
+ * 端点格式:115 返回 `http://oss-cn-shenzhen.aliyuncs.com`(注意 http 不是 https) —
+ * 这是 115 的有意设计,OSS endpoint 不强制 https。Aliyun OSS Android SDK 接受明文。
+ *
+ * @param context Application context(Aliyun OSS Android SDK 构造 [OSSClient] 必须);
+ *                由调用方在 ServiceLocator.init 阶段注入 appContext
+ */
+fun ossClientFactory(context: Context, sts: UploadGetTokenResp): OSSClient {
+    val credentialProvider = OSSStsTokenCredentialProvider(
+        sts.AccessKeyId,
+        sts.AccessKeySecret,
+        sts.SecurityToken,
+    )
+    val endpoint = sts.endpoint.trimEnd('/')
+    // OssClientConfiguration 默认即可(M2 暂不调超时 / 代理)
+    return OSSClient(context, endpoint, credentialProvider)
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    M2 上传 — 允许 Aliyun OSS 走明文 HTTP。
+
+    115 proapi /open/upload/get_token 返回的 endpoint 是 `http://oss-cn-shenzhen.aliyuncs.com`
+    (注意 http 不是 https)。这是 115 的有意设计 — 内网 OSS endpoint 走内网传输,
+    公网入口签名校验 + STS 凭证已经做了鉴权。
+
+    Android 9+ (API 28+) 默认禁止明文 HTTP,会抛:
+        java.net.UnknownServiceException: CLEARTEXT communication to
+        fhnfile.oss-cn-shenzhen.aliyuncs.com not permitted by network security policy
+
+    本配置只对 Aliyun OSS 域名放行(alibaba / aliyuncs 子域),其它流量仍强制 HTTPS。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Aliyun OSS endpoint — *.aliyuncs.com(OSS 区域 endpoint)+ aliyun-inc.com -->
+        <domain includeSubdomains="true">aliyuncs.com</domain>
+        <domain includeSubdomains="true">alibaba-inc.com</domain>
+    </domain-config>
+</network-security-config>

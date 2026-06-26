@@ -32,7 +32,7 @@ interface OpenUploadApiService {
      * 响应字段见 [UploadGetTokenResp](服务端驼峰大小写敏感)。
      */
     @GET("open/upload/get_token")
-    suspend fun getUploadToken(): Response<UploadGetTokenResp>
+    suspend fun getUploadToken(): Response<UploadGetTokenEnvelope>
 
     /**
      * 上传初始化调度。响应 status 字段决定后续分支:
@@ -53,7 +53,7 @@ interface OpenUploadApiService {
         @Field("pick_code") pick_code: String,
         @Field("sign_key") sign_key: String,
         @Field("sign_val") sign_val: String,
-    ): Response<UploadInitResp>
+    ): Response<UploadInitEnvelope>
 
     /**
      * 断点续传初始化(M3 才用,先 stub)。签名 + 字段名按 115 官方文档预留。

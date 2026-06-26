@@ -40,14 +40,18 @@ class OpenUploadApiServiceTest {
     @After fun teardown() { server.shutdown() }
 
     @Test fun `getUploadToken hits correct path and parses response`() = runBlocking {
-        // 服务端返回的 Aliyun OSS STS 凭证(驼峰大小写敏感)
+        // 服务端 envelope-wrapped response — 115 proapi 统一 `{state, code, message, data}` 4 字段,
+        // 业务负载在 `data` 里。注意字段大小写:`Expiration` 大写 E(对齐 115 实际响应)
         val body = """
             {
-              "endpoint": "https://oss-cn-shanghai.aliyuncs.com",
-              "AccessKeyId": "AKID",
-              "AccessKeySecret": "SK",
-              "SecurityToken": "STS",
-              "expiration": "2026-06-25T12:00:00Z"
+              "state": true, "code": 0, "message": "",
+              "data": {
+                "endpoint": "https://oss-cn-shanghai.aliyuncs.com",
+                "AccessKeyId": "AKID",
+                "AccessKeySecret": "SK",
+                "SecurityToken": "STS",
+                "Expiration": "2026-06-25T12:00:00Z"
+              }
             }
         """.trimIndent()
         server.enqueue(MockResponse().setResponseCode(200).setBody(body))
@@ -57,18 +61,22 @@ class OpenUploadApiServiceTest {
 
         assertEquals("GET", recorded.method)
         assertEquals("/open/upload/get_token", recorded.path)
-        assertEquals("AKID", resp.body()!!.AccessKeyId)
-        assertEquals("STS", resp.body()!!.SecurityToken)
+        assertEquals(true, resp.body()!!.state)
+        assertEquals("AKID", resp.body()!!.data.AccessKeyId)
+        assertEquals("STS", resp.body()!!.data.SecurityToken)
     }
 
     @Test fun `initUpload sends U_1_ prefixed target and no topload key`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""
             {
-              "status": 1,
-              "sign_key": "", "sign_check": "", "file_id": "",
-              "target": "U_1_0", "bucket": "b", "object": "o",
-              "callback": {"callback":"http://cb","callback_var":""},
-              "pick_code": "pc"
+              "state": true, "code": 0, "message": "",
+              "data": {
+                "status": 1,
+                "sign_key": "", "sign_check": "", "file_id": "",
+                "target": "U_1_0", "bucket": "b", "object": "o",
+                "callback": {"callback":"http://cb","callback_var":""},
+                "pick_code": "pc"
+              }
             }
         """.trimIndent()))
 
@@ -103,9 +111,12 @@ class OpenUploadApiServiceTest {
     @Test fun `initUpload with sign_check re-init populates sign fields`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""
             {
-              "status": 1, "sign_key": "", "sign_check": "", "file_id": "",
-              "target": "U_1_0", "bucket": "b", "object": "o",
-              "callback": {"callback":"","callback_var":""}, "pick_code": ""
+              "state": true, "code": 0, "message": "",
+              "data": {
+                "status": 1, "sign_key": "", "sign_check": "", "file_id": "",
+                "target": "U_1_0", "bucket": "b", "object": "o",
+                "callback": {"callback":"","callback_var":""}, "pick_code": ""
+              }
             }
         """.trimIndent()))
 

@@ -20,6 +20,7 @@ import com.starvault.data.repository.MediaPreviewRepository
 import com.starvault.data.repository.TransferRepository
 import com.starvault.data.upload.OssUploader
 import com.starvault.data.upload.UploadInitClient
+import com.starvault.data.upload.ossClientFactory
 import com.starvault.data.uploadworker.UploadExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -237,10 +238,11 @@ object ServiceLocator {
 
         // M2 upload 依赖(Phase 3 引入)
         uploadInitClient = UploadInitClient(api = openUploadApi)
-        // ossUploader 必须由调用方在 init 末尾注入(Phase 5 引入 AliyunOssClientFactory) —
-        // 这里用 default NullOssOperations 占位,让 ServiceLocator 编译通过。
-        // Phase 5 修改:替换成真 AliyunOssOperations。
-        ossUploader = OssUploader()
+        // ossUploader 注入真 STS 工厂,每次 upload() 拿 STS 凭证现场构造 OSSClient。
+        // 单测用 NullOssOperations(default)替换 stsClientFactory=null 走 fake ops。
+        ossUploader = OssUploader(
+            stsClientFactory = { sts -> ossClientFactory(appContext, sts) },
+        )
         uploadExecutor = UploadExecutor(
             uploadInitClient = uploadInitClient,
             ossUploader = ossUploader,

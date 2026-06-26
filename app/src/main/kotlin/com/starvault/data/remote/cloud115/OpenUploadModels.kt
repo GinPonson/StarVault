@@ -47,7 +47,26 @@ import kotlinx.serialization.json.buildJsonObject
 // ─────────────────── /open/upload/get_token 响应 ───────────────────
 
 /**
- * GET /open/upload/get_token 响应(OAuth Bearer 鉴权)。
+ * GET /open/upload/get_token 顶层 envelope。
+ *
+ * 与 [UploadInitEnvelope] 同构 — 115 proapi 所有端点统一 `{state, code, message, data}` 4 字段。
+ *
+ * 字段对照:
+ *  - state   : boolean  true=成功
+ *  - code    : int     错误码(0 = 成功)
+ *  - message : string  错误消息
+ *  - data    : object  STS 凭证负载(见 [UploadGetTokenResp])
+ */
+@Serializable
+data class UploadGetTokenEnvelope(
+    val state: Boolean = false,
+    val code: Int = 0,
+    val message: String = "",
+    val data: UploadGetTokenResp = UploadGetTokenResp(),
+)
+
+/**
+ * GET /open/upload/get_token 业务负载(OAuth Bearer 鉴权)。
  *
  * 官方文档:https://www.yuque.com/115yun/open/kzacvzl0g7aiyyn4
  *
@@ -59,7 +78,7 @@ import kotlinx.serialization.json.buildJsonObject
  *  - AccessKeyId     : STS AK(注意驼峰,服务端区分大小写)
  *  - AccessKeySecret : STS SK(注意驼峰)
  *  - SecurityToken   : STS token(注意驼峰,不是 snake_case `security_token`)
- *  - expiration      : ISO 8601 过期时间字符串
+ *  - Expiration      : ISO 8601 过期时间字符串(注意大写 E,与 SecurityToken 一致)
  *
  * DTO 字段名严格按服务端大小写,不用 [SerialName] 重命名——保持契约直观。
  */
@@ -69,7 +88,7 @@ data class UploadGetTokenResp(
     val AccessKeyId: String = "",
     val AccessKeySecret: String = "",
     val SecurityToken: String = "",
-    val expiration: String = "",
+    val Expiration: String = "",
 )
 
 // ─────────────────── /open/upload/init 请求(form-urlencoded) ───────────────────
@@ -107,7 +126,30 @@ data class UploadInitReq(
 // ─────────────────── /open/upload/init 响应 ───────────────────
 
 /**
- * POST /open/upload/init 响应体。
+ * POST /open/upload/init 顶层 envelope。
+ *
+ * 115 proapi 端点统一返回 `{state, code, message, data: {...}}` 4 字段结构;
+ * 业务字段都在 `data` 里(对齐 OpenList 115-sdk-go 与官方文档)。
+ *
+ * Retrofit 反序列化时把整个 envelope 读为 [UploadInitEnvelope],
+ * 调用方 [UploadInitClient.init] 取 `.data` 后传给 [UploadStateMachine]。
+ *
+ * 字段对照:
+ *  - state   : boolean  true=业务成功 / false=业务失败(由调用方进一步判断)
+ *  - code    : int     错误码(0 = 成功);非 0 时 message 必有内容
+ *  - message : string  人类可读错误消息
+ *  - data    : object  业务负载(见 [UploadInitResp])
+ */
+@Serializable
+data class UploadInitEnvelope(
+    val state: Boolean = false,
+    val code: Int = 0,
+    val message: String = "",
+    val data: UploadInitResp = UploadInitResp(),
+)
+
+/**
+ * POST /open/upload/init 业务负载(envelope.data)。
  *
  * 字段对照(全部字段部分有条件):
  *  - status     : int  关键控制流,见下方语义表

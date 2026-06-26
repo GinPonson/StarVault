@@ -86,6 +86,7 @@ class UploadExecutor(
                         totalBytes = fileSize,
                         callback = callbackInfo.callback,
                         callbackVar = callbackInfo.callback_var,
+                        sts = token,
                     )
                     onProgress(fileSize, fileSize)
                     UploadOutcome.Success
@@ -155,6 +156,7 @@ class UploadExecutor(
                     totalBytes = fileSize,
                     callback = callbackInfo.callback,
                     callbackVar = callbackInfo.callback_var,
+                    sts = token,
                 )
                 onProgress(fileSize, fileSize)
                 UploadOutcome.Success
@@ -173,9 +175,17 @@ class UploadExecutor(
 
     /**
      * 拿 STS token — 走 api 直调(M2 spec §6 步骤 4)。
+     *
+     * 拆 envelope:envelope.state == false 时抛 IllegalStateException(message),
+     * 让外层 catch 转 ToastBus + UploadOutcome.Failure。
      */
-    private suspend fun getUploadToken(): UploadGetTokenResp =
-        api.getUploadToken().requireSuccessful()
+    private suspend fun getUploadToken(): UploadGetTokenResp {
+        val envelope = api.getUploadToken().requireSuccessful()
+        if (!envelope.state) {
+            throw IllegalStateException("get_token failed: code=${envelope.code} message=${envelope.message}")
+        }
+        return envelope.data
+    }
 
     /**
      * 从 [UploadCallback](sealed) 抽取 callback + callbackVar 字符串(给 OssUploader)。

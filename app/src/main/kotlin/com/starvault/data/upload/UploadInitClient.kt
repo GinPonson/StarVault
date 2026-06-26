@@ -11,6 +11,9 @@ import com.starvault.data.remote.cloud115.requireSuccessful
  *  2. `file_size` Long → String(协议契约,服务端按字符串解析)
  *  3. **不**发送 `topupload` 字段 — 115 官方文档"必填:否",Go SDK 调用时不带此 key
  *  4. 首次上传 `pick_code=""`(M2 没有断点续传);二次认证时由调用方传 [reInitForSignCheck]
+ *  5. **拆 envelope**:115 proapi 端点统一返回 `{state, code, message, data}` 4 字段,
+ *     业务负载在 `data` 里。本类拿 envelope 后拆 `.data` 给 [UploadStateMachine] 用;
+ *     `envelope.state == false` 抛 IllegalStateException 让 worker 走 Reject 分支。
  *
  * 使用方式:
  * ```
@@ -22,8 +25,10 @@ import com.starvault.data.remote.cloud115.requireSuccessful
  * }
  * ```
  *
- * 错误语义:Retrofit [Response] HTTP 200/4xx/5xx 转换由 [requireSuccessful] 统一抛
- * [Cloud115ApiException](`ResponseExt.kt`),调用方在 [UploadWorker] 里 catch 决定是 retry 还是 fail。
+ * 错误语义:
+ *  - HTTP 非 2xx → [requireSuccessful] 抛 IllegalStateException("HTTP {code}")
+ *  - envelope.state == false → 抛 IllegalStateException(envelope.message)
+ *  - 两种异常在 [UploadWorker.doWork] catch 后走 Result.failure + ToastBus
  */
 class UploadInitClient(
     private val api: OpenUploadApiService,
@@ -41,7 +46,7 @@ class UploadInitClient(
         sha1: String,
         preSha1: String,
     ): UploadInitResp {
-        val response = api.initUpload(
+        val envelope = api.initUpload(
             file_name = fileName,
             file_size = fileSize.toString(),  // 协议:String
             target = U1_PREFIX + targetCid,
@@ -50,8 +55,11 @@ class UploadInitClient(
             pick_code = "",  // M2 首次上传,无 pick_code
             sign_key = "",   // 首次 init 无 sign
             sign_val = "",
-        )
-        return response.requireSuccessful()
+        ).requireSuccessful()
+        if (!envelope.state) {
+            throw IllegalStateException("init failed: code=${envelope.code} message=${envelope.message}")
+        }
+        return envelope.data
     }
 
     /**
@@ -71,7 +79,7 @@ class UploadInitClient(
         signKey: String,
         signVal: String,
     ): UploadInitResp {
-        val response = api.initUpload(
+        val envelope = api.initUpload(
             file_name = fileName,
             file_size = fileSize.toString(),
             target = U1_PREFIX + targetCid,
@@ -80,8 +88,11 @@ class UploadInitClient(
             pick_code = pickCode,
             sign_key = signKey,
             sign_val = signVal,
-        )
-        return response.requireSuccessful()
+        ).requireSuccessful()
+        if (!envelope.state) {
+            throw IllegalStateException("reInit failed: code=${envelope.code} message=${envelope.message}")
+        }
+        return envelope.data
     }
 
     private companion object {
