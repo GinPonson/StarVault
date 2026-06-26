@@ -24,7 +24,9 @@ import com.starvault.data.upload.ossClientFactory
 import com.starvault.data.uploadworker.UploadExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import okhttp3.OkHttpClient
 
@@ -156,19 +158,39 @@ object ServiceLocator {
     val refreshMutex: Mutex = Mutex()
 
     /**
-     * 文件列表刷新触发器 — Phase 6 引入,给上传完成后通知 [com.starvault.ui.files.FilesViewModel]
-     * 自动 reload 当前目录。
+     * 文件列表刷新触发器 — 上传完成后通知 [com.starvault.ui.files.FilesViewModel] 自动
+     * reload 当前目录。
      *
-     * ## 使用场景
-     *  - [com.starvault.ui.transfers.TransfersViewModel.observeWork] 检测到上传完成 → tryEmit
-     *  - [com.starvault.ui.files.FilesViewModel] init 阶段 collect → 调 `refresh()`
+     * ## 选型 Channel(UNLIMITED) 而不是 SharedFlow(replay=0)
+     *  - **Queue semantics**:SharedFlow replay=0 时,emit 时如果无 collector 在线,信号直接丢
+     *    → "VM 后创建时不会突然触发 reload" 这个目标 SharedFlow 反而达不到(它把信号也丢了,
+     *    不是排队)。
+     *  - Channel(UNLIMITED) 永不丢:emit 时 buffer 起来,collector subscribe 后从头部依次消费。
+     *    FilesViewModel nav-scoped pop 后再回来,新 collector 把历史上挂着的信号一次消费掉。
+     *  - 对齐 CLAUDE.md §5 Compose one-shot events 约定(`Channel(UNLIMITED) + receiveAsFlow()`)。
      *
-     * ## 为什么 SharedFlow 而不是 Channel
-     *  - 无 replay:VM 后创建时不会突然触发 reload
-     *  - extraBufferCapacity=4:连续多个上传并发完成时不会丢失信号(tryEmit 直接返回 true)
-     *  - 多 collector 支持:FilesViewModel 实例可能有多个(navigation pop 后重建)
+     * ## API
+     *  - 生产端:[filesRefreshTrigger].trySend(Unit) — 挂在 [com.starvault.ui.transfers.TransfersViewModel.observeWork]
+     *    的 `phase == DONE` 分支(`appScope` 内 collect,跨 nav pop 不死)。
+     *  - 消费端:[filesRefreshFlow].collect { refresh() } — 挂在
+     *    [com.starvault.ui.files.FilesViewModel] init。
+     *
+     * ## 多 collector 注意
+     *  Channel 是 single-consumer,每条消息给一个 collector。当前只有 FilesVM 一处 collect;
+     *  未来需要多 collector 时再 fan-out(BroadcastChannel / 多个 Channel 各自订阅)— 暂不需要。
      */
-    val filesRefreshTrigger: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 4)
+    lateinit var filesRefreshTrigger: Channel<Unit>
+        private set
+
+    /**
+     * 消费端 Flow — FilesViewModel 订阅这个。新 collector 起来时 drain channel 缓冲。
+     *
+     * 挂为 `lateinit var` 是为了测试可重置 — Channel 是 single-consumer,前面 test 创建的
+     * FilesViewModel collector 会持续 suspend 在 receive(),后续 test emit 的 Unit 会被旧
+     * collector 抢先拿走,造成状态污染。生产代码不要直接重置。
+     */
+    lateinit var filesRefreshFlow: Flow<Unit>
+        private set
 
     /**
      * 长轮询 OkHttpClient：65s read timeout，独立持有（不与 30s 共享连接池）。
@@ -197,11 +219,32 @@ object ServiceLocator {
     lateinit var mediaPreviewRepository: MediaPreviewRepository
         private set
 
+    /**
+     * 测试用 — 重置 filesRefreshTrigger 和 filesRefreshFlow,关旧 channel 重建。
+     * Channel 是 single-consumer,前面 test 创建的 VM collector 还活着,新 emit 的 Unit
+     * 会被旧 collector 抢走。`@Before` 调一次清状态。
+     *
+     * 只在 `app/src/test/` 调;**生产代码不要碰**(注释里写明)。
+     */
+    fun resetFilesRefreshTriggerForTest() {
+        if (::filesRefreshTrigger.isInitialized) {
+            filesRefreshTrigger.close()
+        }
+        val newChannel = Channel<Unit>(Channel.UNLIMITED)
+        filesRefreshTrigger = newChannel
+        filesRefreshFlow = newChannel.receiveAsFlow()
+    }
+
     fun init(context: Context) {
         val appContext = context.applicationContext
         this.appContext = appContext
         tokenStore = OpenAuthStore(appContext)
         val tokenProvider = tokenStore::accessTokenBlocking
+
+        // M2 upload 完成 → Files 自动刷新的 cross-VM trigger(Phase 6,详见字段 KDoc)
+        val refreshChannel = Channel<Unit>(Channel.UNLIMITED)
+        filesRefreshTrigger = refreshChannel
+        filesRefreshFlow = refreshChannel.receiveAsFlow()
 
         // 3 个 OkHttpClient:
         // - refreshClient   : 独立,挂浏览器头 + Bearer,baseUrl=passportapi,

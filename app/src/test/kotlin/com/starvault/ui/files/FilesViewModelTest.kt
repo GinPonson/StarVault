@@ -45,6 +45,10 @@ class FilesViewModelTest {
         // VM 失败时调 ToastBus.error;stub 避免走真 Channel
         mockkObject(ToastBus)
         every { ToastBus.error(any()) } returns Unit
+        // ServiceLocator.filesRefreshTrigger 是进程级 Channel(单 collector);前面 test 的
+        // VM collector 还活着,新 emit 的 Unit 会被旧 collector 抢走。setUp 阶段 reset
+        // 整个 channel,确保每个 test 独立。
+        com.starvault.core.ServiceLocator.resetFilesRefreshTriggerForTest()
     }
 
     @After
@@ -194,5 +198,36 @@ class FilesViewModelTest {
         assertTrue("expected empty list, got ${(s as FilesUiState.Success).all.size}", s.all.isEmpty())
         // 错误通过 ToastBus.error 提示
         verify(exactly = 1) { ToastBus.error("network down") }
+    }
+
+    /**
+     * 回归测试 — Files 刷新 trigger 在 no-collector 窗口 emit,VM 起来后仍应消费。
+     *
+     * 复现 race:用户上传完成后已离开 Files 屏,TransfersVM 触发 `filesRefreshTrigger.trySend`
+     * 时无 collector → 旧 SharedFlow(replay=0) 直接丢信号;新 Channel(UNLIMITED) buffer 起来。
+     *
+     * 用户切回 Files,新 FilesVM init 时 subscribe → drain buffer → 调 refresh() →
+     * listFolder 被调第二次(首次来自 init 主动 loadFolder,第二次来自 trigger 触发 refresh)。
+     *
+     * 跑本 test 在旧的 SharedFlow 实现上**会失败**(只调 1 次 listFolder,signal 被丢);
+     * 新 Channel 实现通过。
+     */
+    @Test
+    fun `refresh trigger queued before VM construction causes refresh after init`() = runTest {
+        // 模拟:TransfersVM 在 FilesVM 还没创建时先 trySend(VM 离开 Files 期间发生)
+        // Channel(UNLIMITED) buffer 起来,不丢。
+        com.starvault.core.ServiceLocator.filesRefreshTrigger.trySend(Unit)
+
+        val repo = mockk<FilesRepository>()
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = emptyList(), offset = 0, limit = 50, totalCount = 0, hasMore = false)
+        )
+        FilesViewModel(repo)
+        // init 同步发射:loadJob.launch(loadFolder cid=0) + collect.subscribe(drain Channel buffer → refresh → loadJob.cancel + relaunch)
+        // UnconfinedTestDispatcher 上 init 返回时这些 launch 全部已入队,需要 advanceUntilIdle 让 listFolder 两次都跑完
+        testScheduler.advanceUntilIdle()
+
+        // init 主动 loadFolder("0") 1 次 + trigger 触发 refresh 1 次 = 2 次
+        coVerify(atLeast = 2) { repo.listFolder(any()) }
     }
 }

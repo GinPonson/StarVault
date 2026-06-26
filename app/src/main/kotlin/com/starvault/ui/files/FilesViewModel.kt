@@ -107,8 +107,12 @@ class FilesViewModel(
         loadJob = viewModelScope.launch { loadFolder(cid = "0", offset = 0) }
         // Phase 6:上传完成后 TransfersViewModel 通过 ServiceLocator.filesRefreshTrigger 通知,
         // 这里 collect 后调用 refresh() 重新拉当前目录,新上传的文件立刻出现在列表里。
+        //
+        // 订阅 [ServiceLocator.filesRefreshFlow](receiveAsFlow 包装),不是直接订阅 Channel;
+        // Channel(UNLIMITED) 的 queue semantics 保证:VM 不在线时 emit 的信号被 buffer,
+        // 新 collector subscribe 后从头部依次消费,跨 nav pop 不丢信号(对齐 CLAUDE.md §5)。
         viewModelScope.launch {
-            ServiceLocator.filesRefreshTrigger.collect { refresh() }
+            ServiceLocator.filesRefreshFlow.collect { refresh() }
         }
     }
 

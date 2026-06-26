@@ -122,20 +122,34 @@ class TransfersViewModel(
     /**
      * 观察 1 个 WorkInfo 进度,把 transferred / phase 推到 repo。
      *
-     * 调用方(Phase 5 引入 [UploadRoute]):
+     * 调用方(Phase 5 引入 [com.starvault.ui.upload.UploadRoute]):
      *  1. UploadWorker.enqueue → UUID
      *  2. transfersViewModel.observeWork(workId, fileName, totalBytes)
      *     → 内部 add(RUNNING placeholder) + collect WorkInfoByIdFlow
      *  3. 每次 setProgress 推送 transferred / phase
-     *  4. phase==DONE → markDone;state==FAILED → markFailed
+     *  4. phase==DONE → markDone + filesRefreshTrigger.trySend
+     *  5. state==FAILED → markFailed
      *
-     * @param onDone 成功后回调(由调用方决定要不要触发 ServiceLocator.filesRefreshTrigger)
+     * ## Scope 选型 — 为什么 appScope 不是 viewModelScope
+     *  viewModelScope 在 nav pop 后 cancel(`TransfersViewModel` 是 nav-scoped:
+     *  `composable<Route.Transfers>` 的 ViewModelStoreOwner 是 NavBackStackEntry)。
+     *  如果 collect 跑在 viewModelScope,用户在上传过程中离开 Transfers,
+     *  collect 协程被取消 → `phase == DONE` 永远不被消费 → `repo.markDone` 不触发
+     *  → `filesRefreshTrigger.trySend` 不触发 → Files 永远收不到刷新信号。
+     *
+     *  改用 [ServiceLocator.appScope](进程级 `CoroutineScope(SupervisorJob())`),
+     *  collect 跨 nav pop 不死,Files 自动刷新链路完整。
+     *
+     * ## Terminal state 显式退出
+     *  `WorkManager.getWorkInfoByIdFlow` 是 StateFlow-backed Flow,terminal state(SUCCEEDED /
+     *  FAILED / CANCELLED)后**不会自 complete**。如果不显式 `return@collect`,
+     *  collect 会持续监听同一个 terminal state,虽然没副作用(when 都不命中)但浪费资源。
+     *  DONE / FAILED / isFinished 三处 terminal 全部 return@collect。
      */
     fun observeWork(
         workId: java.util.UUID,
         fileName: String,
         totalBytes: Long,
-        onDone: () -> Unit = {},
     ) {
         // 占位 entry — RUNNING,transferredBytes=0
         repo.add(
@@ -150,8 +164,8 @@ class TransfersViewModel(
                 startedAt = System.currentTimeMillis() / 1000L,
             )
         )
-        // 收集 WorkInfo(在 viewModelScope 走 Application 上下文,需要 WorkManager 注入)
-        viewModelScope.launch {
+        // 收集 WorkInfo(进程级 appScope,nav pop 不死)
+        ServiceLocator.appScope.launch {
             androidx.work.WorkManager.getInstance(ServiceLocator.appContext)
                 .getWorkInfoByIdFlow(workId)
                 .collect { info ->
@@ -161,14 +175,19 @@ class TransfersViewModel(
                     when {
                         phase == com.starvault.data.uploadworker.UploadWorker.Phase.DONE -> {
                             repo.markDone(workId.toString())
-                            // Phase 6:上传完成 → 通知 FilesViewModel 重拉当前目录,
-                            // 新上传的文件立即出现在文件列表(用户不用手动 pull-to-refresh)。
-                            // tryEmit 不挂起、bufferCapacity=4 不丢信号。
-                            ServiceLocator.filesRefreshTrigger.tryEmit(Unit)
-                            onDone()
+                            // Phase 6:上传完成 → 通知 FilesViewModel 重拉当前目录。
+                            // Channel(UNLIMITED) 的 trySend 永不丢:FilesVM 不在线时 buffer,
+                            // 新 collector subscribe 后从头部消费。
+                            ServiceLocator.filesRefreshTrigger.trySend(Unit)
+                            return@collect
                         }
                         info.state == androidx.work.WorkInfo.State.FAILED -> {
                             repo.markFailed(workId.toString(), info.outputData.getString("error") ?: "上传失败")
+                            return@collect
+                        }
+                        info.state.isFinished -> {
+                            // CANCELLED / 其他 terminal 不走 phase 也不走 FAILED
+                            return@collect
                         }
                         phase == com.starvault.data.uploadworker.UploadWorker.Phase.RUNNING -> {
                             repo.updateProgress(workId.toString(), transferredBytes = transferred)
