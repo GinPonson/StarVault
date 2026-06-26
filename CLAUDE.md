@@ -61,7 +61,7 @@ Compose one-shot events use `Channel(UNLIMITED) + receiveAsFlow()` (not `SharedF
 3 base URLs (defined in `Cloud115ApiClient`) — all serve the **115 开放平台 (open platform) OAuth API**, not the legacy webapi/Cookie endpoints. Every request path is prefixed `/open/...` (e.g. `open/authDeviceCode`, `open/ufile/files`, `open/user/info`):
 - `qrcodeapi.115.com` — OAuth device code + status polling (`OpenAuthApiService`, `StatusPollApi`)
 - `passportapi.115.com` — OAuth refresh + revoke (`OpenAuthApiService.refreshToken/revokeToken`)
-- `proapi.115.com` — Bearer business calls (`OpenFileApiService`, `OpenUserApiService`)
+- `proapi.115.com` — Bearer business calls (`OpenFileApiService`, `OpenUserApiService`, `OpenUploadApiService`)
 
 3 OkHttpClient variants (timeout strategy):
 - 30s regular — proapi + qrcodeapi POST
@@ -76,6 +76,21 @@ Interceptor chain (request order = add order):
 `Token401Interceptor` parses `code` field via kotlinx-serialization; matches `code == 99 || code.toString().startsWith("401")` (aligned with OpenList 115-sdk-go `Is401Started`).
 
 `Response<T>.requireSuccessful()` (`ResponseExt.kt`) collapses HTTP+body check across 3 repositories.
+
+### Upload pipeline (M2 spec §3)
+
+Single-file upload (M2) routes through 3 endpoints under `proapi.115.com` (Bearer + 401 auto-refresh):
+- `GET  /open/upload/get_token` — exchange for Aliyun OSS STS credentials (endpoint, AccessKeyId/Secret, SecurityToken, expiration)
+- `POST /open/upload/init`     — SHA1 + target → `status` (1 = new / 2 = 秒传 / 6|7|8 = sign_check range)
+- `POST /open/upload/resume`   — M3+ resume hook (M2 stub returns Unit)
+
+Multipart PUT goes to **Aliyun OSS** (not 115 endpoints) — SDK `com.aliyun.dpa:oss-android-sdk:2.9.9`. STS credentials short-lived (typically 1h); `UploadExecutor` re-fetches `get_token` if 401. Status branches in `UploadStateMachine`:
+- `1` → upload parts → DONE
+- `2` → 秒传 → fail with ToastBus (M2 doesn't support)
+- `6|7|8` → re-init with `sign_check` range SHA1, max 2 attempts
+- else → fail with ToastBus
+
+`target = "U_1_<cid>"` prefix kept 1:1 with OpenList; `topupload` field is **not sent** (115 docs "必填:否", Go SDK omits).
 
 ### DI
 

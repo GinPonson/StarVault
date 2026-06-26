@@ -161,6 +161,10 @@ class TransfersViewModel(
                     when {
                         phase == com.starvault.data.uploadworker.UploadWorker.Phase.DONE -> {
                             repo.markDone(workId.toString())
+                            // Phase 6:上传完成 → 通知 FilesViewModel 重拉当前目录,
+                            // 新上传的文件立即出现在文件列表(用户不用手动 pull-to-refresh)。
+                            // tryEmit 不挂起、bufferCapacity=4 不丢信号。
+                            ServiceLocator.filesRefreshTrigger.tryEmit(Unit)
                             onDone()
                         }
                         info.state == androidx.work.WorkInfo.State.FAILED -> {

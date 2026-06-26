@@ -105,6 +105,11 @@ class FilesViewModel(
             pendingLoad = true,
         )
         loadJob = viewModelScope.launch { loadFolder(cid = "0", offset = 0) }
+        // Phase 6:上传完成后 TransfersViewModel 通过 ServiceLocator.filesRefreshTrigger 通知,
+        // 这里 collect 后调用 refresh() 重新拉当前目录,新上传的文件立刻出现在列表里。
+        viewModelScope.launch {
+            ServiceLocator.filesRefreshTrigger.collect { refresh() }
+        }
     }
 
     /**

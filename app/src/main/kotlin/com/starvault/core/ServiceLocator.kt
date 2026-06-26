@@ -23,6 +23,7 @@ import com.starvault.data.upload.UploadInitClient
 import com.starvault.data.uploadworker.UploadExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import okhttp3.OkHttpClient
 
@@ -152,6 +153,21 @@ object ServiceLocator {
      * 暴露为 val(不是 lateinit var)因为 Mutex() 无副作用、无 init 依赖。
      */
     val refreshMutex: Mutex = Mutex()
+
+    /**
+     * 文件列表刷新触发器 — Phase 6 引入,给上传完成后通知 [com.starvault.ui.files.FilesViewModel]
+     * 自动 reload 当前目录。
+     *
+     * ## 使用场景
+     *  - [com.starvault.ui.transfers.TransfersViewModel.observeWork] 检测到上传完成 → tryEmit
+     *  - [com.starvault.ui.files.FilesViewModel] init 阶段 collect → 调 `refresh()`
+     *
+     * ## 为什么 SharedFlow 而不是 Channel
+     *  - 无 replay:VM 后创建时不会突然触发 reload
+     *  - extraBufferCapacity=4:连续多个上传并发完成时不会丢失信号(tryEmit 直接返回 true)
+     *  - 多 collector 支持:FilesViewModel 实例可能有多个(navigation pop 后重建)
+     */
+    val filesRefreshTrigger: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 4)
 
     /**
      * 长轮询 OkHttpClient：65s read timeout，独立持有（不与 30s 共享连接池）。
