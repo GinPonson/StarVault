@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- 扫码登录需联网调 qrcodeapi.115.com -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -29,5 +30,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            WorkManager Foreground Service — Android 14+ 兼容性声明。
+
+            androidx.work.impl.foreground.SystemForegroundService 默认 manifest 里没声明
+            foregroundServiceType,但 UploadWorker.getForegroundInfo() 在 API 34+ 必须传 type=DATA_SYNC
+            (M2 spec §4 走数据同步)。运行时 type 必须是 manifest 声明 type 的子集,否则:
+
+              java.lang.IllegalArgumentException: foregroundServiceType 0x00000001 is not a subset
+              of foregroundServiceType attribute 0x00000000 in service element of manifest file
+
+            用 tools:node="merge" 覆盖默认 <service> 声明,补 foregroundServiceType="dataSync"。
+
+            参考: https://developer.android.com/develop/background-work/foreground-services#manifest
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>
