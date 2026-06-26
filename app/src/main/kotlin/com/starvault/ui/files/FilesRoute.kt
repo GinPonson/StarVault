@@ -3,6 +3,7 @@ package com.starvault.ui.files
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,6 +17,8 @@ import androidx.navigation.NavHostController
 import com.starvault.data.model.FileType
 import com.starvault.nav.Route
 import com.starvault.ui.files.sort.SortSheet
+import com.starvault.ui.transfers.TransfersViewModel
+import com.starvault.ui.upload.rememberUploadLauncher
 
 /**
  * Route 入口（NavHost 唯一注入点）。
@@ -29,8 +32,22 @@ fun FilesRoute(
     args: Route.Files,
     nav: NavHostController,
     vm: FilesViewModel = viewModel(),
+    transfersViewModel: TransfersViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // 上传入口:ActivityResultContracts.GetContent → queryFileMeta → UploadWorker.enqueue + observeWork
+    // currentCid 在 picker 回调里实时读 state(folderId 可能在用户操作期间变了 — 比如进子目录后再上传)
+    val launchPicker = rememberUploadLauncher { meta ->
+        val liveCid = (vm.state.value as? com.starvault.ui.files.FilesUiState.Success)?.folderId ?: "0"
+        com.starvault.ui.upload.enqueueUpload(
+            context = context,
+            uri = meta.uri,
+            targetCid = liveCid,
+            transfersViewModel = transfersViewModel,
+        )
+    }
 
     // 启动时按 args 切目录（null = 根 "0"，VM.init 已默认加载）
     LaunchedEffect(args.folderId) {
@@ -70,7 +87,7 @@ fun FilesRoute(
             onCrumbClick = { index -> vm.popToFolder(index) },
             onCloseBulk = vm::clearSelection,
             onBulkAction = vm::bulk,
-            onUpload = { /* TODO: 弹上传选择 */ },
+            onUpload = { launchPicker() },
             onLoadMore = vm::loadMore,
         )
 

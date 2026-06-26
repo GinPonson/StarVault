@@ -186,6 +186,29 @@ class UploadWorker(
 
         /** ForegroundInfo 通知 id — 单上传任务用固定 1 个(Phase 3 限制 M2 只能 1 个并发任务)。 */
         const val NOTIFICATION_ID = 115_001
+
+        /**
+         * 构造 1 个 OneTimeWorkRequest(由 TransfersViewModel / UploadRoute 调用)。
+         */
+        fun enqueue(
+            context: Context,
+            uri: Uri,
+            targetCid: String,
+            fileName: String,
+            sizeBytes: Long,
+        ): UUID {
+            val data: Data = workDataOf(
+                Key.Uri to uri.toString(),
+                Key.TargetCid to targetCid,
+                Key.FileName to fileName,
+                Key.SizeBytes to sizeBytes,
+            )
+            val request: OneTimeWorkRequest = OneTimeWorkRequestBuilder<UploadWorker>()
+                .setInputData(data)
+                .build()
+            WorkManager.getInstance(context).enqueue(request)
+            return request.id
+        }
     }
 
     /** WorkRequest input Data keys(顶层 const,方便测试 + 跨 module 调用)。 */
@@ -209,28 +232,5 @@ class UploadWorker(
         const val DONE = "DONE"
         const val FAILED = "FAILED"
         const val CANCELED = "CANCELED"
-    }
-
-    /**
-     * 构造 1 个 OneTimeWorkRequest(由 TransfersViewModel / UploadRoute 调用)。
-     */
-    fun enqueue(
-        context: Context,
-        uri: Uri,
-        targetCid: String,
-        fileName: String,
-        sizeBytes: Long,
-    ): UUID {
-        val data: Data = workDataOf(
-            Key.Uri to uri.toString(),
-            Key.TargetCid to targetCid,
-            Key.FileName to fileName,
-            Key.SizeBytes to sizeBytes,
-        )
-        val request: OneTimeWorkRequest = OneTimeWorkRequestBuilder<UploadWorker>()
-            .setInputData(data)
-            .build()
-        WorkManager.getInstance(context).enqueue(request)
-        return request.id
     }
 }

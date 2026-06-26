@@ -17,6 +17,7 @@ import com.starvault.data.remote.cloud115.Token401Interceptor
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
+import com.starvault.data.repository.TransferRepository
 import com.starvault.data.upload.OssUploader
 import com.starvault.data.upload.UploadInitClient
 import com.starvault.data.uploadworker.UploadExecutor
@@ -42,6 +43,15 @@ import okhttp3.OkHttpClient
  *  - `statusPollClient` : 65s 长轮询（115 get/status/）
  */
 object ServiceLocator {
+
+    /**
+     * Application context — [androidx.work.WorkManager.getInstance] 注入用。
+     *
+     * init() 阶段从 [init] 参数保存。Process 死亡后 Application onCreate 必重 init,
+     * 不会出现 lateinit 还没赋值就被读的情况(M1 没遇到)。
+     */
+    lateinit var appContext: Context
+        private set
 
     lateinit var tokenStore: OpenAuthStore
         private set
@@ -101,6 +111,13 @@ object ServiceLocator {
      * 构造在 ServiceLocator.init 末尾,因为依赖 [uploadInitClient] / [ossUploader] / [openUploadApi]。
      */
     lateinit var uploadExecutor: UploadExecutor
+        private set
+
+    /**
+     * 内存版 Transfer 仓库(Phase 5)— Transfers 屏 ViewModel 通过此聚合状态。
+     * 不依赖 Context,可提前构造。
+     */
+    lateinit var transferRepository: TransferRepository
         private set
 
     lateinit var authManager: OpenAuthManager
@@ -165,6 +182,7 @@ object ServiceLocator {
 
     fun init(context: Context) {
         val appContext = context.applicationContext
+        this.appContext = appContext
         tokenStore = OpenAuthStore(appContext)
         val tokenProvider = tokenStore::accessTokenBlocking
 
@@ -212,6 +230,8 @@ object ServiceLocator {
             ossUploader = ossUploader,
             api = openUploadApi,
         )
+        // M2 transfer 仓库(Phase 5 引入)
+        transferRepository = TransferRepository()
 
         // Coil 全局 ImageLoader 注入 OkHttpNetworkFetcher（带 Bearer）
         SingletonImageLoader.setSafe { ctx ->
