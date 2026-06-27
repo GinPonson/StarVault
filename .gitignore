@@ -37,5 +37,8 @@ captures/
 design_icons_baseline.png
 platform-*.zip
 
+# design-baseline: scripts/capture-design-baseline.sh 的输出(可重新生成)
+design-baseline/
+
 # OS
 .DS_Store
