@@ -352,6 +352,20 @@ class FilesViewModel(
         clearSelection()
     }
 
+    /**
+     * 新建文件夹（115 `create_dir` 端点接入时实现）。
+     *
+     * 当前 stub：
+     *  - 仅 ToastBus.error 提示"功能开发中"
+     *  - 字段定义先固化，后端接好直接替换函数体即可
+     *
+     * @param name 用户输入的文件夹名（FilesRoute 已 trim 过）
+     */
+    fun createFolder(name: String) {
+        ToastBus.error("新建文件夹功能开发中")
+        // TODO: 调用 115 create_dir endpoint，name 用 URLEncoder.encode，cid = currentCid
+    }
+
     /* ─────────────────── ParsedFileItem → FileEntry 映射 ─────────────────── */
 
     /**
