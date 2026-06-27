@@ -14,7 +14,11 @@ import com.starvault.data.remote.cloud115.OpenUploadApiService
 import com.starvault.data.remote.cloud115.OpenUserApiService
 import com.starvault.data.remote.cloud115.StatusPollApi
 import com.starvault.data.remote.cloud115.Token401Interceptor
+import com.starvault.data.download.DownloadSaveUri
+import com.starvault.data.download.OssDownloader
+import com.starvault.data.downloadworker.DownloadExecutor
 import com.starvault.data.repository.AuthRepository
+import com.starvault.data.repository.DownloadRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
 import com.starvault.data.repository.TransferRepository
@@ -29,6 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import okhttp3.OkHttpClient
+import java.util.UUID
 
 /**
  * 极简 ServiceLocator：单例持有数据层组件。
@@ -115,6 +120,58 @@ object ServiceLocator {
      * 构造在 ServiceLocator.init 末尾,因为依赖 [uploadInitClient] / [ossUploader] / [openUploadApi]。
      */
     lateinit var uploadExecutor: UploadExecutor
+        private set
+
+    /**
+     * 下载落盘辅助(M3)— [com.starvault.data.downloadworker.DownloadExecutor] 通过此
+     * 写 `MediaStore.Downloads` 公开目录。构造依赖 [appContext].contentResolver。
+     */
+    lateinit var downloadSaveUri: DownloadSaveUri
+        private set
+
+    /**
+     * 下载 OkHttp 流式 GET 器(M3)— [com.starvault.data.downloadworker.DownloadExecutor]
+     * 调 [OssDownloader.download] 拉签名 URL 写流。复用 [okHttpClient](`browserLikeHeader`
+     * + `AuthHeader` + `Token401`,UA 已自动注入 — CDN 直链必需)。
+     *
+     * 已知风险(plan #11):Token401 在签名 URL 401 时浪费 ~60s。暂接受,M4 优化。
+     */
+    lateinit var ossDownloader: OssDownloader
+        private set
+
+    /**
+     * 下载执行器(M3)— Worker 业务编排(downurl → MediaStore.insert → 流式写 → publish/delete)。
+     * 构造依赖 [openFileApi] / [downloadSaveUri] / [ossDownloader]。
+     */
+    lateinit var downloadExecutor: DownloadExecutor
+        private set
+
+    /**
+     * 下载入口仓库(M3)— [com.starvault.ui.files.FilesViewModel] 通过此把单文件下载
+     * 任务投递到 WorkManager,内部 `downloadWorkTrigger.trySend(workId)` 把 workId
+     * 桥接到 [com.starvault.ui.transfers.TransfersViewModel]。
+     */
+    lateinit var downloadRepository: DownloadRepository
+        private set
+
+    /**
+     * 下载 workId 触发器 — [DownloadRepository.enqueue] 把 workId 桥接到
+     * [com.starvault.ui.transfers.TransfersViewModel.observeDownloadWork]。
+     *
+     * ## 选型 Channel(UNLIMITED)
+     *  对齐 [filesRefreshTrigger] 的设计(plan 同步策略)— 永不丢信号,新 collector 起来
+     *  后 drain 缓冲。
+     *
+     * ## API
+     *  - 生产端:[downloadWorkTrigger].trySend(workId) — [DownloadRepository.enqueue] 末尾。
+     *  - 消费端:[downloadWorkFlow].collect { observeDownloadWork(it) } —
+     *    [com.starvault.ui.transfers.TransfersViewModel] init(Phase B 接入)。
+     */
+    lateinit var downloadWorkTrigger: Channel<UUID>
+        private set
+
+    /** 消费端 Flow — TransfersViewModel 订阅这个(Phase B)。 */
+    lateinit var downloadWorkFlow: Flow<UUID>
         private set
 
     /**
@@ -293,6 +350,22 @@ object ServiceLocator {
         )
         // M2 transfer 仓库(Phase 5 引入)
         transferRepository = TransferRepository()
+
+        // M3 下载管道 — 与上传对称,复用 okHttpClient(UA 注入),落盘走 MediaStore.Downloads
+        val downloadChannel = Channel<UUID>(Channel.UNLIMITED)
+        downloadWorkTrigger = downloadChannel
+        downloadWorkFlow = downloadChannel.receiveAsFlow()
+        downloadSaveUri = DownloadSaveUri(contentResolver = appContext.contentResolver)
+        ossDownloader = OssDownloader(okHttpClient = okHttpClient)
+        downloadExecutor = DownloadExecutor(
+            api = openFileApi,
+            downloadSaveUri = downloadSaveUri,
+            ossDownloader = ossDownloader,
+        )
+        downloadRepository = DownloadRepository(
+            context = appContext,
+            downloadWorkTrigger = downloadWorkTrigger,
+        )
 
         // Coil 全局 ImageLoader 注入 OkHttpNetworkFetcher（带 Bearer）
         SingletonImageLoader.setSafe { ctx ->
