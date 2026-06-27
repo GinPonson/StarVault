@@ -209,8 +209,22 @@ class FilesRepository(
             val sha1 = obj.stringOrNull("sha1") ?: obj.stringOrNull("sha") ?: ""
             val mtime = obj.longOrZero("upt") ?: obj.longOrZero("tp") ?: 0L
             // 缩略图 URL:proapi `thumb`,webapi `u`;都带 115 签名
+            //
+            // 已知 115 thumb.115.com → imgjump.115.com CDN 限制:
+            //  1. 只支持两种 size 档位:`_0`(原图档,实测 370×320 / 40KB PNG,**8-bit 调色板 256 色**)
+            //     和 `_100`(100px 缩略图,17KB)。`_200/_300/_500` 全部 404,不要尝试拼接。
+            //  2. 强制 8-bit palette 256 色量化 — 用户上传的彩色 / 渐变图在缩略图里会变成
+            //     色带 banding,看起来"糊"。这是 CDN 端硬限制,客户端无法绕过。
+            //  3. `uo` 字段(p115client 标 "source_url")实测跟 `thumb` 同 MD5,不是用户上传的
+            //     原图,不要加进 fallback 链当"高色深档"用。
+            //
+            // 当前策略:统一走 `_0` 拿最大尺寸档,Coil 用 size hint downsample 到目标像素。
+            // 渐变 banding 是已知 UX 妥协,等 115 改 CDN。
+            //
+            // 正则说明:URL 形如 `xxx_100?sig=xxx`(无扩展名) 或 `xxx_100.jpg?`(带扩展名),
+            // 用 `_\d+(?=\.|$|\?)` 兼容两种形态和行尾形态,防止 115 未来改格式导致漏匹配。
             val rawThumb = obj.stringOrNull("thumb") ?: obj.stringOrNull("u") ?: ""
-            val thumbnailUrl = rawThumb.replace(Regex("_\\d+(?=\\?)"), "_0")
+            val thumbnailUrl = rawThumb.replace(Regex("_\\d+(?=\\.|$|\\?)"), "_0")
             ParsedFileItem(
                 id = fid,
                 parentId = parentId,
