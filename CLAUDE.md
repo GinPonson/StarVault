@@ -92,6 +92,26 @@ Multipart PUT goes to **Aliyun OSS** (not 115 endpoints) — SDK `com.aliyun.dpa
 
 `target = "U_1_<cid>"` prefix kept 1:1 with OpenList; `topupload` field is **not sent** (115 docs "必填:否", Go SDK omits).
 
+### Download pipeline (M3 spec §6)
+
+Single-file download (M3) symmetric to M2 upload — WorkManager + ForegroundService + notification progress + in-memory TransferRepository aggregation. Out of scope: batch, range resume, custom save path.
+
+**Pipeline** (entry point: FilesViewModel.downloadEntry → row "···" DropdownMenu):
+- `POST /open/ufile/downurl` — exchange `pickCode` for 5-minute signed CDN URL via `OpenFileApiService.downloadUrl` (proapi + Bearer)
+- `MediaStore.Downloads.insert(IS_PENDING=1)` — pre-allocate row; flips to `IS_PENDING=0` on success (`publish`) or `delete` on failure (avoids ghost rows mid-write)
+- OkHttp `Call.enqueue` + `suspendCancellableCoroutine` → `BufferedOutputStream` 8 KB chunked loop → 1 MB / 200 ms progress throttle → `MediaStore.openOutputStream(uri, "w")`
+- Notification state machine: progress (no PI) → completion (`Intent.ACTION_VIEW + destUri`, `FLAG_IMMUTABLE`). WorkManager replaces same-id notification in place; `Result.success()` tears down FGS, completion notif stays in tray for tap-to-open.
+
+**OkHttp client reuse** — `ossDownloader` uses `ServiceLocator.okHttpClient` directly (UA injection + `browserLikeHeader` + `AuthHeader` already wired). Known risk: `Token401Interceptor` wastes ~60s if CDN URL itself 401s; accepted for M3.
+
+**Signed URL 5-min expiry** — `runAttemptCount` left uncapped; WorkManager default exponential backoff (30s start, 5 attempts) re-fetches a fresh URL each retry. CancellationException → `Result.retry()` (preserves partial progress only conceptually; whole file re-streams because no range download).
+
+**Multi-concurrent** — `NOTIFICATION_ID = id.hashCode()` per work; users can launch N downloads in parallel, each with own progress bar.
+
+**Cross-VM bridge** — `DownloadRepository.enqueue` → `ServiceLocator.downloadWorkTrigger.trySend(DownloadWork(workId, fileName, sizeBytes))`. `TransfersViewModel.init` subscribes `downloadWorkFlow` in `appScope` (not `viewModelScope` — survives nav pop). Channel(UNLIMITED) queue semantics match M2 `filesRefreshTrigger`. WorkManager 2.10.3 `WorkInfo` does NOT expose `inputData`, so envelope carries display metadata.
+
+**Done vs upload** — download `phase == DONE` does **not** trigger `filesRefreshTrigger` (remote list unchanged). All other Phase transitions mirror upload (RUNNING → updateProgress; FAILED/CANCELED → markFailed).
+
 ### DI
 
 `core/ServiceLocator` — pure singleton, no Hilt/Koin. `MainActivity.onCreate` initializes once; all VMs read dependencies from there by default. Simpler than `Lazy`/`synchronized`.
