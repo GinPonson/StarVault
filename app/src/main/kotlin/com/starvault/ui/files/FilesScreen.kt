@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +88,12 @@ fun FilesScreen(
     onSort: () -> Unit = {},
     onSelect: (FileEntry) -> Unit = {},
     onOpen: (FileEntry) -> Unit = {},
+    /**
+     * 单文件下载入口（M3）— FilesScreen 在 row 右侧 "···" DropdownMenu 里调它，
+     * 由 Route 接到 [com.starvault.ui.files.FilesViewModel.downloadEntry]。
+     * 视觉变更：仅当菜单展开时显示 DropdownMenu，collapsed 态与改前完全一致。
+     */
+    onDownload: (FileEntry) -> Unit = {},
     /** 点击面包屑中某一段（0-based index）；截断 stack 跳回该层。 */
     onCrumbClick: (Int) -> Unit = {},
     onCloseBulk: () -> Unit = {},
@@ -153,6 +163,7 @@ fun FilesScreen(
                                 selectedIds = state.selectedIds,
                                 onSelect = onSelect,
                                 onOpen = onOpen,
+                                onDownload = onDownload,
                                 isLoadingMore = state.isLoadingMore,
                                 hasMore = state.hasMore,
                                 onLoadMore = onLoadMore,
@@ -499,6 +510,7 @@ private fun FileList(
     selectedIds: Set<String>,
     onSelect: (FileEntry) -> Unit,
     onOpen: (FileEntry) -> Unit,
+    onDownload: (FileEntry) -> Unit,
     isLoadingMore: Boolean = false,
     hasMore: Boolean = false,
     onLoadMore: () -> Unit = {},
@@ -542,6 +554,7 @@ private fun FileList(
                 selected = f.id in selectedIds,
                 onSelect = { onSelect(f) },
                 onOpen = { onOpen(f) },
+                onDownload = { onDownload(f) },
             )
         }
         // 列表底部加载指示器：仅在还能加载下一页且正在加载时显示
@@ -571,9 +584,11 @@ private fun FileListRow(
     selected: Boolean,
     onSelect: () -> Unit,
     onOpen: () -> Unit,
+    onDownload: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
+    var moreExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -603,18 +618,46 @@ private fun FileListRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Box(
-            modifier = Modifier
-                .clickable { /* TODO: 单条更多 */ }
-                .padding(8.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.More,
-                contentDescription = "更多",
-                tint = c.muted,
-                modifier = Modifier.size(18.dp),
-            )
+        Box {
+            Box(
+                modifier = Modifier
+                    .clickable { moreExpanded = true }
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.More,
+                    contentDescription = "更多",
+                    tint = c.muted,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            // "···" 展开菜单 — 单文件下载入口（M3）
+            DropdownMenu(
+                expanded = moreExpanded,
+                onDismissRequest = { moreExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Download,
+                                contentDescription = null,
+                                tint = c.fg,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text("下载", style = t.body, color = c.fg)
+                        }
+                    },
+                    onClick = {
+                        moreExpanded = false
+                        onDownload()
+                    },
+                )
+            }
         }
     }
 }

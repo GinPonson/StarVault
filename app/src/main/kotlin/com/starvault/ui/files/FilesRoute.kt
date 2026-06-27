@@ -86,6 +86,8 @@ fun FilesRoute(
                     else -> { /* TODO: 详情页 / 下载 */ }
                 }
             },
+            // M3: row 右侧 "···" DropdownMenu 触发单文件下载
+            onDownload = { e -> vm.downloadEntry(e) },
             onCrumbClick = { index -> vm.popToFolder(index) },
             onCloseBulk = vm::clearSelection,
             onBulkAction = vm::bulk,

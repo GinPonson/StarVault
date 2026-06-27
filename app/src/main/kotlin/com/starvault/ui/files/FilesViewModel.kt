@@ -6,6 +6,7 @@ import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.ParsedFileItem
+import com.starvault.data.repository.DownloadRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.toFileType
 import kotlinx.coroutines.Job
@@ -35,6 +36,7 @@ import java.util.concurrent.TimeUnit
  */
 class FilesViewModel(
     private val filesRepository: FilesRepository = ServiceLocator.filesRepository,
+    private val downloadRepository: DownloadRepository = ServiceLocator.downloadRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<FilesUiState>(FilesUiState.Loading())
@@ -380,6 +382,32 @@ class FilesViewModel(
         }
     }
 
+    /**
+     * 单文件下载入口 — 把 [entry] 反构为 ParsedFileItem,投递到 DownloadRepository。
+     *
+     *  - 文件夹 → ToastBus.error（与 DownloadRepository 内 defense-in-depth 校验一致）
+     *  - 缺 pickCode → ToastBus.error（极少见;115 /files 响应的 pc 字段缺失）
+     *  - 成功 → ToastBus.info(开始下载) + 后台流由 Downloads/ 系统目录接管
+     *  - 失败 → ToastBus.error（115 message）
+     *
+     * 进度/通知由 TransfersViewModel.observeDownloadWork 聚合,Files 屏不显示进度。
+     */
+    fun downloadEntry(entry: FileEntry) {
+        val result = downloadRepository.enqueue(
+            ParsedFileItem(
+                id = entry.id,
+                parentId = currentCid,
+                name = entry.name,
+                isFolder = entry.isFolder,
+                pickCode = entry.pickCode,
+                sizeBytes = entry.sizeBytes,
+            ),
+        )
+        result
+            .onSuccess { ToastBus.info("开始下载：${entry.name}") }
+            .onFailure { e -> ToastBus.error(e.message ?: "下载失败") }
+    }
+
     /* ─────────────────── ParsedFileItem → FileEntry 映射 ─────────────────── */
 
     /**
@@ -417,6 +445,9 @@ class FilesViewModel(
             metaSegments = meta,
             isFolder = isFolder,
             thumbnailUrl = thumb,
+            // 文件下载入口所需的两个字段(folder 无意义,默认 0 / 空)
+            pickCode = pickCode,
+            sizeBytes = sizeBytes,
         )
     }
 }

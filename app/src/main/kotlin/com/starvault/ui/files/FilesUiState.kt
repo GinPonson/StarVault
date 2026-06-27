@@ -75,6 +75,9 @@ data class TabCounts(
  *
  *  - thumbnailUrl 仅 IMAGE / VIDEO 类型有值（115 webapi /files 响应 `u` 字段）；
  *    folder / audio / doc / zip 留 null，FileRow 仍用渐变色块 fallback
+ *  - pickCode / sizeBytes 仅文件需要(folder 留空 / 0)。ViewModel 调
+ *    [com.starvault.data.repository.DownloadRepository.enqueue] 时把 entry 反构为
+ *    ParsedFileItem,这两个字段必填 — 故一并下沉到 entry,避免 UI ↔ VM 间再维护一份并查表
  */
 data class FileEntry(
     val id: String,
@@ -83,6 +86,8 @@ data class FileEntry(
     val metaSegments: List<String>,  // 3-4 段，用 " · " 拼成 meta 行
     val isFolder: Boolean,
     val thumbnailUrl: String? = null,
+    val pickCode: String = "",       // 115 文件下载码（pc），folder 留空
+    val sizeBytes: Long = 0L,        // 字节数，folder = 0
 )
 
 /**
