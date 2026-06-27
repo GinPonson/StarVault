@@ -91,6 +91,11 @@ dependencies {
     implementation(libs.zxing.core)
     // Media3 视频播放（PreviewVideo 用，播放 115 m3u8 流）
     implementation(libs.media3.exoplayer)
+    // HLS manifest 解析 — 115 /open/video/play 返回 m3u8，不是 mp4 二进制。
+    // 2026-06-27 实测不加 HlsMediaSource 时 ExoPlayer 抛
+    // `UnrecognizedInputFormatException: dataType=1`（= C.DATA_TYPE_MANIFEST），
+    // 必须用 HlsMediaSource.Factory 解析 m3u8 manifest + segment URL。
+    implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
     implementation(libs.media3.datasource.okhttp)
     // Aliyun OSS Android SDK(M2 upload:115 storage layer = Aliyun OSS,见 spec §3.3)

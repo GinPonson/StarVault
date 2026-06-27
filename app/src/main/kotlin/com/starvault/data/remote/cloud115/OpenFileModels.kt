@@ -309,10 +309,21 @@ data class OpenVideoPlayData(
     val height: Int = 0,
     /** 各清晰度播放地址列表。取 [videoUrl] 第一个 url 即可。 */
     @SerialName("video_url") val videoUrl: List<OpenVideoPlayUrl> = emptyList(),
-    /** 多音轨列表(本次 MVP 不处理)。 */
-    @SerialName("multitrack_list") val multitrackList: List<JsonElement> = emptyList(),
-    /** 所有可用清晰度列表(本次 MVP 不处理)。 */
-    @SerialName("definition_list_new") val definitionListNew: List<JsonElement> = emptyList(),
+    /** 多音轨列表(本次 MVP 不处理)。shape 不固定,留 JsonElement 兜底。 */
+    @SerialName("multitrack_list") val multitrackList: JsonElement? = null,
+    /**
+     * 所有可用清晰度列表(本次 MVP 不处理)。
+     *
+     * 115 不同文件返回 shape 不一致:
+     *  - array : `[{definition, desc}, ...]`(老格式)
+     *  - object: `{"4":"1080P","100":"原画"}`(新格式,key=definition 数值,value=名称)
+     *
+     * 之前强制 `List<JsonElement>` 在 object 形态下会抛 "Expected start of the array '[',
+     *  but had '{' instead",整个响应解析失败 → 拿不到 video_url → 播放挂掉(2026-06-27 实测
+     * Tomo Chan Wa Onnanoko S01E13 命中此 bug)。改成 `JsonElement?` 后不解,只取我们真正
+     * 用的 `video_url` 第一个即可。
+     */
+    @SerialName("definition_list_new") val definitionListNew: JsonElement? = null,
 )
 
 /** 单个清晰度播放地址(OpenVideoPlayData.videoUrl 单项)。 */

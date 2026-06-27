@@ -49,7 +49,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.PlayerView
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
@@ -128,8 +128,11 @@ private fun VideoContent(
         val okHttpClient: OkHttpClient = ServiceLocator.okHttpClient
         val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0")
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(dataSourceFactory)
+        // 115 /open/video/play 返回的是 HLS manifest (m3u8)，不是 mp4 二进制。
+        // 之前用 DefaultMediaSourceFactory 时 ExoPlayer 抛
+        // `UnrecognizedInputFormatException: dataType=1`（= C.DATA_TYPE_MANIFEST）。
+        // 切到 HlsMediaSource.Factory 后 manifest 解析 + segment URL 注入 Bearer 都交给 HLS 管线。
+        val mediaSourceFactory = HlsMediaSource.Factory(dataSourceFactory)
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()

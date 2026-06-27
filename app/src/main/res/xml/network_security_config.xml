@@ -1,21 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    M2 上传 — 允许 Aliyun OSS 走明文 HTTP。
+    明文 HTTP 域名白名单(Android 9+ 默认禁止 cleartext)。
 
-    115 proapi /open/upload/get_token 返回的 endpoint 是 `http://oss-cn-shenzhen.aliyuncs.com`
-    (注意 http 不是 https)。这是 115 的有意设计 — 内网 OSS endpoint 走内网传输,
-    公网入口签名校验 + STS 凭证已经做了鉴权。
+    加入此白名单的域名都是 **服务端强制返回 HTTP** 的合法资源,签名/CDN
+    自带鉴权(非纯 HTTP 走代理攻击面):
+      1. Aliyun OSS — `oss-cn-shenzhen.aliyuncs.com` 等。115 /open/upload/get_token
+         返回的 endpoint 走 HTTP(115 设计,内网传输,STS 凭证已鉴权)。
+      2. 115 视频播放 CDN — `videoplay.115.com`。115 /open/video/play 响应的
+         video_url 是 `http://videoplay.115.com/...`(同 115 内部 CDN 设计,带签名)。
+         2026-06-27 跑视频播放 e2e 时 ExoPlayer OkHttpDataSource 抛
+         `UnknownServiceException: CLEARTEXT communication to videoplay.115.com
+         not permitted by network security policy`。
+         ⚠️ 不要把 `http://` 改写成 `https://` — 115 签名包含协议头,改写会失效
+         403。直接放行 cleartext 即可(签名已鉴权,无 MITM 风险)。
 
-    Android 9+ (API 28+) 默认禁止明文 HTTP,会抛:
-        java.net.UnknownServiceException: CLEARTEXT communication to
-        fhnfile.oss-cn-shenzhen.aliyuncs.com not permitted by network security policy
-
-    本配置只对 Aliyun OSS 域名放行(alibaba / aliyuncs 子域),其它流量仍强制 HTTPS。
+    其它所有流量仍强制 HTTPS,不受本配置影响。
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <!-- Aliyun OSS endpoint — *.aliyuncs.com(OSS 区域 endpoint)+ aliyun-inc.com -->
         <domain includeSubdomains="true">aliyuncs.com</domain>
         <domain includeSubdomains="true">alibaba-inc.com</domain>
+        <!-- 115 视频播放 CDN — *.115.com(覆盖 videoplay.115.com / 未来其他子域) -->
+        <domain includeSubdomains="true">115.com</domain>
     </domain-config>
 </network-security-config>
