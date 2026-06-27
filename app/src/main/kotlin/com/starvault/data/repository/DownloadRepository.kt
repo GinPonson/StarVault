@@ -1,6 +1,7 @@
 package com.starvault.data.repository
 
 import android.content.Context
+import com.starvault.data.downloadworker.DownloadWork
 import com.starvault.data.downloadworker.DownloadWorker
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import kotlinx.coroutines.channels.Channel
@@ -16,9 +17,11 @@ import java.util.UUID
  *  - [com.starvault.data.downloadworker.DownloadExecutor] : 业务编排(downurl → 写流)
  *
  * ## 跨 VM 桥接
- *  `enqueue` 成功后 `downloadWorkTrigger.trySend(workId)` —
+ *  `enqueue` 成功后 `downloadWorkTrigger.trySend(DownloadWork(workId, fileName, sizeBytes))` —
  *  [com.starvault.ui.transfers.TransfersViewModel] 在 appScope 内 collect 这个 Channel,
- *  收到 workId 后调 [observeDownloadWork] 订阅 WorkInfo 进度(对齐 M2 `filesRefreshTrigger` 模式)。
+ *  收到 [DownloadWork] 后调 [observeDownloadWork] 订阅 WorkInfo 进度(对齐 M2
+ *  `filesRefreshTrigger` 模式)。envelope 多带 fileName/sizeBytes 是因为
+ *  WorkManager 2.10.3 WorkInfo 不暴露 inputData,VM 拿不到展示元数据。
  *
  * ## 校验
  *  - [ParsedFileItem.isFolder] == true → [Result.failure]("文件夹不支持下载")
@@ -30,7 +33,7 @@ import java.util.UUID
  */
 class DownloadRepository(
     private val context: Context,
-    private val downloadWorkTrigger: Channel<UUID>,
+    private val downloadWorkTrigger: Channel<DownloadWork>,
 ) {
 
     /**
@@ -57,8 +60,16 @@ class DownloadRepository(
             saveName = item.name,
             sizeBytes = item.sizeBytes,
         )
-        // 桥接到 TransfersViewModel.observeDownloadWork(进程级 appScope 收集)
-        downloadWorkTrigger.trySend(workId)
+        // 桥接到 TransfersViewModel.observeDownloadWork(进程级 appScope 收集)。
+        // envelope 携带 fileName + sizeBytes — WorkManager 2.10.3 WorkInfo 不暴露
+        // inputData,VM 侧拿到 envelope 后直接建占位 entry,不用再回去查 source。
+        downloadWorkTrigger.trySend(
+            DownloadWork(
+                workId = workId,
+                fileName = item.name,
+                sizeBytes = item.sizeBytes,
+            ),
+        )
         return Result.success(workId)
     }
 }

@@ -17,6 +17,7 @@ import com.starvault.data.remote.cloud115.Token401Interceptor
 import com.starvault.data.download.DownloadSaveUri
 import com.starvault.data.download.OssDownloader
 import com.starvault.data.downloadworker.DownloadExecutor
+import com.starvault.data.downloadworker.DownloadWork
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.DownloadRepository
 import com.starvault.data.repository.FilesRepository
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import okhttp3.OkHttpClient
-import java.util.UUID
 
 /**
  * 极简 ServiceLocator：单例持有数据层组件。
@@ -155,23 +155,23 @@ object ServiceLocator {
         private set
 
     /**
-     * 下载 workId 触发器 — [DownloadRepository.enqueue] 把 workId 桥接到
-     * [com.starvault.ui.transfers.TransfersViewModel.observeDownloadWork]。
+     * 下载 work 触发器 — [DownloadRepository.enqueue] 把 [DownloadWork] envelope
+     * 桥接到 [com.starvault.ui.transfers.TransfersViewModel.observeDownloadWork]。
      *
      * ## 选型 Channel(UNLIMITED)
      *  对齐 [filesRefreshTrigger] 的设计(plan 同步策略)— 永不丢信号,新 collector 起来
      *  后 drain 缓冲。
      *
      * ## API
-     *  - 生产端:[downloadWorkTrigger].trySend(workId) — [DownloadRepository.enqueue] 末尾。
+     *  - 生产端:[downloadWorkTrigger].trySend(DownloadWork(...)) — [DownloadRepository.enqueue] 末尾。
      *  - 消费端:[downloadWorkFlow].collect { observeDownloadWork(it) } —
-     *    [com.starvault.ui.transfers.TransfersViewModel] init(Phase B 接入)。
+     *    [com.starvault.ui.transfers.TransfersViewModel] init。
      */
-    lateinit var downloadWorkTrigger: Channel<UUID>
+    lateinit var downloadWorkTrigger: Channel<DownloadWork>
         private set
 
     /** 消费端 Flow — TransfersViewModel 订阅这个(Phase B)。 */
-    lateinit var downloadWorkFlow: Flow<UUID>
+    lateinit var downloadWorkFlow: Flow<DownloadWork>
         private set
 
     /**
@@ -352,7 +352,7 @@ object ServiceLocator {
         transferRepository = TransferRepository()
 
         // M3 下载管道 — 与上传对称,复用 okHttpClient(UA 注入),落盘走 MediaStore.Downloads
-        val downloadChannel = Channel<UUID>(Channel.UNLIMITED)
+        val downloadChannel = Channel<DownloadWork>(Channel.UNLIMITED)
         downloadWorkTrigger = downloadChannel
         downloadWorkFlow = downloadChannel.receiveAsFlow()
         downloadSaveUri = DownloadSaveUri(contentResolver = appContext.contentResolver)

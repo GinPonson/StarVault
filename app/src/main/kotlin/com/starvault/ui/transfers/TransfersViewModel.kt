@@ -28,14 +28,35 @@ import kotlinx.coroutines.launch
  *  - downSpeedBps = sum(DOWN RUNNING transfers.speedBps)
  *  - speedBps 是 UI 估算,不在 repo 里维护 — VM 每次 collect repo 重新算
  *
- * ## observeWork
+ * ## observeWork / observeDownloadWork
  *  - [observeWork] 是 Phase 5 引入的入口,UploadRoute enqueue 后调
+ *  - [observeDownloadWork] 是 M3 引入的入口;由 [TransfersViewModel.init] 在
+ *    [ServiceLocator.downloadWorkFlow] 上订阅 — DownloadRepository.enqueue 时
+ *    `downloadWorkTrigger.trySend(workId)`,VM 收到 UUID 后调 observeDownloadWork
  *  - 收集 WorkManager.getWorkInfoByIdFlow(workId) → 把 progress 推到 repo
- *  - 这里只暴露接口;具体实现里 [TransfersViewModel.observeWork] 在 ApplicationScope 里 collect
+ *  - 这里只暴露接口;具体实现里 collect 跑在 appScope(进程级,nav pop 不死)
  */
 class TransfersViewModel(
     private val repo: TransferRepository = ServiceLocator.transferRepository,
 ) : ViewModel() {
+
+    init {
+        // M3:订阅下载 work 触发器 — FilesVM.downloadEntry → DownloadRepository.enqueue
+        //   → ServiceLocator.downloadWorkTrigger.trySend(DownloadWork) → 此处 collect
+        //   → observeDownloadWork(envelope) 订阅 WorkInfo,推到 TransferRepository
+        //
+        // 与 M2 UploadRoute 不同:upload 是同步 enqueue 后立刻 observeWork(uuid, fileName, totalBytes),
+        // download 是异步触发(用户点 Files 屏 "···" → 下载),所以走 Channel 桥接。
+        //
+        // appScope 而不是 viewModelScope:TransfersViewModel 是 nav-scoped,
+        // nav pop 后 viewModelScope cancel → collect 死 → WorkInfo 不再消费。
+        // appScope 跨 nav pop 不死,Downloads 屏切回仍能看到进度更新。
+        ServiceLocator.appScope.launch {
+            ServiceLocator.downloadWorkFlow.collect { envelope ->
+                observeDownloadWork(envelope)
+            }
+        }
+    }
 
     private val _activeTab = MutableStateFlow(TransfersTab.Active)
 
@@ -190,6 +211,80 @@ class TransfersViewModel(
                             return@collect
                         }
                         phase == com.starvault.data.uploadworker.UploadWorker.Phase.RUNNING -> {
+                            repo.updateProgress(workId.toString(), transferredBytes = transferred)
+                        }
+                    }
+                }
+        }
+    }
+
+    /**
+     * M3 下载入口 — 镜像 [observeWork],处理 [com.starvault.data.downloadworker.DownloadWorker]
+     * 的 setProgress 信号。
+     *
+     * ## 与 observeWork 的差异
+     *  - direction = Direction.DOWN
+     *  - phase DONE 不调 `filesRefreshTrigger.trySend`(下载不动远端列表)
+     *  - fileName / totalBytes 从 envelope [DownloadWork] 直接拿(WorkManager 2.10.3
+     *    WorkInfo 不暴露 inputData),不需要 WorkManager 输入数据
+     *  - 入口是 Channel 桥接([ServiceLocator.downloadWorkFlow]),不是 UploadRoute 同步调
+     *
+     * ## 多并发安全
+     *  每个 workId 独立 collect,互不干扰。
+     *
+     * ## Terminal 退出 + 占位时机
+     *  - 入口直接调 repo.add() 占位(envelope 已带 fileName / totalBytes)
+     *  - 之后 setProgress 阶段持续 updateProgress
+     *  - 终态(DONE / FAILED / CANCELLED)→ markDone / markFailed + return@collect
+     */
+    fun observeDownloadWork(envelope: com.starvault.data.downloadworker.DownloadWork) {
+        val workId = envelope.workId
+        val downloadPhase = com.starvault.data.downloadworker.DownloadWorker.Phase
+        val progressKey = com.starvault.data.downloadworker.DownloadWorker.ProgressKey
+
+        // 占位 entry — 用 envelope 元数据建,不等 WorkInfo 首帧
+        repo.add(
+            Transfer(
+                id = workId.toString(),
+                fileName = envelope.fileName,
+                direction = Direction.DOWN,
+                totalBytes = envelope.sizeBytes,
+                transferredBytes = 0L,
+                speedBps = 0L,
+                status = TransferStatus.RUNNING,
+                startedAt = System.currentTimeMillis() / 1000L,
+            ),
+        )
+
+        ServiceLocator.appScope.launch {
+            androidx.work.WorkManager.getInstance(ServiceLocator.appContext)
+                .getWorkInfoByIdFlow(workId)
+                .collect { info ->
+                    if (info == null) return@collect
+                    val phase = info.progress.getString(progressKey.Phase)
+                    val transferred = info.progress.getLong(progressKey.Transferred, 0L)
+                    when {
+                        phase == downloadPhase.DONE -> {
+                            repo.markDone(workId.toString())
+                            // 注意:下载成功**不**触发 filesRefreshTrigger — 远端列表无变化
+                            return@collect
+                        }
+                        phase == downloadPhase.FAILED || info.state == androidx.work.WorkInfo.State.FAILED -> {
+                            val msg = info.outputData.getString("error") ?: "下载失败"
+                            repo.markFailed(workId.toString(), msg)
+                            return@collect
+                        }
+                        phase == downloadPhase.CANCELED || info.state == androidx.work.WorkInfo.State.CANCELLED -> {
+                            // CANCELED = WorkManager backoff 重试中(spec §6.2);当前 entry 标 FAILED,
+                            // 重试成功会重新走 RUNNING → DONE 路径
+                            repo.markFailed(workId.toString(), "已取消(将自动重试)")
+                            return@collect
+                        }
+                        info.state.isFinished -> {
+                            // 其他 terminal 不命中以上分支 — 静默退出
+                            return@collect
+                        }
+                        phase == downloadPhase.RUNNING -> {
                             repo.updateProgress(workId.toString(), transferredBytes = transferred)
                         }
                     }
