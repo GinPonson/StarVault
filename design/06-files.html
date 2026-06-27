@@ -460,6 +460,36 @@
   }
   .fab svg { width: 24px; height: 24px; }
   .screen:has(.file-row.selected) .fab { bottom: 158px; }
+
+  /* AddMenu — FAB 展开后的 2 项 DropdownMenu（HTML 静态 demo 默认 hidden） */
+  .add-menu {
+    position: absolute;
+    right: 20px;
+    bottom: 158px;
+    min-width: 200px;
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.25);
+    padding: 6px;
+    z-index: 24;
+    display: flex; flex-direction: column;
+  }
+  .add-menu[hidden] { display: none; }
+  .add-menu-item {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; padding: 12px 14px;
+    background: transparent; border: 0;
+    color: var(--fg); font: inherit; font-size: 14px;
+    border-radius: 10px; cursor: pointer;
+    text-align: left;
+  }
+  .add-menu-item:hover { background: rgba(0,0,0,0.04); }
+  .add-menu-item svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .add-menu-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 0 8px;
+  }
 </style>
 </head>
 <body>
@@ -490,9 +520,6 @@
             </a>
             <button class="icon-btn" aria-label="更多">
               <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
-            </button>
-            <button class="icon-btn" aria-label="新建文件夹">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM12 11v6M9 14h6"/></svg>
             </button>
           </div>
         </div>
@@ -735,10 +762,23 @@
         </div>
       </div>
 
-      <!-- FAB 上传 -->
-      <button class="fab" aria-label="上传">
+      <!-- FAB 上传/新建文件夹（点击展开菜单） -->
+      <button class="fab" aria-label="新建" aria-haspopup="menu" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
       </button>
+
+      <!-- + 弹出菜单 demo（点击 FAB 切换 visible） -->
+      <div class="add-menu" hidden>
+        <button class="add-menu-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+          <span>上传文件</span>
+        </button>
+        <div class="add-menu-divider"></div>
+        <button class="add-menu-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+          <span>新建文件夹</span>
+        </button>
+      </div>
     </div>
 
     <!-- 底部 3 键导航 -->
@@ -788,6 +828,26 @@
       list.classList.toggle('grid', toGrid);
       btns.forEach(b => b.classList.toggle('active', b === btn));
     });
+  });
+})();
+
+/* FAB Speed Dial：点击 FAB 切换 .add-menu 显隐（HTML 静态 demo） */
+(function () {
+  const fab = document.querySelector('.fab');
+  const menu = document.querySelector('.add-menu');
+  if (!fab || !menu) return;
+  fab.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const shown = !menu.hidden;
+    menu.hidden = shown;
+    fab.setAttribute('aria-expanded', String(!shown));
+  });
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (!e.target.closest('.add-menu, .fab')) {
+      menu.hidden = true;
+      fab.setAttribute('aria-expanded', 'false');
+    }
   });
 })();
 
