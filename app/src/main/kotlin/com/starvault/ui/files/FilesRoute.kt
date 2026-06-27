@@ -57,6 +57,9 @@ fun FilesRoute(
     // 排序 BottomSheet 显隐（rememberSaveable：旋转屏保留）
     var sortSheetVisible by rememberSaveable { mutableStateOf(false) }
 
+    // 新建文件夹 AlertDialog 显隐（rememberSaveable：旋转屏保留）
+    var newFolderDialogVisible by rememberSaveable { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         FilesScreen(
             state = state,
@@ -67,7 +70,6 @@ fun FilesRoute(
             onSearch = { nav.navigate(Route.Search()) },
             onTransfers = { nav.navigate(Route.Transfers) },
             onMore = { /* TODO: 弹文件更多菜单 */ },
-            onNewFolder = { /* TODO: 弹新建文件夹 */ },
             onTypeClick = vm::selectType,
             onViewToggle = vm::changeViewMode,
             onSort = { sortSheetVisible = true },
@@ -87,7 +89,8 @@ fun FilesRoute(
             onCrumbClick = { index -> vm.popToFolder(index) },
             onCloseBulk = vm::clearSelection,
             onBulkAction = vm::bulk,
-            onUpload = { launchPicker() },
+            onAddUpload = { launchPicker() },
+            onAddNewFolder = { newFolderDialogVisible = true },
             onLoadMore = vm::loadMore,
         )
 
@@ -102,6 +105,17 @@ fun FilesRoute(
                     sortSheetVisible = false
                 },
                 onDismiss = { sortSheetVisible = false },
+            )
+        }
+
+        // 新建文件夹 AlertDialog（覆盖在 FilesScreen 之上）
+        if (newFolderDialogVisible) {
+            NewFolderDialog(
+                onConfirm = { name ->
+                    vm.createFolder(name)
+                    newFolderDialogVisible = false
+                },
+                onDismiss = { newFolderDialogVisible = false },
             )
         }
     }
