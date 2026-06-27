@@ -79,7 +79,6 @@ fun FilesScreen(
     onSearch: () -> Unit = {},
     onTransfers: () -> Unit = {},
     onMore: () -> Unit = {},
-    onNewFolder: () -> Unit = {},
     onTypeClick: (FileType?) -> Unit = {},
     onViewToggle: (ViewMode) -> Unit = {},
     onSort: () -> Unit = {},
@@ -89,7 +88,8 @@ fun FilesScreen(
     onCrumbClick: (Int) -> Unit = {},
     onCloseBulk: () -> Unit = {},
     onBulkAction: (BulkAction) -> Unit = {},
-    onUpload: () -> Unit = {},
+    onAddUpload: () -> Unit = {},
+    onAddNewFolder: () -> Unit = {},
     /**
      * 列表滚到末尾时触发；ViewModel 用它加载下一页（offset+limit）。
      * UI 侧用 `LazyListState.firstVisibleItemIndex` + visibleItemCount 判别接近末尾时调一次。
@@ -118,7 +118,6 @@ fun FilesScreen(
                         onSearch = onSearch,
                         onTransfers = onTransfers,
                         onMore = onMore,
-                        onNewFolder = onNewFolder,
                     )
                     Crumb(
                         folderPath = state.folderPath,
@@ -181,9 +180,10 @@ fun FilesScreen(
                             .padding(horizontal = 12.dp, vertical = 12.dp),
                     )
                 }
-                // FAB
-                Fab(
-                    onClick = onUpload,
+                // FAB + DropdownMenu（AddMenu）：点 + 弹 2 项
+                AddMenu(
+                    onAddUpload = onAddUpload,
+                    onAddNewFolder = onAddNewFolder,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 20.dp, bottom = if (state.selectedIds.isNotEmpty()) 80.dp else 90.dp),
@@ -204,7 +204,6 @@ private fun FilesAppBar(
     onSearch: () -> Unit,
     onTransfers: () -> Unit,
     onMore: () -> Unit,
-    onNewFolder: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
@@ -225,7 +224,6 @@ private fun FilesAppBar(
             IconBtn(icon = Icons.Search,     onClick = onSearch,    contentDescription = "搜索")
             IconBtn(icon = Icons.Transfers,  onClick = onTransfers, contentDescription = "传输中心")
             IconBtn(icon = Icons.More,       onClick = onMore,      contentDescription = "更多")
-            IconBtn(icon = Icons.NewFolder,  onClick = onNewFolder, contentDescription = "新建文件夹")
         }
     }
 }
@@ -1050,22 +1048,5 @@ private fun BulkActBtn(icon: ImageVector, danger: Boolean = false, onClick: () -
 }
 
 /* ───────────────────── FAB ───────────────────── */
+// Fab composable 已删除 — FAB 视觉内联在 [AddMenu] (app/src/main/kotlin/com/starvault/ui/files/AddMenu.kt)
 
-@Composable
-private fun Fab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(StarVaultTheme.colors.fg)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Plus,
-            contentDescription = "新建",
-            tint = Color.White,
-            modifier = Modifier.size(24.dp),
-        )
-    }
-}
