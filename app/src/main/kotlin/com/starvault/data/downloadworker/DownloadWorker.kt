@@ -1,6 +1,7 @@
 package com.starvault.data.downloadworker
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -38,14 +39,17 @@ import java.util.UUID
  * ## ForegroundInfo / 通知栏状态机
  *
  * - **多并发**:NOTIFICATION_ID = `id.hashCode()`(每个 work 独立,允许多文件同时下载)。
- * - 进度阶段:`setForeground(getProgressInfo(percent))` — `stat_sys_download` 图标 + 横向进度条,
+ * - 进度阶段:`setForeground(buildProgressInfo(percent))` — `stat_sys_download` 图标 + 横向进度条,
  *   无 PendingIntent(downloading 时 destUri 尚未生成)。
- * - 完成阶段:`setForeground(getCompletionInfo(uri, mime))` — `stat_sys_download_done` 图标 +
- *   `Intent.ACTION_VIEW + destUri` 的 PendingIntent(API 31+ `FLAG_IMMUTABLE` 必填)。
- *   WorkManager 把同 id 通知**就地替换**为完成态,Result.success() 后 FGS 拆除但通知保留
- *   在通知栏,用户点 → 系统文件管理器打开。
- * - 失败阶段:`setForeground(getFailureInfo(fileName))` — `stat_notify_error` 图标,无 action
- *   (失败走 ToastBus 已提示)。
+ * - 完成阶段:`postCompletionNotification(fileName, targetUri, mime)` — `stat_sys_download_done`
+ *   图标 + `Intent.ACTION_VIEW + destUri` 的 PendingIntent(API 31+ `FLAG_IMMUTABLE` 必填)。
+ *   通过 [NotificationManager.notify] 直接 post 到**独立 ID** [COMPLETION_NOTIFICATION_TAG],**绕开
+ *   WorkManager 的 FGS 通知生命周期** — 因为 [Result.success] 返回后 WM 会调
+ *   `SystemForegroundDispatcher.cancelNotification` 移除同 id 通知,完成态必须脱离 WM 管控
+ *   才能保留在通知栏。用户点 → 系统文件管理器打开 destUri。
+ * - 失败阶段:`setForeground(buildFailureInfo(fileName))` — `stat_notify_error` 图标,无 action
+ *   (失败走 ToastBus 已提示)。Result.failure() 后 FGS 通知被 WM 移除,但失败已由 ToastBus 提示,
+ *   不需要残留通知。
  *
  * ## 取消 / 重试
  *  - 协程被取消 → [DownloadExecutor] 抛 [kotlinx.coroutines.CancellationException] →
@@ -107,7 +111,11 @@ class DownloadWorker(
                         ProgressKey.Transferred to sizeBytes,
                         ProgressKey.TotalBytes to sizeBytes,
                     ))
-                    setForeground(buildCompletionInfo(fileName = saveName, targetUri = result.targetUri, mime = mime))
+                    postCompletionNotification(
+                        fileName = saveName,
+                        targetUri = result.targetUri,
+                        mime = mime,
+                    )
                     Result.success()
                 }
                 is DownloadResult.Failure -> {
@@ -161,16 +169,18 @@ class DownloadWorker(
     }
 
     /**
-     * 完成阶段 ForegroundInfo — `stat_sys_download_done` 图标 + `Intent.ACTION_VIEW` PendingIntent。
+     * 完成阶段通知 — `stat_sys_download_done` 图标 + `Intent.ACTION_VIEW` PendingIntent。
      *
-     * WorkManager 把同 id 通知就地替换,Result.success() 后 FGS 拆除但通知保留,
+     * 通过 [NotificationManager.notify] 直接 post,**不使用** [setForeground] — 后者会被
+     * WorkManager 在 [Result.success] 后被 `SystemForegroundDispatcher.cancelNotification` 移除。
+     * 这里用独立 tag 维度(id 部分 + tag 部分)发,WM 只取消它自己登记的 id,我们的保留在通知栏,
      * 用户点 → 系统文件管理器打开 destUri。
      */
-    private fun buildCompletionInfo(fileName: String, targetUri: Uri, mime: String): ForegroundInfo {
+    private fun postCompletionNotification(fileName: String, targetUri: Uri, mime: String) {
         DownloadNotificationChannel.ensureCreated(applicationContext)
         val openIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(targetUri, mime)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val pi = PendingIntent.getActivity(
             applicationContext,
@@ -178,16 +188,16 @@ class DownloadWorker(
             openIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return wrapForegroundInfo(
-            NotificationCompat.Builder(applicationContext, DownloadNotificationChannel.CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("下载完成")
-                .setContentText(fileName)
-                .setContentIntent(pi)
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .build()
-        )
+        val notification = NotificationCompat.Builder(applicationContext, DownloadNotificationChannel.CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("下载完成")
+            .setContentText(fileName)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(COMPLETION_NOTIFICATION_TAG, notificationId(), notification)
     }
 
     /**
@@ -231,6 +241,13 @@ class DownloadWorker(
 
     companion object {
         private const val TAG = "DownloadWorker"
+
+        /**
+         * 完成通知的 tag 维度 — 与 FGS 通知的 id 区分,绕开 WorkManager cancelNotification。
+         * tag + id 是 [NotificationManager.notify] 的复合 key;tag 唯一即可,id 仍按
+         * `notificationId()`(每个 work 独立)排布,允许多文件同时完成。
+         */
+        private const val COMPLETION_NOTIFICATION_TAG = "download_complete"
 
         /**
          * 构造 1 个 OneTimeWorkRequest(由 [com.starvault.data.repository.DownloadRepository] 调用)。
