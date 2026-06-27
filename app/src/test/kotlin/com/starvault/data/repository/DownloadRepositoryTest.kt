@@ -7,6 +7,7 @@ import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.starvault.data.downloadworker.DownloadWork
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import io.mockk.every
 import io.mockk.mockkStatic
@@ -38,7 +39,7 @@ import java.util.UUID
 class DownloadRepositoryTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val channel = Channel<UUID>(Channel.UNLIMITED)
+    private val channel = Channel<DownloadWork>(Channel.UNLIMITED)
     private val repo = DownloadRepository(context = context, downloadWorkTrigger = channel)
 
     @Before fun setup() {
@@ -112,9 +113,11 @@ class DownloadRepositoryTest {
         val workId = result.getOrNull()
         assertNotNull("workId should be returned", workId)
 
-        // 桥接:channel 应收到 1 条 workId(先验 channel,再验 WorkManager 用 channel 拿到的 id)
-        val receivedUuid = drainOne()
-        assertEquals(workId, receivedUuid)
+        // 桥接:channel 应收到 1 条 DownloadWork(workId, fileName, sizeBytes)— 先验 envelope,再验 WorkManager
+        val envelope = drainOne()
+        assertEquals(workId, envelope.workId)
+        assertEquals("song.flac", envelope.fileName)
+        assertEquals(5_242_880L, envelope.sizeBytes)
 
         // 真实 WorkManager:workId 对应的 WorkInfo 应存在
         val info = WorkManager.getInstance(context).getWorkInfoById(workId!!).get()
@@ -122,7 +125,7 @@ class DownloadRepositoryTest {
     }
 
     @Test fun `enqueue failure path does not bridge to channel`() {
-        // 校验失败时不应往 channel 发任何信号(避免 TransfersViewModel 收到空 UUID 触发空 observe)
+        // 校验失败时不应往 channel 发任何信号(避免 TransfersViewModel 收到空 envelope 触发空 observe)
         val folder = ParsedFileItem(
             id = "cid_x",
             parentId = "cid_0",
@@ -134,18 +137,18 @@ class DownloadRepositoryTest {
         repo.enqueue(folder)
 
         // tryReceive 在空 channel 上返回 failure ChannelResult → getOrNull() == null
-        val receivedUuid = drainOneOrNull()
-        assertEquals(null, receivedUuid)
+        val envelope = drainOneOrNull()
+        assertEquals(null, envelope)
     }
 
-    /** 取出 channel 中 1 个 workId(假设 channel 至少 1 条),并返回它。 */
-    private fun drainOne(): UUID {
+    /** 取出 channel 中 1 条 DownloadWork envelope(假设 channel 至少 1 条),并返回它。 */
+    private fun drainOne(): DownloadWork {
         val r = channel.tryReceive()
         val v = r.getOrNull()
-        assertNotNull("channel should have a UUID to drain", v)
+        assertNotNull("channel should have a DownloadWork to drain", v)
         return v!!
     }
 
-    /** 取出 channel 中 1 个 workId(允许空) — 空时返回 null。 */
-    private fun drainOneOrNull(): UUID? = channel.tryReceive().getOrNull()
+    /** 取出 channel 中 1 条 DownloadWork envelope(允许空) — 空时返回 null。 */
+    private fun drainOneOrNull(): DownloadWork? = channel.tryReceive().getOrNull()
 }

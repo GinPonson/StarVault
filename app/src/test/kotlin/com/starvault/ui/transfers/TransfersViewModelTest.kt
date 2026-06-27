@@ -1,14 +1,18 @@
 package com.starvault.ui.transfers
 
 import com.starvault.core.ServiceLocator
+import com.starvault.data.downloadworker.DownloadWork
 import com.starvault.data.model.Direction
 import com.starvault.data.model.Transfer
 import com.starvault.data.model.TransferStatus
 import com.starvault.data.repository.TransferRepository
+import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -39,6 +43,10 @@ class TransfersViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // VM 内部不直接调 ToastBus,但 mockkObject 保险
         mockkObject(ServiceLocator)
+        // M3:TransfersViewModel.init 订阅 downloadWorkFlow;给个空 channel 避免
+        // UninitializedPropertyAccessException(本测试不触发下载)
+        val emptyChannel = Channel<DownloadWork>(Channel.UNLIMITED)
+        every { ServiceLocator.downloadWorkFlow } returns emptyChannel.receiveAsFlow()
     }
 
     @After fun tearDown() {

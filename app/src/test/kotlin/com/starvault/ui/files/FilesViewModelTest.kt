@@ -5,6 +5,7 @@ import com.starvault.core.ToastBus
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.OpenFolderAddData
 import com.starvault.data.remote.cloud115.ParsedFileItem
+import com.starvault.data.repository.DownloadRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.PagedFiles
 import io.mockk.coEvery
@@ -47,6 +48,10 @@ class FilesViewModelTest {
         mockkObject(ToastBus)
         every { ToastBus.error(any()) } returns Unit
         every { ToastBus.info(any()) } returns Unit
+        // M3:FilesViewModel(downloadRepository = ServiceLocator.downloadRepository)
+        // 默认从 ServiceLocator 拿;本测试不关心下载,给个 relaxed mock 让 lateinit 访问不抛
+        mockkObject(ServiceLocator)
+        every { ServiceLocator.downloadRepository } returns mockk<DownloadRepository>(relaxed = true)
         // ServiceLocator.filesRefreshTrigger 是进程级 Channel(单 collector);前面 test 的
         // VM collector 还活着,新 emit 的 Unit 会被旧 collector 抢走。setUp 阶段 reset
         // 整个 channel,确保每个 test 独立。
@@ -57,6 +62,7 @@ class FilesViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         unmockkObject(ToastBus)
+        unmockkObject(ServiceLocator)
     }
 
     private fun folder(id: String, name: String) = ParsedFileItem(
