@@ -3,6 +3,7 @@ package com.starvault.data.repository
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.FileListResponse
 import com.starvault.data.remote.cloud115.OpenFileApiService
+import com.starvault.data.remote.cloud115.OpenFolderAddData
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.remote.cloud115.requireSuccessful
 import kotlinx.serialization.json.JsonElement
@@ -129,6 +130,30 @@ class FilesRepository(
                 totalCount = body.count,
                 hasMore = body.hasMore(),
             )
+        }
+    }
+
+    /**
+     * 在指定父目录下新建空文件夹。
+     *
+     *  调用 115 `POST /open/folder/add`(参考 OpenListTeam/115-sdk-go/fs.go:17-25 Mkdir)。
+     *  成功后 ViewModel 通常会调 [listFolder] 刷新当前目录列表(115 端不会通过 push 推过来)。
+     *
+     * @param name  新文件夹名(已由 UI 层 trim,不为空)
+     * @param pid   父目录 cid;根目录传 "0"
+     * @return      新建文件夹的 [OpenFolderAddData](含 file_id + 回显 file_name)
+     *
+     *  错误处理：
+     *  - HTTP / 业务失败 → Result.failure,message 来自 115 error/message 字段
+     *  - 重名 / 路径非法 → 115 端 state=false + message 非空,直接抛 IllegalStateException
+     */
+    suspend fun createFolder(name: String, pid: String): Result<OpenFolderAddData> {
+        return runCatching {
+            val body = api.addFolder(pid = pid, fileName = name).requireSuccessful()
+            if (body.state != true) {
+                throw IllegalStateException(body.message ?: "新建文件夹失败")
+            }
+            body.data ?: throw IllegalStateException("响应为空")
         }
     }
 

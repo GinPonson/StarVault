@@ -353,17 +353,31 @@ class FilesViewModel(
     }
 
     /**
-     * 新建文件夹（115 `create_dir` 端点接入时实现）。
+     * 新建文件夹（115 `POST /open/folder/add` 端点）。
      *
-     * 当前 stub：
-     *  - 仅 ToastBus.error 提示"功能开发中"
-     *  - 字段定义先固化，后端接好直接替换函数体即可
+     *  - 入参 name 由 [NewFolderDialog] 在调用前 trim 过；此处再加一道空串防御
+     *  - pid 用 [currentCid]（用户当前所在目录）
+     *  - 成功：ToastBus.info 提示新建的文件夹名(回显 115 端可能改名后的值)+ 刷新当前目录
+     *  - 失败：ToastBus.error 提示 115 message（重名/权限/网络），UI 不弹错误占位
      *
-     * @param name 用户输入的文件夹名（FilesRoute 已 trim 过）
+     * @param name 用户输入的文件夹名（已 trim）
      */
     fun createFolder(name: String) {
-        ToastBus.error("新建文件夹功能开发中")
-        // TODO: 调用 115 create_dir endpoint，name 用 URLEncoder.encode，cid = currentCid
+        if (name.isBlank()) {
+            ToastBus.error("文件夹名不能为空")
+            return
+        }
+        viewModelScope.launch {
+            filesRepository.createFolder(name = name, pid = currentCid)
+                .onSuccess { data ->
+                    val display = data.fileName.ifBlank { name }
+                    ToastBus.info("已新建：$display")
+                    refresh()
+                }
+                .onFailure { e ->
+                    ToastBus.error(e.message ?: "新建文件夹失败")
+                }
+        }
     }
 
     /* ─────────────────── ParsedFileItem → FileEntry 映射 ─────────────────── */

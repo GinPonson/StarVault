@@ -3,6 +3,7 @@ package com.starvault.ui.files
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.model.FileType
+import com.starvault.data.remote.cloud115.OpenFolderAddData
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.PagedFiles
@@ -45,6 +46,7 @@ class FilesViewModelTest {
         // VM 失败时调 ToastBus.error;stub 避免走真 Channel
         mockkObject(ToastBus)
         every { ToastBus.error(any()) } returns Unit
+        every { ToastBus.info(any()) } returns Unit
         // ServiceLocator.filesRefreshTrigger 是进程级 Channel(单 collector);前面 test 的
         // VM collector 还活着,新 emit 的 Unit 会被旧 collector 抢走。setUp 阶段 reset
         // 整个 channel,确保每个 test 独立。
@@ -229,5 +231,67 @@ class FilesViewModelTest {
 
         // init 主动 loadFolder("0") 1 次 + trigger 触发 refresh 1 次 = 2 次
         coVerify(atLeast = 2) { repo.listFolder(any()) }
+    }
+
+    @Test
+    fun `createFolder success toasts info and triggers refresh`() = runTest {
+        val repo = mockk<FilesRepository>()
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = emptyList(), offset = 0, limit = 50, totalCount = 0, hasMore = false)
+        )
+        coEvery { repo.createFolder(name = "新文件夹", pid = any()) } returns Result.success(
+            OpenFolderAddData(fileName = "新文件夹", fileId = "999")
+        )
+        val vm = FilesViewModel(repo)
+        testScheduler.advanceUntilIdle()
+
+        vm.createFolder("新文件夹")
+        testScheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.createFolder(name = "新文件夹", pid = "0") }
+        // 成功后 refresh → listFolder 被多调一次
+        coVerify(atLeast = 2) { repo.listFolder(any()) }
+        verify(exactly = 1) { ToastBus.info(match { it.contains("新文件夹") }) }
+        verify(exactly = 0) { ToastBus.error(any()) }
+    }
+
+    @Test
+    fun `createFolder failure toasts error and skips refresh`() = runTest {
+        val repo = mockk<FilesRepository>()
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = emptyList(), offset = 0, limit = 50, totalCount = 0, hasMore = false)
+        )
+        coEvery { repo.createFolder(name = any(), pid = any()) } returns Result.failure(
+            IllegalStateException("重名")
+        )
+        val vm = FilesViewModel(repo)
+        testScheduler.advanceUntilIdle()
+        val callsBefore = mutableListOf<String>().also {
+            coVerify { repo.listFolder(any()) }
+        }
+
+        vm.createFolder("冲突名")
+        testScheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.createFolder(name = "冲突名", pid = "0") }
+        // 失败不走 refresh,listFolder 调用次数与失败前一致(init 一次)
+        coVerify(exactly = 1) { repo.listFolder(any()) }
+        verify(exactly = 1) { ToastBus.error("重名") }
+    }
+
+    @Test
+    fun `createFolder blank name short-circuits without calling repo`() = runTest {
+        val repo = mockk<FilesRepository>()
+        coEvery { repo.listFolder(any()) } returns Result.success(
+            PagedFiles(items = emptyList(), offset = 0, limit = 50, totalCount = 0, hasMore = false)
+        )
+        val vm = FilesViewModel(repo)
+        testScheduler.advanceUntilIdle()
+
+        vm.createFolder("   ")
+        testScheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.createFolder(any(), any()) }
+        verify(exactly = 1) { ToastBus.error(match { it.contains("不能为空") }) }
     }
 }

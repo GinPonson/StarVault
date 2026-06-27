@@ -325,3 +325,39 @@ data class OpenVideoPlayUrl(
     /** 清晰度名称。 */
     val desc: String = "",
 )
+
+// ─────────────────── /open/folder/add 响应(新建文件夹) ───────────────────
+
+/**
+ * POST /open/folder/add 响应(OAuth Bearer 鉴权,Files 屏新建文件夹)。
+ *
+ *  官方文档:https://www.yuque.com/115yun/open/qur839kyx9cgxpxi
+ *  OpenList SDK 同步参考:OpenListTeam/115-sdk-go/fs.go:12-25(MkdirResp)。
+ *
+ *  字段对照:
+ *  - state   : bool    业务成功标记
+ *  - message : string  异常信息(成功时为空)
+ *  - code    : int     异常码(成功为 0)
+ *  - data    : object  新建文件夹信息
+ *    - file_name : string  创建的文件夹名(回显,可能含 115 端转码后的名字)
+ *    - file_id   : string  新建文件夹 ID
+ *
+ *  ⚠️ 错误识别:115 在重名 / 路径非法 / 权限不足等场景下 state=false + message 非空。
+ *  state 与 code 同时看,code 是 115 端标准错误码(对齐 401 拦截器的 40140123 等家族)。
+ */
+@Serializable
+data class OpenFolderAddResponse(
+    val state: Boolean? = null,
+    val message: String? = null,
+    val code: Int = 0,
+    val data: OpenFolderAddData? = null,
+)
+
+/** 新建文件夹信息(OpenFolderAddResponse.data)。 */
+@Serializable
+data class OpenFolderAddData(
+    /** 创建的文件夹名(可能含 115 端转义后的名字,带 `/` 等保留字符会替换)。 */
+    @SerialName("file_name") val fileName: String = "",
+    /** 新建文件夹 ID。 */
+    @SerialName("file_id") val fileId: String = "",
+)

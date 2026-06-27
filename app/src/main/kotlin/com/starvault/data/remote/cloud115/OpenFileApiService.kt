@@ -18,6 +18,7 @@ import retrofit2.http.Query
  *  - /open/ufile/files          GET   目录文件列表(混合)
  *  - /open/ufile/search         GET   文件名搜索(全账号 substring)
  *  - /open/folder/get_info      GET   单文件/夹 metadata(Preview 入口)
+ *  - /open/folder/add           POST  新建空文件夹(Files 屏 AddMenu)
  *  - /open/ufile/downurl        POST  原图/文件直链(**必须传 UA,见 downloadUrl 注释**)
  *  - /open/video/play           GET   视频 m3u8(多清晰度,取 video_url[0])
  *
@@ -99,6 +100,32 @@ interface OpenFileApiService {
     suspend fun getInfo(
         @Query("file_id") fileId: String,
     ): Response<OpenFolderInfoResponse>
+
+    /**
+     * POST /open/folder/add — 新建空文件夹(Files 屏 AddMenu → "新建文件夹")。
+     *
+     * 官方文档:https://www.yuque.com/115yun/open/qur839kyx9cgxpxi
+     * OpenList 同步实现:OpenListTeam/115-sdk-go/fs.go:17-25(Mkdir)。
+     *
+     * **必须走 form-urlencoded body**(对齐 OpenList `ReqWithForm(SetFormData(...))`):
+     *  - field `pid`       : 父目录 cid;根目录传 "0"
+     *  - field `file_name` : 新文件夹名(由 UI 层 trim 完再传,Retrofit 自动 URL encode)
+     *
+     * 响应:[OpenFolderAddResponse]:
+     *  - state / message / code
+     *  - data : { file_name, file_id } — 创建后的文件夹元信息(回显名可能含 115 端转码)
+     *
+     * 错误场景(state=false):
+     *  - 重名同层目录 → 115 端拒
+     *  - 父目录不存在 / 无权限 → 40140123 / 990001 等
+     *  - file_name 含 `/` 或其他保留字符 → 115 端返回 file_name 已替换为安全名
+     */
+    @FormUrlEncoded
+    @POST("open/folder/add")
+    suspend fun addFolder(
+        @Field("pid") pid: String,
+        @Field("file_name") fileName: String,
+    ): Response<OpenFolderAddResponse>
 
     /**
      * POST /open/ufile/downurl — 文件直链(图片原图 / 任意文件下载 URL)。
