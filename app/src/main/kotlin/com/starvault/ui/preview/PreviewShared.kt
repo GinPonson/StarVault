@@ -1,6 +1,7 @@
 package com.starvault.ui.preview
 
 import com.starvault.data.repository.MediaMetadata
+import com.starvault.data.repository.VideoM3u8
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,6 +39,13 @@ sealed interface PreviewUiState {
          * 取值如 "1080P"/"720P"/"4K"/"原画"。空 → UI fallback "—"。
          */
         val qualityChip: String = "",
+        /**
+         * 全部可用清晰度(VIDEO 才有,image 屏空 list)。
+         * 来自 `/open/video/play` 响应的 `data.video_url[]`,
+         * 每项 = 一个 (url, desc) 配对;给 PreviewVideoScreen 画质切换弹层用。
+         * 5 分钟签名失效前可任意切换,过期需要重新 fetch(目前未做自动刷新)。
+         */
+        val qualityOptions: List<VideoM3u8> = emptyList(),
     ) : PreviewUiState
 }
 

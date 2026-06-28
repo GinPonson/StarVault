@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -99,6 +100,7 @@ object Icons {
     val Clock: ImageVector        get() = MaterialIcons.Outlined.Schedule
     val DownloadInto: ImageVector get() = MaterialIcons.Outlined.Download
     val Fullscreen: ImageVector   get() = MaterialIcons.Outlined.Fullscreen
+    val FullscreenExit: ImageVector get() = MaterialIcons.Outlined.FullscreenExit
     val Prev: ImageVector         get() = MaterialIcons.Outlined.SkipPrevious
     val Next: ImageVector         get() = MaterialIcons.Outlined.SkipNext
     val Play: ImageVector         get() = MaterialIcons.Filled.PlayArrow

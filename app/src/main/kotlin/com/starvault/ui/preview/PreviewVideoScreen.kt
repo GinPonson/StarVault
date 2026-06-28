@@ -1,6 +1,8 @@
 package com.starvault.ui.preview
 
+import android.app.Activity
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
@@ -28,6 +30,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +53,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
@@ -60,6 +68,7 @@ import com.starvault.component.Icons
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.ParsedFileItem
+import com.starvault.data.repository.VideoM3u8
 import com.starvault.theme.StarVaultTheme
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
@@ -104,15 +113,17 @@ import okhttp3.OkHttpClient
  *  MediaMetadata.fileCategory 是 String "1" 而 ParsedFileItem.fileCategory 是 Int 2,
  *  同名不同义,合成处显式注释。
  *
- *  Noop + ToastBus:字幕 / 投屏 / 更多 / 上一集 / 下一集 / 全屏。
+ *  Noop + ToastBus:字幕 / 投屏 / 更多 / 上一集 / 下一集(全屏已接,见 VideoContent.isFullscreen)。
  *
  *  @param state VM 暴露的 [PreviewUiState]
  *  @param onBack 返回(BackHandler + 顶部"返回"按钮都调它)
+ *  @param onSelectQuality 切档(VM 收到后改 Success.mediaUrl,Screen 侧 remember 重建 player)
  */
 @Composable
 fun PreviewVideoScreen(
     state: PreviewUiState,
     onBack: () -> Unit,
+    onSelectQuality: (VideoM3u8) -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     BackHandler(enabled = true) { onBack() }
@@ -123,7 +134,7 @@ fun PreviewVideoScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Success -> VideoContent(state, onBack)
+            is PreviewUiState.Success -> VideoContent(state, onBack, onSelectQuality)
         }
     }
 }
@@ -134,6 +145,7 @@ fun PreviewVideoScreen(
 private fun VideoContent(
     state: PreviewUiState.Success,
     onBack: () -> Unit,
+    onSelectQuality: (VideoM3u8) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -205,26 +217,74 @@ private fun VideoContent(
         }
     }
 
+    // 10. 全屏切换:
+    //   - 横屏(landscape) + immersive sticky 隐藏系统栏
+    //   - 顶栏整条收起(对齐 YouTube/B 站,横屏纯视频模式)
+    //   - orientation 改变默认会重建 Activity;ExoPlayer 由 composition remember 持有,
+    //     重建后会丢。预先把当前位置存到 rememberSaveable,新 player 起来后 seekTo 恢复。
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var resumePositionMs by rememberSaveable { mutableIntStateOf(0) }
+    val localCtx = LocalContext.current
+    DisposableEffect(isFullscreen) {
+        val activity = localCtx as? Activity
+        if (activity != null) {
+            activity.requestedOrientation = if (isFullscreen) {
+                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            val controller = WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            if (isFullscreen) {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose { /* 状态翻转时由下一个 effect 接管 */ }
+    }
+    val onToggleFullscreen: () -> Unit = {
+        // 切换前抓拍位置(无论进入还是退出):横竖屏切换都会重建 Activity,
+        // 新 player 起来后 LaunchedEffect(player) 会 seekTo 到这里
+        resumePositionMs = snapshot.positionMs
+        isFullscreen = !isFullscreen
+    }
+    // 新 player 起来 → 恢复到原位置
+    LaunchedEffect(player) {
+        if (resumePositionMs > 0) {
+            player.seekTo(resumePositionMs.toLong())
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        PreviewTopBar(name = state.metadata.name, onBack = onBack)
+        // 全屏时隐藏顶栏:横屏下返回用 BackHandler / 系统手势即可,
+        // 留顶栏反而挤压视频画布(对齐 YouTube/B 站视频横屏体验)
+        if (!isFullscreen) {
+            PreviewTopBar(name = state.metadata.name, onBack = onBack)
+        }
 
         PreviewCanvas(
             player = player,
             snapshot = snapshot,
             qualityChip = state.qualityChip,
+            qualityOptions = state.qualityOptions,
+            currentQualityUrl = state.mediaUrl,
             speedChip = speedLabel,
             bufferedMb = bufferedMb,
             onTogglePlay = onTogglePlay,
+            onSelectQuality = onSelectQuality,
             modifier = Modifier.weight(1f),
         )
 
         PreviewControls(
             snapshot = snapshot,
             speedLabel = speedLabel,
+            isFullscreen = isFullscreen,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onCycleSpeed = onCycleSpeed,
             onDownload = onDownload,
+            onToggleFullscreen = onToggleFullscreen,
         )
     }
 }
@@ -395,9 +455,12 @@ private fun PreviewCanvas(
     player: ExoPlayer,
     snapshot: PlayerSnapshot,
     qualityChip: String,
+    qualityOptions: List<VideoM3u8>,
+    currentQualityUrl: String,
     speedChip: String,
     bufferedMb: String,
     onTogglePlay: () -> Unit,
+    onSelectQuality: (VideoM3u8) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val t = StarVaultTheme.typography
@@ -444,14 +507,20 @@ private fun PreviewCanvas(
             )
         }
 
-        // 右上:3 chip
+        // 右上:3 chip。quality chip 可点(有 options 时)→ DropdownMenu 切档;
+        // 单档 / 列表为空时降级为只读,避免点开空菜单。
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(end = 12.dp, top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            PreviewChip(text = qualityChip.ifBlank { "—" }, accent = true)
+            QualityChipWithMenu(
+                currentDesc = qualityChip.ifBlank { "—" },
+                options = qualityOptions,
+                currentUrl = currentQualityUrl,
+                onSelect = onSelectQuality,
+            )
             PreviewChip(text = speedChip, accent = false)
             PreviewChip(text = "原声", accent = false)
         }
@@ -497,6 +566,69 @@ private fun PreviewChip(text: String, accent: Boolean) {
             style = StarVaultTheme.typography.micro,
             color = Color.White,
         )
+    }
+}
+
+/**
+ * 清晰度 chip + DropdownMenu 切档。
+ *
+ *  - [currentDesc]: 蓝底 chip 显示当前 desc(如 "1080P",空 → UI fallback "—")
+ *  - [options]: 全部可用清晰度(来自 /open/video/play 的 video_url[])
+ *  - [currentUrl]: 当前正在播放的 url,用于菜单项打勾
+ *  - [onSelect]: 选中后调 → VM 改 Success.mediaUrl → Screen 重建 player
+ *
+ *  当 [options] 只有一个或为空时(降级到只 1 档 / 元数据缺失),整个 chip 不可点;
+ *  只显示,不开菜单(避免点开"1 项菜单"这种空操作)。
+ */
+@Composable
+private fun QualityChipWithMenu(
+    currentDesc: String,
+    options: List<VideoM3u8>,
+    currentUrl: String,
+    onSelect: (VideoM3u8) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val isInteractive = options.size > 1
+
+    Box {
+        // chip 本体:有 ≥2 档才加 clickable;否则纯展示
+        val chipModifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xD92F6FEB))
+            .then(
+                if (isInteractive) Modifier.clickable { expanded = true }
+                else Modifier,
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+        Box(modifier = chipModifier) {
+            Text(
+                text = currentDesc,
+                style = StarVaultTheme.typography.micro,
+                color = Color.White,
+            )
+        }
+        // DropdownMenu:挂在 chip 父 Box 上,系统会自动定位到 anchor 下方
+        DropdownMenu(
+            expanded = expanded && isInteractive,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { opt ->
+                val isCurrent = opt.url == currentUrl
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = opt.qualityDesc.ifBlank { "未知清晰度" },
+                            color = if (isCurrent) Color(0xFF2F6FEB) else Color.White,
+                            style = StarVaultTheme.typography.body,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        if (!isCurrent) onSelect(opt)
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -548,10 +680,12 @@ private fun PreviewPulseDot() {
 private fun PreviewControls(
     snapshot: PlayerSnapshot,
     speedLabel: String,
+    isFullscreen: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Int) -> Unit,
     onCycleSpeed: () -> Unit,
     onDownload: () -> Unit,
+    onToggleFullscreen: () -> Unit,
 ) {
     val t = StarVaultTheme.typography
     Column(
@@ -615,7 +749,12 @@ private fun PreviewControls(
                     )
                 }
                 PreviewCtrlBtn(Icons.DownloadInto, "下载", onClick = onDownload)
-                PreviewCtrlBtn(Icons.Fullscreen, "全屏") { ToastBus.info("全屏即将上线") }
+                // 全屏 / 退出全屏 二态:portrait 显示 Fullscreen(放大),landscape 显示 FullscreenExit(收缩)
+                PreviewCtrlBtn(
+                    icon = if (isFullscreen) Icons.FullscreenExit else Icons.Fullscreen,
+                    contentDescription = if (isFullscreen) "退出全屏" else "全屏",
+                    onClick = onToggleFullscreen,
+                )
             }
         }
     }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.repository.MediaPreviewRepository
+import com.starvault.data.repository.VideoM3u8
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,10 +16,11 @@ import kotlinx.coroutines.launch
  *
  *  流程：
  *  1. [MediaPreviewRepository.fetchMetadata] 拿 pickcode + name + size
- *  2. [MediaPreviewRepository.fetchVideoM3u8Url] 拿 video_url
- *  3. 暴露 [PreviewUiState.Success]（mediaUrl = m3u8 URL）
+ *  2. [MediaPreviewRepository.fetchVideoM3u8Options] 拿全量清晰度列表
+ *  3. 默认选第一档（服务端按可用性降序，通常是 1080P 或最高），暴露
+ *     [PreviewUiState.Success]（mediaUrl + qualityOptions + qualityChip）
+ *  4. [selectQuality] 切换清晰度：把 mediaUrl 改到对应 url，让 Screen 重建 player
  *
- *  与 PreviewImage 几乎对称，区别只是第二步的 endpoint。
  *  ExoPlayer 实例的创建/释放由 Screen 侧 [DisposableEffect] 负责，不放进 VM
  *  （避免 VM 重建时 player 泄漏；player 生命周期应绑 Composable）。
  */
@@ -41,10 +43,16 @@ class PreviewVideoViewModel(
             val metadata = repo.fetchMetadata(fileId)
             metadata.fold(
                 onSuccess = { meta ->
-                    val url = repo.fetchVideoM3u8Url(meta.pickCode)
-                    url.fold(
-                        onSuccess = { u ->
-                            _state.value = PreviewUiState.Success(meta, u.url, qualityChip = u.qualityDesc)
+                    val options = repo.fetchVideoM3u8Options(meta.pickCode)
+                    options.fold(
+                        onSuccess = { list ->
+                            val first = list.first()
+                            _state.value = PreviewUiState.Success(
+                                metadata = meta,
+                                mediaUrl = first.url,
+                                qualityChip = first.qualityDesc,
+                                qualityOptions = list,
+                            )
                         },
                         onFailure = { e ->
                             // 失败：_state 保持 Loading,仅 ToastBus 提示
@@ -58,5 +66,18 @@ class PreviewVideoViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * 切换清晰度。Screen 监听 state.mediaUrl 变化重建 ExoPlayer;
+     * 签名 5 分钟有效期内切档无需重新 fetch，超过则需要重新调用 load。
+     */
+    fun selectQuality(option: VideoM3u8) {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        if (current.mediaUrl == option.url) return
+        _state.value = current.copy(
+            mediaUrl = option.url,
+            qualityChip = option.qualityDesc,
+        )
     }
 }

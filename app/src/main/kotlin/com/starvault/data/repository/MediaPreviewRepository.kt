@@ -16,8 +16,8 @@ import com.starvault.data.remote.cloud115.requireSuccessful
  *  2. downloadUrl(pickCode) → resp.data[fileId].url.url(图片直链)
  *
  *  流程(Video):
- *  1. getInfo(fid)          → pickCode, name, sizeBytes
- *  2. videoPlay(pickCode)   → resp.data.videoUrl[0].url(m3u8 流)
+ *  1. getInfo(fid)             → pickCode, name, sizeBytes
+ *  2. videoPlay(pickCode)      → resp.data.videoUrl[].url + desc(m3u8 列表)
  *
  *  错误策略:所有 HTTP / 业务失败 → Result.failure(message);UI 屏展示 Error 分支。
  *
@@ -110,18 +110,17 @@ class MediaPreviewRepository(
     }
 
     /**
-     * 拿视频 m3u8 URL(带 115 签名,可直接给 Media3 播放)。
+     * 拿视频全部可用 m3u8 列表(带 115 签名,可直接给 Media3 播放)。
      *
      * **字段差异**:
      *  - webapi `data.video_url` 是 string;proapi `data.video_url` 是 array
-     *  - 取 array[0].url(服务端按可用性排序,通常是 1080P 或最高可用清晰度)
-     *  - 一并返回 array[0].desc(清晰度名 "1080P"/"720P"/"4K"/"原画"),
-     *    给 PreviewVideoScreen 的画质 chip 用
+     *  - array 每一项 = 一个清晰度(1080P / 720P / 4K / 原画),服务端按可用性降序
+     *  - 给 PreviewVideoScreen 画质切换用:列表展示,选哪条就 prepare 哪条的 url
      *
      * @param pickCode 调 getInfo 拿到的 pick_code 字段
-     * @return Result.success([VideoM3u8](url + qualityDesc)) / Result.failure
+     * @return Result.success([VideoM3u8] 列表) / Result.failure
      */
-    suspend fun fetchVideoM3u8Url(pickCode: String): Result<VideoM3u8> {
+    suspend fun fetchVideoM3u8Options(pickCode: String): Result<List<VideoM3u8>> {
         return runCatching {
             val body = api.videoPlay(pickCode = pickCode).requireSuccessful()
             if (body.state != true) {
@@ -130,10 +129,11 @@ class MediaPreviewRepository(
             body
         }.mapCatching { body ->
             val data = body.data ?: throw IllegalStateException("无法获取视频播放地址")
-            val first = data.videoUrl.firstOrNull()
-                ?: throw IllegalStateException("无法获取视频播放地址")
-            if (first.url.isBlank()) throw IllegalStateException("无法获取视频播放地址")
-            VideoM3u8(url = first.url, qualityDesc = first.desc)
+            val options = data.videoUrl
+                .filter { it.url.isNotBlank() }
+                .map { VideoM3u8(url = it.url, qualityDesc = it.desc) }
+            if (options.isEmpty()) throw IllegalStateException("无法获取视频播放地址")
+            options
         }
     }
 }

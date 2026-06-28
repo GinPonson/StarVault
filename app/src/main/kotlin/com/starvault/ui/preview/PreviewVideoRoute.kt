@@ -29,5 +29,9 @@ fun PreviewVideoRoute(
         },
     )
     val state by vm.state.collectAsStateWithLifecycle()
-    PreviewVideoScreen(state = state, onBack = onBack)
+    PreviewVideoScreen(
+        state = state,
+        onBack = onBack,
+        onSelectQuality = vm::selectQuality,
+    )
 }
