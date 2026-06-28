@@ -21,9 +21,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -47,6 +48,7 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import com.starvault.component.Icons
 import com.starvault.theme.StarVaultTheme
+import com.starvault.ui.dialog.RenameDialog
 
 /**
  * PreviewImage 全屏屏幕（浅色主题对齐设计稿）。
@@ -85,9 +87,17 @@ fun PreviewImageScreen(
     isStarred: Boolean = false,
     onBack: () -> Unit,
     onToggleStar: () -> Unit = {},
+    onRename: (String) -> Unit = {},
+    onDelete: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onDownload: () -> Unit = {},
+    onMove: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     BackHandler(enabled = true) { onBack() }
+
+    // M5:MoreMenu "重命名" → 弹 RenameDialog;不存到 rememberSaveable(弹层瞬时 UI,旋转屏关掉重新弹即可)
+    var renameDialogVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -104,16 +114,31 @@ fun PreviewImageScreen(
                     visible = uiVisible.value,
                     fileName = state.metadata.name,
                     onBack = onBack,
+                    onRename = { renameDialogVisible = true },
+                    onDelete = onDelete,
+                    onShare = onShare,
+                    onDownload = onDownload,
+                    onMove = onMove,
                 )
 
                 BottomActionBar(
                     visible = uiVisible.value,
                     isStarred = isStarred,
-                    onShare = { /* TODO: 调 AndroidSharesheet 分享原图 */ },
                     onFavorite = onToggleStar,
-                    onDelete = { /* TODO: 调 115 files/delete */ },
                 )
             }
+        }
+
+        // M5:重命名弹层(顶栏 MoreMenu "重命名" → 弹 RenameDialog)
+        if (renameDialogVisible && state is PreviewUiState.Success) {
+            RenameDialog(
+                currentName = state.metadata.name,
+                onConfirm = { newName ->
+                    renameDialogVisible = false
+                    onRename(newName)
+                },
+                onDismiss = { renameDialogVisible = false },
+            )
         }
     }
 }
@@ -228,25 +253,34 @@ private fun ImageContent(
 /* ─────────────────── 顶 / 底 浮层（BoxScope 扩展 → 钉到外层 Box 边） ─────────────────── */
 
 /**
- * 顶部信息栏（参考 Google Photos lightbox 风格）。
+ * 顶部信息栏（参考 Google Photos lightbox 风格 + M5 顶栏 MoreMenu 入口）。
  *
  *  - surface 白底（不透明），与下方黑底图片形成"白底 vs 黑底"强对比（明显分割）
  *  - 不用 1dp 灰线 —— 靠"白底栏 vs 黑底图片"的色差自然分割（Photos 同款）
- *  - 左侧 ← 返回 icon + 中间文件名 `titleMedium` 居中（maxLines=1）+ 右侧 ❤️ 星标
- *  - 16dp 横向 padding + 12dp 纵向 padding
+ *  - 左侧 ← 返回 icon + 中间文件名 `titleMedium`(maxLines=1,weight=1f) + 右侧 ··· MoreMenu
+ *  - 8dp 横向 + 8dp 纵向 padding
  *  - 作为 BoxScope 扩展，钉到外层 Box 的 [Alignment.TopCenter]
  *  - 显隐由 [visible] 控制（外层 [AnimatedVisibility] 包裹 fadeIn/fadeOut）
  *
+ *  M5 顶栏 ··· 入口(对齐 PreviewVideo/Audio):6 项 DropdownMenu
+ *  (下载/重命名/移动/删除/分享/属性)复用 PreviewShared.MoreMenu 黑底半透配色。
+ *  ❤️ 已挪到底栏 BottomActionBar(单按钮),此处不再放 ❤️,避免与底栏重复。
+ *
  *  顶 / 底与图片之间的"明显分割线"由黑底图片 + 白底栏的强对比实现 —— 不再画灰线。
- *  ❤️ 用 androidx vector icon（之前是 android.R 系统 drawable），跟 PreviewVideo/Audio ❤️ 一致。
  */
 @Composable
 private fun BoxScope.TopInfoBar(
     visible: Boolean,
     fileName: String,
     onBack: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onDownload: () -> Unit,
+    onMove: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
+    var moreExpanded by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -279,7 +313,7 @@ private fun BoxScope.TopInfoBar(
                         modifier = Modifier.size(22.dp),
                     )
                 }
-                // 中间文件名（居中 + 占满中间空间）
+                // 中间文件名（占满中间空间）
                 Text(
                     text = fileName,
                     color = c.fg,
@@ -290,31 +324,58 @@ private fun BoxScope.TopInfoBar(
                         .weight(1f)
                         .padding(horizontal = 4.dp),
                 )
-                // 右侧空白占位(40dp),与原来 ❤️ 对齐宽度 — 避免文件名挤压
-                Box(modifier = Modifier.size(40.dp))
+                // 右侧 ··· MoreMenu 入口(M5)
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .pointerInput(Unit) { detectTapGestures(onTap = { moreExpanded = true }) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.More,
+                            contentDescription = "更多",
+                            tint = c.fg,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    // 6 项 DropdownMenu:复用 PreviewShared.MoreMenu(黑底半透,跟黑底图片屏面融合)
+                    MoreMenu(
+                        expanded = moreExpanded,
+                        onDismiss = { moreExpanded = false },
+                        onDownload = { moreExpanded = false; onDownload() },
+                        onRename = { moreExpanded = false; onRename() },
+                        onMove = { moreExpanded = false; onMove() },
+                        onDelete = { moreExpanded = false; onDelete() },
+                        onShare = { moreExpanded = false; onShare() },
+                        onProperties = {
+                            moreExpanded = false
+                            com.starvault.core.ToastBus.info("查看属性即将上线")
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * 底部操作栏（参考 Google Photos lightbox 风格）。
+ * 底部操作栏（参考 Google Photos lightbox 风格 + M5 单 ❤️ 收藏按钮）。
  *
  *  - surface 白底（不透明），与上方黑底图片形成"白底 vs 黑底"强对比（明显分割）
  *  - 不用 1dp 灰线 —— 靠色差自然分割（Photos 同款）
  *  - 16dp padding
- *  - 三等宽 [OutlinedButton]（`weight(1f)`），border 边 + fg 文字 + 透明容器
- *  - 按钮间 8dp 间距
+ *  - M5:底栏从原来的"分享 / 收藏 / 删除"3 按钮减为单 ❤️ 收藏按钮;
+ *    分享 / 删除 已挪到顶栏 MoreMenu(避免与 MoreMenu 6 项重复),对齐 PreviewAudio 单 ❤️ 布局
+ *  - [isStarred] true → 实心 Icons.HeartFilled + accent 色;false → 空心 Icons.HeartOutline + fg 色
  *  - 作为 BoxScope 扩展，钉到外层 Box 的 [Alignment.BottomCenter]
- *  - MVP：分享 / 收藏 / 删除按钮仅占位（回调由父 Composable 注入）
  */
 @Composable
 private fun BoxScope.BottomActionBar(
     visible: Boolean,
     isStarred: Boolean,
-    onShare: () -> Unit,
     onFavorite: () -> Unit,
-    onDelete: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     Box(
@@ -333,25 +394,13 @@ private fun BoxScope.BottomActionBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.Center,
             ) {
-                OutlinedActionButton(
-                    iconRes = android.R.drawable.ic_menu_share,
-                    label = "分享",
-                    onClick = onShare,
-                    modifier = Modifier.weight(1f),
-                )
                 OutlinedActionButton(
                     iconVector = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
                     iconTint = if (isStarred) c.accent else c.fg,
                     label = if (isStarred) "已收藏" else "收藏",
                     onClick = onFavorite,
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedActionButton(
-                    iconRes = android.R.drawable.ic_menu_delete,
-                    label = "删除",
-                    onClick = onDelete,
                     modifier = Modifier.weight(1f),
                 )
             }

@@ -131,6 +131,27 @@ internal fun formatFileSize(sizeBytes: Long): String {
     }
 }
 
+/* ─────────────────── Preview 一次性事件(M5 CRUD)─────────────────── */
+
+/**
+ * Preview 屏"已删除/已移动"等需要 Route 介入的一次性事件。
+ *
+ *  为什么用 Channel 而不是 SharedFlow:
+ *   - Channel(UNLIMITED) 的 queue semantics 保证:VM 不在线时 emit 的事件被 buffer,
+ *     新 collector subscribe 后从头部依次消费,跨 nav pop / config change 不丢信号
+ *   - SharedFlow 没有这个保证(replay 配错或 buffer 满了会丢)
+ *   - 见 CLAUDE.md "Compose one-shot events use Channel(UNLIMITED) + receiveAsFlow()"
+ *
+ *  当前只一个事件类型 [Deleted]:delete / move 成功后,VM emit,Route collect 后调 onBack()
+ *  回到 Files 屏。rename 不需要事件(state 已经在 VM 内更新,UI 自然响应)。
+ *
+ *  未来要加 Renamed / MovedToFolder 等更多事件,直接加 data class 即可。
+ */
+sealed interface PreviewEvent {
+    /** 文件已被删除/移动 → Route 调 onBack() 回 Files 屏 */
+    data object Deleted : PreviewEvent
+}
+
 /**
  * unix 秒 → "yyyy-MM-dd HH:mm"。对齐 Lumen `ImagePreviewScreen.kt:formatDate`。
  *

@@ -10,9 +10,12 @@ import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
 import com.starvault.data.repository.toFileType
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -61,6 +64,15 @@ class PreviewAudioViewModel(
      */
     private val _isStarred = MutableStateFlow(false)
     val isStarred: StateFlow<Boolean> = _isStarred.asStateFlow()
+
+    /**
+     * 一次性事件流(delete / move 成功后 → Route 调 onBack 回 Files)。
+     *
+     *  Channel(UNLIMITED) 的 queue semantics 保证 VM 不在线时 emit 不丢;
+     *  Route 端 `LaunchedEffect(Unit) { vm.oneShotEvents.collect { ... } }` 订阅。
+     */
+    private val _oneShotEvents = Channel<PreviewEvent>(Channel.UNLIMITED)
+    val oneShotEvents: Flow<PreviewEvent> = _oneShotEvents.receiveAsFlow()
 
     /**
      * 兄弟文件状态(用于"上一首/下一首"按钮)。
@@ -153,6 +165,82 @@ class PreviewAudioViewModel(
                 .onFailure { e ->
                     _isStarred.value = !next
                     ToastBus.error(e.message ?: "星标失败")
+                }
+        }
+    }
+
+    /**
+     * 重命名(乐观更新 + 失败回滚)— 由 PreviewAudio 顶栏 MoreMenu "重命名" 触发。
+     *
+     *  流程:
+     *  1. newName 为空 / 与当前同名 → ToastBus 提示,不发请求
+     *  2. 立即用 newName 覆盖 _state.metadata.name(乐观更新,顶栏文件名立刻变)
+     *  3. 调 filesRepo.renameFile → 成功 → ToastBus.info("已重命名: 新名")
+     *  4. 失败 → 回滚 _state.metadata.name 到 oldName + ToastBus.error(115 message)
+     *
+     *  不需要 emit PreviewEvent(Route 无需响应,state 自身已更新)。
+     */
+    fun onRename(newName: String) {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        if (newName.isBlank()) {
+            ToastBus.error("名称不能为空")
+            return
+        }
+        val oldName = current.metadata.name
+        if (newName == oldName) {
+            ToastBus.info("名称未变化")
+            return
+        }
+        // 乐观更新
+        _state.value = current.copy(metadata = current.metadata.copy(name = newName))
+        viewModelScope.launch {
+            filesRepo.renameFile(id = current.metadata.fid, newName = newName)
+                .onSuccess {
+                    ToastBus.info("已重命名: $newName")
+                }
+                .onFailure { e ->
+                    // 回滚到 oldName
+                    val s = _state.value as? PreviewUiState.Success ?: return@onFailure
+                    _state.value = s.copy(metadata = s.metadata.copy(name = oldName))
+                    ToastBus.error(e.message ?: "重命名失败")
+                }
+        }
+    }
+
+    /**
+     * 删除当前文件 — 成功 → emit [PreviewEvent.Deleted] → Route 调 onBack 回 Files。
+     *
+     *  失败:ToastBus.error(115 message,常见 990003 文件已删除);
+     *  不 emit 事件,UI 留在 PreviewAudio 让用户重试。
+     */
+    fun onDelete() {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        viewModelScope.launch {
+            filesRepo.deleteFiles(ids = listOf(current.metadata.fid))
+                .onSuccess {
+                    _oneShotEvents.trySend(PreviewEvent.Deleted)
+                }
+                .onFailure { e ->
+                    ToastBus.error(e.message ?: "删除失败")
+                }
+        }
+    }
+
+    /**
+     * 移动到目标目录(由 FolderPicker 选完回传后触发)— 成功 → emit [PreviewEvent.Deleted]。
+     *
+     *  FolderPicker 已在 UI 层 excludeIds 过滤(自身 + 祖先),VM 不再做防自循环。
+     *  失败:ToastBus.error(115 message,常见 990001 目标无效);不 emit 事件。
+     */
+    fun onMoveConfirmed(targetCid: String) {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        viewModelScope.launch {
+            filesRepo.moveFiles(ids = listOf(current.metadata.fid), toCid = targetCid)
+                .onSuccess {
+                    _oneShotEvents.trySend(PreviewEvent.Deleted)
+                }
+                .onFailure { e ->
+                    ToastBus.error(e.message ?: "移动失败")
                 }
         }
     }

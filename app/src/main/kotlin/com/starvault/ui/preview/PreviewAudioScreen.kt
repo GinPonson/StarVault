@@ -65,6 +65,7 @@ import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.theme.StarVaultTheme
+import com.starvault.ui.dialog.RenameDialog
 import okhttp3.OkHttpClient
 
 /**
@@ -110,6 +111,10 @@ fun PreviewAudioScreen(
     onToggleStar: () -> Unit = {},
     onSelectFromPlaylist: (String) -> Unit = {},
     onSavePosition: (Long) -> Unit = {},
+    onRename: (String) -> Unit = {},
+    onDelete: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onMove: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     KeepScreenOnEffect()
@@ -132,6 +137,10 @@ fun PreviewAudioScreen(
                 onToggleStar = onToggleStar,
                 onSelectFromPlaylist = onSelectFromPlaylist,
                 onSavePosition = onSavePosition,
+                onRename = onRename,
+                onDelete = onDelete,
+                onShare = onShare,
+                onMove = onMove,
             )
         }
     }
@@ -157,10 +166,17 @@ private fun AudioContent(
     onToggleStar: () -> Unit,
     onSelectFromPlaylist: (String) -> Unit,
     onSavePosition: (Long) -> Unit,
+    onRename: (String) -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onMove: () -> Unit,
 ) {
     val context = LocalContext.current
     val t = StarVaultTheme.typography
     val c = StarVaultTheme.colors
+
+    // M5:MoreMenu "重命名" → 弹 RenameDialog(复用 Files 屏同款组件,样式一致)。
+    var renameDialogVisible by remember { mutableStateOf(false) }
 
     val player = remember(state.mediaUrl) {
         if (state.mediaUrl.isBlank()) null else buildAudioPlayer(context, state.mediaUrl)
@@ -256,6 +272,10 @@ private fun AudioContent(
             name = state.metadata.name,
             onBack = onBack,
             onDownload = onDownload,
+            onRename = { renameDialogVisible = true },
+            onDelete = onDelete,
+            onShare = onShare,
+            onMove = onMove,
         )
 
         // 中段圆形唱碟（aspectRatio 1f 强制正方形后再 clip 圆）
@@ -329,6 +349,18 @@ private fun AudioContent(
             onDismiss = { playlistVisible = false },
         )
     }
+
+    // M5:重命名弹层(MoreMenu "重命名" → 弹 RenameDialog)
+    if (renameDialogVisible) {
+        RenameDialog(
+            currentName = state.metadata.name,
+            onConfirm = { newName ->
+                renameDialogVisible = false
+                onRename(newName)
+            },
+            onDismiss = { renameDialogVisible = false },
+        )
+    }
 }
 
 /* ─────────────────── 顶栏 + 唱碟 ─────────────────── */
@@ -338,12 +370,19 @@ private fun AudioContent(
  *
  *  白底黑字：跟 PreviewVideo 黑底区分（视频暗色沉浸，音频亮色日常）。
  *  DropdownMenu 仍走 PreviewShared.MoreMenu 黑底半透（dark surface 在亮色顶栏上更聚焦）。
+ *
+ *  M5:6 项菜单(下载/重命名/移动/删除/分享/属性)由调用方传入回调,VideoContent / AudioContent
+ *  透传 VM 的 onRename / onDelete / onShare / onMove。属性保留 ToastBus "查看属性即将上线" 占位。
  */
 @Composable
 private fun PreviewTopBarLite(
     name: String,
     onBack: () -> Unit,
     onDownload: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onMove: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     var moreExpanded by remember { mutableStateOf(false) }
@@ -370,10 +409,10 @@ private fun PreviewTopBarLite(
                 expanded = moreExpanded,
                 onDismiss = { moreExpanded = false },
                 onDownload = { moreExpanded = false; onDownload() },
-                onRename = { moreExpanded = false; ToastBus.info("重命名即将上线") },
-                onMove = { moreExpanded = false; ToastBus.info("移动即将上线") },
-                onDelete = { moreExpanded = false; ToastBus.info("删除即将上线") },
-                onShare = { moreExpanded = false; ToastBus.info("分享即将上线") },
+                onRename = { moreExpanded = false; onRename() },
+                onMove = { moreExpanded = false; onMove() },
+                onDelete = { moreExpanded = false; onDelete() },
+                onShare = { moreExpanded = false; onShare() },
                 onProperties = { moreExpanded = false; ToastBus.info("查看属性即将上线") },
             )
         }

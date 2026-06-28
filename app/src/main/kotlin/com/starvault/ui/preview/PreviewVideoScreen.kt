@@ -70,6 +70,7 @@ import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.VideoM3u8
 import com.starvault.theme.StarVaultTheme
+import com.starvault.ui.dialog.RenameDialog
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.delay
 
@@ -145,6 +146,10 @@ fun PreviewVideoScreen(
     onSavePosition: (Long) -> Unit = {},
     playlist: List<com.starvault.data.remote.cloud115.ParsedFileItem> = emptyList(),
     onSelectFromPlaylist: (String) -> Unit = {},
+    onRename: (String) -> Unit = {},
+    onDelete: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onMove: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     KeepScreenOnEffect()
@@ -167,6 +172,10 @@ fun PreviewVideoScreen(
                 onSavePosition = onSavePosition,
                 playlist = playlist,
                 onSelectFromPlaylist = onSelectFromPlaylist,
+                onRename = onRename,
+                onDelete = onDelete,
+                onShare = onShare,
+                onMove = onMove,
             )
         }
     }
@@ -198,8 +207,16 @@ private fun VideoContent(
     onSavePosition: (Long) -> Unit,
     playlist: List<com.starvault.data.remote.cloud115.ParsedFileItem>,
     onSelectFromPlaylist: (String) -> Unit,
+    onRename: (String) -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onMove: () -> Unit,
 ) {
     val context = LocalContext.current
+
+    // M5:MoreMenu "重命名" → 弹 RenameDialog(复用 Files 屏同款组件,样式一致)。
+    // 不存到 rememberSaveable:弹层瞬时 UI,旋转屏关掉重新弹即可。
+    var renameDialogVisible by remember { mutableStateOf(false) }
 
     // 1. ExoPlayer 实例(URL 变 → 重新 prepare,同一 Preview 屏被复用也能正确切源)
     val player = remember(state.mediaUrl) { buildPlayer(context, state.mediaUrl) }
@@ -390,6 +407,10 @@ private fun VideoContent(
                 onBack = onBack,
                 onDownload = onDownload,
                 onToggleStar = onToggleStar,
+                onRename = { renameDialogVisible = true },
+                onDelete = onDelete,
+                onShare = onShare,
+                onMove = onMove,
             )
         }
 
@@ -435,6 +456,18 @@ private fun VideoContent(
                     onSelectFromPlaylist(fid)
                 },
                 onDismiss = { playlistVisible = false },
+            )
+        }
+
+        // M5:重命名弹层(MoreMenu "重命名" → 弹 RenameDialog)
+        if (renameDialogVisible) {
+            RenameDialog(
+                currentName = state.metadata.name,
+                onConfirm = { newName ->
+                    renameDialogVisible = false
+                    onRename(newName)
+                },
+                onDismiss = { renameDialogVisible = false },
             )
         }
     }
@@ -603,7 +636,7 @@ private fun parseTracksFromTracks(tracks: Tracks, player: ExoPlayer): TracksSnap
  *  字幕入口已下沉到画布 chip 行的"字幕" chip([TextChipWithMenu],接 ExoPlayer 字幕轨真切换),
  *  不再在顶栏放 CC icon——避免两个"字幕"入口冲突(顶栏 noop vs chip 真功能)。
  *  "下载" 从原底部控制栏下移到更多菜单(用户偏好:用下拉收纳一次性操作,不放主控制条);
- *  重命名/移动/删除/分享/属性 本期 noop + ToastBus 提示。
+ *  重命名/移动/删除/分享/属性 由调用方传入回调,M5 接通 115 端点。
  *  点赞:[isStarred] 控制 HeartFilled / HeartOutline 切换;[onToggleStar] 回调
  *  [com.starvault.ui.preview.PreviewVideoViewModel.toggleStar] 乐观更新 + 失败回滚。
  */
@@ -614,6 +647,10 @@ private fun PreviewTopBar(
     onBack: () -> Unit,
     onDownload: () -> Unit,
     onToggleStar: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onMove: () -> Unit,
 ) {
     var moreExpanded by remember { mutableStateOf(false) }
 
@@ -649,10 +686,22 @@ private fun PreviewTopBar(
                     moreExpanded = false
                     onDownload()
                 },
-                onRename = { moreExpanded = false; ToastBus.info("重命名即将上线") },
-                onMove = { moreExpanded = false; ToastBus.info("移动即将上线") },
-                onDelete = { moreExpanded = false; ToastBus.info("删除即将上线") },
-                onShare = { moreExpanded = false; ToastBus.info("分享即将上线") },
+                onRename = {
+                    moreExpanded = false
+                    onRename()
+                },
+                onMove = {
+                    moreExpanded = false
+                    onMove()
+                },
+                onDelete = {
+                    moreExpanded = false
+                    onDelete()
+                },
+                onShare = {
+                    moreExpanded = false
+                    onShare()
+                },
                 onProperties = { moreExpanded = false; ToastBus.info("查看属性即将上线") },
             )
         }
