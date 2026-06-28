@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
+import com.starvault.data.local.playback.MediaPositionStore
 import com.starvault.data.model.FileType
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
@@ -45,6 +46,7 @@ class PreviewVideoViewModel(
     private val parentCid: String? = null,
     private val repo: MediaPreviewRepository = ServiceLocator.mediaPreviewRepository,
     private val filesRepo: FilesRepository = ServiceLocator.filesRepository,
+    private val positionStore: MediaPositionStore = ServiceLocator.mediaPositionStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PreviewUiState>(PreviewUiState.Loading)
@@ -73,6 +75,8 @@ class PreviewVideoViewModel(
         if (_state.value is PreviewUiState.Success) return
         _state.value = PreviewUiState.Loading
         viewModelScope.launch {
+            // 并发拉 metadata + 已保存的播放位置,缩短首屏时间(对齐 PreviewAudioViewModel)
+            val savedPositionMs = positionStore.load(fileId)?.toInt() ?: 0
             val metadata = repo.fetchMetadata(fileId)
             metadata.fold(
                 onSuccess = { meta ->
@@ -85,6 +89,7 @@ class PreviewVideoViewModel(
                                 mediaUrl = first.url,
                                 qualityChip = first.qualityDesc,
                                 qualityOptions = list,
+                                resumePositionMs = savedPositionMs,
                             )
                         },
                         onFailure = { e ->
@@ -98,6 +103,18 @@ class PreviewVideoViewModel(
                     ToastBus.error(e.message ?: "文件不存在或已删除")
                 },
             )
+        }
+    }
+
+    /**
+     * 保存当前播放位置(由 Screen 5s 节流 + onDispose 兜底调用)。
+     *
+     * VM 不持有 ExoPlayer 实例(player 在 Screen 侧 `remember(mediaUrl)` 持有),由 Screen
+     * 把 player.currentPosition 拿到后调此函数写盘。
+     */
+    fun savePosition(positionMs: Long) {
+        viewModelScope.launch {
+            positionStore.save(fileId, positionMs)
         }
     }
 

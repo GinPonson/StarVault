@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
-import com.starvault.data.local.playback.AudioPositionStore
+import com.starvault.data.local.playback.MediaPositionStore
 import com.starvault.data.model.FileType
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
@@ -43,7 +43,7 @@ class PreviewAudioViewModel(
     private val parentCid: String? = null,
     private val repo: MediaPreviewRepository = ServiceLocator.mediaPreviewRepository,
     private val filesRepo: FilesRepository = ServiceLocator.filesRepository,
-    private val positionStore: AudioPositionStore = ServiceLocator.audioPositionStore,
+    private val positionStore: MediaPositionStore = ServiceLocator.mediaPositionStore,
 ) : ViewModel() {
 
     /**

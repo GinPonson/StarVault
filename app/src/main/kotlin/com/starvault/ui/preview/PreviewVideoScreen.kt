@@ -67,6 +67,7 @@ import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.VideoM3u8
 import com.starvault.theme.StarVaultTheme
 import okhttp3.OkHttpClient
+import kotlinx.coroutines.delay
 
 /**
  * PreviewVideo 全屏屏幕（黑底 Media3 风格播放器 chrome）。
@@ -127,6 +128,7 @@ fun PreviewVideoScreen(
     onSelectQuality: (VideoM3u8) -> Unit = {},
     onPrev: () -> Unit = {},
     onNext: () -> Unit = {},
+    onSavePosition: (Long) -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     KeepScreenOnEffect()
@@ -138,7 +140,7 @@ fun PreviewVideoScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Success -> VideoContent(state, siblings, onBack, onSelectQuality, onPrev, onNext)
+            is PreviewUiState.Success -> VideoContent(state, siblings, onBack, onSelectQuality, onPrev, onNext, onSavePosition)
         }
     }
 }
@@ -165,6 +167,7 @@ private fun VideoContent(
     onSelectQuality: (VideoM3u8) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onSavePosition: (Long) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -182,9 +185,34 @@ private fun VideoContent(
         onDispose { player.removeListener(listener) }
     }
 
-    // 3. 释放(Composable 离屏时 release ExoPlayer 防泄漏)
+    // 3. 释放(Composable 离屏时 release ExoPlayer 防泄漏) + 兜底保存播放位置
+    //    两个 onDispose 顺序执行:先 savePosition 读 player.currentPosition(此时 player
+    //    还没 release),然后 release。DataStore.edit 是 IO,毫秒级不影响 release 时序。
     DisposableEffect(player) {
-        onDispose { player.release() }
+        onDispose {
+            onSavePosition(player.currentPosition)
+            player.release()
+        }
+    }
+
+    // 4. 恢复播放位置：player ready 后立刻 seekTo 到上次的 positionMs
+    //    state.resumePositionMs 由 VM 在 emit Success 之前从 MediaPositionStore 读出
+    //    注:跟旋转屏 rememberSaveable resumePositionMs 是独立两份 — DataStore 跨进程,
+    //    rememberSaveable 只跨 Activity 重建。VideoContent 重组 / player 切 URL 重建时
+    //    优先用 state.resumePositionMs,横竖屏切换由下面"全屏切换"另处理。
+    val savedResumeMs = state.resumePositionMs
+    LaunchedEffect(player) {
+        if (savedResumeMs > 0) {
+            player.seekTo(savedResumeMs.toLong())
+        }
+    }
+
+    // 5. 节流保存播放位置(5s 一次):player.currentPosition 写到 MediaPositionStore
+    LaunchedEffect(player) {
+        while (true) {
+            delay(5_000L)
+            onSavePosition(player.currentPosition)
+        }
     }
 
     // 4. 10 Hz 状态同步(单 source 写多字段)
@@ -349,7 +377,10 @@ private fun buildPlayer(context: Context, mediaUrl: String): ExoPlayer {
         .build()
         .apply {
             setMediaItem(MediaItem.fromUri(mediaUrl))
-            playWhenReady = true
+            // 进屏不自动播放(Spotify / Apple Music 风格):用户点 Play 按钮开始
+            // resumePositionMs 由 LaunchedEffect(player) seekTo,但 playWhenReady=false
+            // 让 player 准备好后停在暂停态,seek 后用户点 Play 才真正播
+            playWhenReady = false
             prepare()
         }
 }

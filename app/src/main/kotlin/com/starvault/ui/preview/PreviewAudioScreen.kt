@@ -576,7 +576,10 @@ private fun buildAudioPlayer(context: Context, mediaUrl: String): ExoPlayer {
         .build()
         .apply {
             setMediaItem(MediaItem.fromUri(mediaUrl))
-            playWhenReady = true
+            // 进屏不自动播放(Spotify / Apple Music 风格):用户点 Play 按钮开始
+            // resumePositionMs 由 LaunchedEffect(player) seekTo,但 playWhenReady=false
+            // 让 player 准备好后停在暂停态,seek 后用户点 Play 才真正播
+            playWhenReady = false
             prepare()
         }
 }

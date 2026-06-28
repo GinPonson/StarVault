@@ -49,5 +49,6 @@ fun PreviewVideoRoute(
         onSelectQuality = vm::selectQuality,
         onPrev = { siblings.prevId?.let { nav.navigate(Route.PreviewVideo(it, args.parentCid)) } },
         onNext = { siblings.nextId?.let { nav.navigate(Route.PreviewVideo(it, args.parentCid)) } },
+        onSavePosition = vm::savePosition,
     )
 }
