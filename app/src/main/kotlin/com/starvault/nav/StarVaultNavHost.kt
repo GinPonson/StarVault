@@ -10,6 +10,7 @@ import com.starvault.data.repository.AuthState
 import com.starvault.ui.album.AlbumRoute
 import com.starvault.ui.debug.ThumbStateLab
 import com.starvault.ui.files.FilesRoute
+import com.starvault.ui.folderpicker.FolderPickerRoute
 import com.starvault.ui.home.HomeRoute
 import com.starvault.ui.login.LoginRoute
 import com.starvault.ui.player.PlayerRoute
@@ -55,7 +56,7 @@ fun StarVaultNavHost(
 
         composable<Route.Files>     { entry -> FilesRoute(args = entry.toRoute(), nav = navController) }
         // Preview 屏：黑底全屏预览 IMAGE / VIDEO；不显示 bottom-nav
-        composable<Route.PreviewImage> { entry -> PreviewImageRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
+        composable<Route.PreviewImage> { entry -> PreviewImageRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }, nav = navController) }
         composable<Route.PreviewVideo> { entry -> PreviewVideoRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }, nav = navController) }
         composable<Route.PreviewAudio> { entry -> PreviewAudioRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }, nav = navController) }
         composable<Route.Album>     { AlbumRoute(nav = navController) }
@@ -65,5 +66,12 @@ fun StarVaultNavHost(
         composable<Route.ThumbLab>  { ThumbStateLab() }
         // 搜索屏（Files 屏的搜索入口跳转）：全屏覆盖，不显示 bottom-nav
         composable<Route.Search>   { entry -> SearchRoute(args = entry.toRoute(), nav = navController) }
+        // 文件夹选择器（Files MOVE / Preview MOVE 入口）：全屏覆盖，不显示 bottom-nav;
+        // 选完通过 previousBackStackEntry.savedStateHandle["pickedCid"] 回传 + popBackStack
+        composable<Route.FolderPicker> { entry -> FolderPickerRoute(
+            args = entry.toRoute(),
+            nav = navController,
+            onBack = { navController.popBackStack() },
+        ) }
     }
 }

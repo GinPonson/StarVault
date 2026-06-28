@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider paths 配置 — 暴露 cacheDir 给 Sharesheet 接收方 app 读。
+
+    用途:PreviewImage MoreMenu "分享" 流程需要把 115 CDN mediaUrl 下到本地,
+    拿 FileProvider.getUriForFile 拿 content:// URI 分享给其他 app。
+    接收方 app 通过此 paths 配置找到对应的本地文件。
+
+    路径:仅暴露 cacheDir(应用内部缓存) — 不暴露 filesDir(用户文件) 或
+    external-files(外部存储),安全范围最小化。
+
+    name="cache" 是 FileProvider 内部引用 key,ShareHelper.kt 用 cacheDir 直接传
+    File 对象,FileProvider 自动映射到本 paths 规则。
+
+    AndroidManifest.xml provider 节点:
+      <provider android:name="androidx.core.content.FileProvider"
+                android:authorities="${applicationId}.fileprovider"
+                android:exported="false"
+                android:grantUriPermissions="true">
+          <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                     android:resource="@xml/file_paths" />
+      </provider>
+
+    接收方 app 读 content URI 需 Intent.FLAG_GRANT_READ_URI_PERMISSION(ShareHelper 内已加),
+    权限范围限定到接收方 app 自身,不会泄露到全局。
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="cache" path="." />
+</paths>

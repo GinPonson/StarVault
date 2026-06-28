@@ -50,5 +50,26 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!--
+            M5 FileProvider — Android Sharesheet 分享图片(PreviewImage MoreMenu → 分享)用。
+
+            仅暴露 cacheDir(FileProvider paths 在 res/xml/file_paths.xml 限定 <cache-path>):
+              1. exported="false" — 其他 app 不能主动启动本 provider
+              2. grantUriPermissions="true" — 配合 Intent.FLAG_GRANT_READ_URI_PERMISSION
+                 临时给 Sharesheet 接收方 app 授予 content:// URI 读权限
+              3. authorities = ${applicationId}.fileprovider — applicationId 在
+                 app/build.gradle.kts 已设 com.starvault,完整值 com.starvault.fileprovider
+            ShareHelper.kt 用此 authorities 拿 FileProvider.getUriForFile(…)。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

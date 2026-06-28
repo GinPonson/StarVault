@@ -16,6 +16,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.starvault.data.model.FileType
 import com.starvault.nav.Route
+import com.starvault.ui.dialog.ConfirmDialog
+import com.starvault.ui.dialog.RenameDialog
 import com.starvault.ui.files.sort.SortSheet
 import com.starvault.ui.transfers.TransfersViewModel
 import com.starvault.ui.upload.rememberUploadLauncher
@@ -60,6 +62,30 @@ fun FilesRoute(
     // 新建文件夹 AlertDialog 显隐（rememberSaveable：旋转屏保留）
     var newFolderDialogVisible by rememberSaveable { mutableStateOf(false) }
 
+    // M5 CRUD 弹层 state:
+    //  - confirmDialog:删除确认(选 N 项 → 弹 N 项确认)
+    //  - renameDialog:重命名(仅 N==1 时由 bulk 弹);用 FileEntry? 存要重命名的行
+    //  - moveExcludeIds:FolderPicker 排除规则(当前目录 cid + 已选 id 集合)
+    //
+    //  注意:这些 state 不存到 savedStateHandle(弹层是瞬时 UI,旋转屏关掉无所谓;用户能理解)
+    var pendingDeleteIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingRenameEntry by remember { mutableStateOf<FileEntry?>(null) }
+
+    // 监听 FolderPicker 选完返回的 pickedCid(savedStateHandle 回传,见 FolderPickerRoute)
+    val savedStateHandle = nav.currentBackStackEntry?.savedStateHandle
+    LaunchedEffect(savedStateHandle) {
+        savedStateHandle?.getStateFlow<String?>("pickedCid", null)?.collect { pickedCid ->
+            if (pickedCid != null) {
+                val success = vm.state.value as? com.starvault.ui.files.FilesUiState.Success
+                if (success != null && success.selectedIds.isNotEmpty()) {
+                    vm.moveFiles(ids = success.selectedIds.toList(), toCid = pickedCid)
+                }
+                // 一次性 key,消费后清掉,避免重组重复触发
+                savedStateHandle["pickedCid"] = null
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         FilesScreen(
             state = state,
@@ -91,7 +117,38 @@ fun FilesRoute(
             onDownload = { e -> vm.downloadEntry(e) },
             onCrumbClick = { index -> vm.popToFolder(index) },
             onCloseBulk = vm::clearSelection,
-            onBulkAction = vm::bulk,
+            // M5:bulk 5 路 when 在 VM 内;UI 层根据 result 弹弹层
+            onBulkAction = { action ->
+                when (action) {
+                    com.starvault.ui.files.BulkAction.DELETE -> {
+                        val success = vm.state.value as? com.starvault.ui.files.FilesUiState.Success
+                        val ids = success?.selectedIds?.toList().orEmpty()
+                        if (ids.isNotEmpty()) pendingDeleteIds = ids
+                    }
+                    com.starvault.ui.files.BulkAction.RENAME -> {
+                        val success = vm.state.value as? com.starvault.ui.files.FilesUiState.Success
+                        val ids = success?.selectedIds?.toList().orEmpty()
+                        // N==1 才弹 dialog(VM 已 ToastBus 拒绝 N>1;UI 双保险)
+                        if (ids.size == 1) {
+                            pendingRenameEntry = success?.all?.find { it.id == ids.first() }
+                        }
+                    }
+                    com.starvault.ui.files.BulkAction.MOVE -> {
+                        val success = vm.state.value as? com.starvault.ui.files.FilesUiState.Success
+                        val ids = success?.selectedIds.orEmpty()
+                        if (ids.isNotEmpty()) {
+                            // 跳 FolderPicker;excludeIds = 当前 cid + 已选 id 集合
+                            // (防止移到自身或已选文件夹)
+                            val currentCid = success?.folderId ?: "0"
+                            val exclude = (ids + currentCid).toList()
+                            nav.navigate(Route.FolderPicker(excludeIds = exclude))
+                        }
+                    }
+                    // DOWNLOAD / SHARE 由 VM 内部直接处理,UI 不弹层
+                    com.starvault.ui.files.BulkAction.DOWNLOAD,
+                    com.starvault.ui.files.BulkAction.SHARE -> vm.bulk(action)
+                }
+            },
             onAddUpload = { launchPicker() },
             onAddNewFolder = { newFolderDialogVisible = true },
             onLoadMore = vm::loadMore,
@@ -119,6 +176,33 @@ fun FilesRoute(
                     newFolderDialogVisible = false
                 },
                 onDismiss = { newFolderDialogVisible = false },
+            )
+        }
+
+        // M5:删除确认弹层
+        if (pendingDeleteIds.isNotEmpty()) {
+            ConfirmDialog(
+                title = "确认删除 ${pendingDeleteIds.size} 项?",
+                message = "此操作会移到回收站，7 天内可在 115 端恢复",
+                confirmLabel = "删除",
+                danger = true,
+                onConfirm = {
+                    vm.deleteFiles(pendingDeleteIds)
+                    pendingDeleteIds = emptyList()
+                },
+                onDismiss = { pendingDeleteIds = emptyList() },
+            )
+        }
+
+        // M5:重命名弹层(仅 N==1)
+        pendingRenameEntry?.let { entry ->
+            RenameDialog(
+                currentName = entry.name,
+                onConfirm = { newName ->
+                    vm.renameFile(entry.id, newName)
+                    pendingRenameEntry = null
+                },
+                onDismiss = { pendingRenameEntry = null },
             )
         }
     }

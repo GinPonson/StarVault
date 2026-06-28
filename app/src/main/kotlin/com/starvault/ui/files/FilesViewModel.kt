@@ -10,6 +10,8 @@ import com.starvault.data.repository.DownloadRepository
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.toFileType
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -349,9 +351,165 @@ class FilesViewModel(
         _state.value = s.copy(selectedIds = emptySet())
     }
 
+    /**
+     * BulkBar 5 动作的统一入口 — 仅做意图路由,**不直接执行** CRUD;
+     * 真正的"执行"由调用方(Route 层)弹 ConfirmDialog / RenameDialog / FolderPicker 后
+     * 调对应 [deleteFiles] / [moveFiles] / [renameFile] / [downloadEntries] 完成。
+     *
+     *  路由表:
+     *  - DOWNLOAD → 直接调 [downloadEntries](无需用户再确认)
+     *  - SHARE    → ToastBus.info 占位(115 开放平台无 share 端点;批量分享用户已说不需要)
+     *  - MOVE     → 无操作(让 UI 层弹 FolderPicker,picker 回调调 [moveFiles])
+     *  - RENAME   → N==1 时无操作(让 UI 层弹 RenameDialog);N>1 → ToastBus.error 拒绝
+     *               (115 update 端点单文件限制;多选循环会 partial fail)
+     *  - DELETE   → 无操作(让 UI 层弹 ConfirmDialog,确认后调 [deleteFiles])
+     *
+     *  注意:**不清选中**(老行为);DELETE / MOVE / RENAME 真正执行成功后才清。
+     *  DOWNLOAD / SHARE 即时反馈,可在执行后清(看具体路径)。
+     */
     fun bulk(action: BulkAction) {
-        // Phase 2 stub：仅清掉选中；后续切片接入真 bulk endpoint
-        clearSelection()
+        val s = _state.value as? FilesUiState.Success ?: return
+        val ids = s.selectedIds.toList()
+        if (ids.isEmpty()) return
+        when (action) {
+            BulkAction.DOWNLOAD -> {
+                val entries = ids.mapNotNull { id -> s.all.find { it.id == id } }
+                downloadEntries(entries)
+                clearSelection()
+            }
+            BulkAction.SHARE -> {
+                // 115 开放平台无 share 端点;批量分享用户原话"不需要"
+                ToastBus.info("分享功能暂不支持")
+            }
+            BulkAction.MOVE -> {
+                // UI 层(FilesRoute)弹 FolderPicker;picker 回调调 [moveFiles]
+            }
+            BulkAction.RENAME -> {
+                if (ids.size > 1) {
+                    // 115 update 端点单文件限制,多选循环会 partial fail
+                    ToastBus.error("批量重命名不支持，请单选")
+                }
+                // N==1:UI 层弹 RenameDialog(此处无操作,让 dialog 拿到选中文件信息)
+            }
+            BulkAction.DELETE -> {
+                // UI 层(FilesRoute)弹 ConfirmDialog,确认后调 [deleteFiles]
+            }
+        }
+    }
+
+    /**
+     * 批量删除 — 由 FilesRoute 的 ConfirmDialog 确认回调触发。
+     *
+     *  - ids 为空 → 短路(防御性)
+     *  - 成功 → ToastBus.info("已删除 N 项") + clearSelection + refresh 拉新列表
+     *  - 失败 → ToastBus.error(115 message);不自动 refresh(避免部分成功时 UI 状态不一致)
+     *
+     *  跟 M2/M3 错误模式一致:业务错误只走 ToastBus,屏不被错误占位。
+     */
+    fun deleteFiles(ids: List<String>) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            filesRepository.deleteFiles(ids)
+                .onSuccess {
+                    ToastBus.info("已删除 ${ids.size} 项")
+                    clearSelection()
+                    refresh()
+                }
+                .onFailure { e ->
+                    ToastBus.error(e.message ?: "删除失败")
+                }
+        }
+    }
+
+    /**
+     * 批量移动到目标目录 — 由 FilesRoute 的 FolderPicker 选中回调触发。
+     *
+     *  - ids 为空 → 短路
+     *  - toCid 由 FolderPicker 写回(savedStateHandle["pickedCid"])
+     *  - 自循环防御**不在此处**:FolderPicker 已在 UI 层 excludeIds 过滤,此处信任
+     *  - 成功 → ToastBus.info("已移动 N 项") + clearSelection + refresh
+     *  - 失败 → ToastBus.error(115 message,常见 990001 目标无效)
+     */
+    fun moveFiles(ids: List<String>, toCid: String) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            filesRepository.moveFiles(ids, toCid)
+                .onSuccess {
+                    ToastBus.info("已移动 ${ids.size} 项")
+                    clearSelection()
+                    refresh()
+                }
+                .onFailure { e ->
+                    ToastBus.error(e.message ?: "移动失败")
+                }
+        }
+    }
+
+    /**
+     * 重命名单个文件 / 文件夹 — 由 FilesRoute 的 RenameDialog 确认回调触发。
+     *
+     *  - newName 为空或与 currentName 相同 → 不发请求,ToastBus.info 提示无变化
+     *    (UI 层 RenameDialog 已卡 trimmed != currentName,这里是双保险)
+     *  - 成功 → ToastBus.info("已重命名: 新名") + refresh 拉新列表
+     *  - 失败 → ToastBus.error(115 message,常见 990004 名称非法字符)
+     */
+    fun renameFile(id: String, newName: String) {
+        if (newName.isBlank()) {
+            ToastBus.error("名称不能为空")
+            return
+        }
+        val s = _state.value as? FilesUiState.Success ?: return
+        val current = s.all.find { it.id == id }
+        if (current != null && current.name == newName) {
+            ToastBus.info("名称未变化")
+            return
+        }
+        viewModelScope.launch {
+            filesRepository.renameFile(id, newName)
+                .onSuccess {
+                    ToastBus.info("已重命名: $newName")
+                    refresh()
+                }
+                .onFailure { e ->
+                    ToastBus.error(e.message ?: "重命名失败")
+                }
+        }
+    }
+
+    /**
+     * 批量下载 — 由 BulkBar DOWNLOAD 直接触发(无需用户再确认)。
+     *
+     *  - 并发投递到 [DownloadRepository.enqueue] (每个文件自己一个 WorkRequest,M3 已实现)
+     *  - 串行 await 所有结果;UI 仅在最后给个汇总 toast
+     *  - 文件夹行会被 [DownloadRepository.enqueue] 内部 defense-in-depth 校验拦截
+     *  - 部分成功 → ToastBus.error("X 项已加入, Y 项失败");全部成功 → ToastBus.info
+     *  - 不清选中:失败项用户可能想重试
+     */
+    fun downloadEntries(entries: List<FileEntry>) {
+        if (entries.isEmpty()) return
+        viewModelScope.launch {
+            val results = entries.map { e ->
+                async {
+                    downloadRepository.enqueue(
+                        ParsedFileItem(
+                            id = e.id,
+                            parentId = currentCid,
+                            name = e.name,
+                            isFolder = e.isFolder,
+                            pickCode = e.pickCode,
+                            sizeBytes = e.sizeBytes,
+                        ),
+                    )
+                }
+            }.awaitAll()
+            val ok = results.count { it.isSuccess }
+            val fail = results.size - ok
+            if (fail == 0) {
+                ToastBus.info("已加入下载队列: $ok 项")
+            } else {
+                ToastBus.error("$ok 项已加入，$fail 项失败")
+            }
+        }
     }
 
     /**

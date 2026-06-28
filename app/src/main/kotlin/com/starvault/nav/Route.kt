@@ -53,4 +53,18 @@ sealed interface Route {
      *                     留出 deep link 扩展点：未来可从 Home / Album 屏带初始词跳进来。
      */
     @Serializable data class   Search(val initialQuery: String = "")                : Route
+
+    /**
+     * 文件夹选择器（Files BulkBar MOVE 入口 + Preview 屏单文件 MOVE 入口）。
+     *
+     *  复用 FilesScreen 渲染目录树,用户点行 = 选中目标目录并返回;通过
+     *  [androidx.navigation.NavController.previousBackStackEntry].savedStateHandle["pickedCid"]
+     *  传回调用方(MOVE 时调用方读出后调 [com.starvault.data.repository.FilesRepository.moveFiles])。
+     *
+     * @param excludeIds 不允许选中的目录 cid 集合(防止移到自身/祖先造成自循环):
+     *                   Files MOVE 传 currentCid + selectedIds(folder 行);
+     *                   Preview MOVE 传 current.metadata.parentId + current.metadata.fid。
+     *                   UI 层做行点击前过滤(若 id ∈ excludeIds 则 noop + ToastBus)。
+     */
+    @Serializable data class   FolderPicker(val excludeIds: List<String> = emptyList()) : Route
 }
