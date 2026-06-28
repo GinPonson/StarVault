@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -252,10 +253,17 @@ internal fun speedLabel(v: Float): String =
  *
  *  - 3dp 灰底 + accent 蓝填充 + 12dp 白 thumb
  *  - 拖动([detectDragGestures])→ onSeek(ms)→ ExoPlayer.seekTo
+ *  - 单击([detectTapGestures])→ onSeek(对应 frac 的 ms)→ ExoPlayer.seekTo
  *  - [BoxWithConstraints] 拿父宽推 thumb offset(Media3 PlayerView seekbar 标准写法)
  *
  *  为什么不用 Material3 Slider:Slider 的 track / thumb / 拖动手柄都不可定制到
  *  "3dp 灰底 + 12dp 白 thumb"细颗粒;改 SliderColors 只能换色,改不了尺寸/形状。
+ *
+ *  Tap + Drag 并存:Compose 多个 pointerInput modifier 独立处理手势——
+ *  - detectTapGestures 等到 up 才触发,中间无 move
+ *  - detectDragGestures 在 move > touchSlop 时立刻触发
+ *  - 单纯 click: 无 move,drag 不触发,tap 在 up 时 seek 到点击位置
+ *  - 拖动: 有 move,drag 触发 onDragStart 立即 seek + 持续更新,tap 不触发
  */
 @Composable
 internal fun PreviewSeekBar(
@@ -269,6 +277,14 @@ internal fun PreviewSeekBar(
     BoxWithConstraints(
         modifier = modifier
             .height(18.dp)
+            .pointerInput(durationMs) {
+                detectTapGestures(
+                    onTap = { off ->
+                        val frac = (off.x / size.width).coerceIn(0f, 1f)
+                        onSeek((frac * durationMs).toInt())
+                    },
+                )
+            }
             .pointerInput(durationMs) {
                 detectDragGestures(
                     onDragStart = { off ->
