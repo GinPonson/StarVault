@@ -45,7 +45,11 @@ private val ALLOWED_IMAGE_EXTS = setOf("jpg", "jpeg", "png", "webp", "gif", "hei
  * @throws java.io.IOException ext 不在白名单 / HTTP 失败 / 累计字节 > 50MB
  */
 suspend fun shareImage(context: Context, mediaUrl: String) {
-    val ext = mediaUrl.substringAfterLast('.', missingDelimiterValue = "")
+    // 115 CDN URL 带 5min 签名查询串(?t=...&sign=...),substringAfterLast('.') 会取到
+    // "png?t=..." 这种污染 ext。substringBefore('?') 先砍掉 query 段,再正常提 ext。
+    // 例:https://cdn-cf.115.com/xxx/021.png?t=123 → ext = "png" ✓
+    val ext = mediaUrl.substringBefore('?')
+        .substringAfterLast('.', missingDelimiterValue = "")
         .lowercase()
         .take(5)
     if (ext !in ALLOWED_IMAGE_EXTS) {
@@ -82,12 +86,20 @@ suspend fun shareImage(context: Context, mediaUrl: String) {
             context.packageName + FILE_PROVIDER_AUTHORITIES_SUFFIX,
             tempFile,
         )
+        // 必须带 FLAG_ACTIVITY_NEW_TASK:caller 是 application context(PreviewImageViewModel.onShare
+        // 接的是 appContext,屏销毁不丢正在进行的下载),不带这个 flag startActivity 抛
+        // "Calling startActivity() from outside of an Activity context requires the
+        // FLAG_ACTIVITY_NEW_TASK flag" 警告,Sharesheet 起不来。
+        // 选 app 后系统会自动切回原 task(用户感知无 task 切换),对 Sharesheet UX 无副作用。
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/*"
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "分享"))
+        val chooser = Intent.createChooser(intent, "分享").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
     } finally {
         // 兜底清理:任何路径(包括 ActivityNotFoundException)都删 tempFile
         tempFile.deleteOnExit()
