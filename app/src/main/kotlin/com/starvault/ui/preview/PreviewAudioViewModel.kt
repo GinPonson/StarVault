@@ -6,6 +6,7 @@ import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.local.playback.MediaPositionStore
 import com.starvault.data.model.FileType
+import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
 import com.starvault.data.repository.toFileType
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
  *  - 仅当 [parentCid] 非空时触发(由 Route.PreviewAudio.parentCid 传入)
  *  - 调 [FilesRepository.listFolder] 拿父目录全部项,过滤 audio,按 name 升序排列
  *  - 找到当前 [fileId] 的 index,前后两条作为 prev/next
+ *  - 同一调用顺手填充 [playlist](完整 audio 列表),供 ModalBottomSheet 播放列表用
  *  - 失败/找不到 → siblings 保持空,UI 端按钮降级为 ToastBus "已是单文件"
  *
  *  Siblings 单独走一个 StateFlow, 跟 metadata 加载解耦:
@@ -73,6 +75,17 @@ class PreviewAudioViewModel(
 
     private val _siblings = MutableStateFlow(Siblings())
     val siblings: StateFlow<Siblings> = _siblings.asStateFlow()
+
+    /**
+     * 完整播放列表(同父目录 audio 文件,按 name asc 排序)。
+     *
+     *  - 空 list = 无 parentCid(Search 入口)/ 未拉取完成 / 拉取失败
+     *  - 复用 [loadSiblings] 的 [FilesRepository.listFolder] 调用,顺手填充;不发起额外网络
+     *  - 1150 上限同 [loadSiblings] — 父目录 audio 数 > 1150 时只显示前 1150
+     *  - 已过滤 [FileType.AUDIO] + !isFolder,Screen 端直接渲染无需再 filter
+     */
+    private val _playlist = MutableStateFlow<List<ParsedFileItem>>(emptyList())
+    val playlist: StateFlow<List<ParsedFileItem>> = _playlist.asStateFlow()
 
     init {
         load()
@@ -158,10 +171,11 @@ class PreviewAudioViewModel(
 
     /**
      * 拉父目录全部 audio 兄弟,定位当前 fid 的 index,算 prev/next。
+     * 顺手把过滤后的 audio 列表也填到 [playlist] StateFlow(ModalBottomSheet 播放列表用)。
      *
      *  - 调用 [FilesRepository.listFolder] 时显式 `order=file_name asc`(对应
      *    115 `o=file_name asc=1`)让兄弟按文件名自然顺序排列
-     *  - 一次拉到 1150 上限;父目录 audio 数 > 1150 时只显示前 1150 内的 prev/next
+     *  - 一次拉到 1150 上限;父目录 audio 数 > 1150 时只显示前 1150 内的 prev/next + playlist
      *  - 翻页:暂不分页 — 1150 条以上同一目录 95% 概率是云盘根目录或大型合集,通常 prev/next
      *    不会跨过 1150 边界
      */
@@ -178,9 +192,12 @@ class PreviewAudioViewModel(
                         prevId = audios.getOrNull(idx - 1)?.id,
                         nextId = audios.getOrNull(idx + 1)?.id,
                     )
+                    // 完整列表(同 listFolder 调用,无额外网络):ModalBottomSheet 播放列表用
+                    _playlist.value = audios
                 }
                 .onFailure {
-                    // 拉兄弟失败不影响主播放;_siblings 保持初值, UI 端按钮降级 ToastBus
+                    // 拉兄弟失败不影响主播放;_siblings + _playlist 保持初值(empty),
+                    // UI 端按钮降级 ToastBus / sheet 显示"暂无播放列表"占位
                 }
         }
     }

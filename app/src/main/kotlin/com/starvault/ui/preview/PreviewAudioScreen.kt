@@ -22,8 +22,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
@@ -44,6 +50,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -81,22 +89,26 @@ import okhttp3.OkHttpClient
  *
  *  @param state         PreviewUiState.Loading / Success(metadata, mediaUrl, "", [])
  *  @param siblings      上一首/下一首（VM.loadSiblings 异步拉取）
+ *  @param playlist      同父目录 audio 完整列表(VM.playlist StateFlow),供"文件列表"ModalBottomSheet 用
  *  @param isStarred     当前星标状态,用于 ❤️/♡ 切换(VM.isStarred StateFlow 注入)
  *  @param onBack        NavHost popBackStack
  *  @param onPrev        上一首(fileId 由 Route 注入 → nav.navigate 新 PreviewAudio)
  *  @param onNext        下一首
  *  @param onToggleStar  点 ❤️ 触发(VM.toggleStar:乐观更新 + 失败回滚)
+ *  @param onSelectFromPlaylist 从播放列表点选(fileId 由 Route 注入 → nav.navigate 新 PreviewAudio)
  *  @param onSavePosition 5s 节流 + onDispose 兜底,把 player.currentPosition 写盘
  */
 @Composable
 fun PreviewAudioScreen(
     state: PreviewUiState,
     siblings: PreviewAudioViewModel.Siblings = PreviewAudioViewModel.Siblings(),
+    playlist: List<ParsedFileItem> = emptyList(),
     isStarred: Boolean = false,
     onBack: () -> Unit,
     onPrev: () -> Unit = {},
     onNext: () -> Unit = {},
     onToggleStar: () -> Unit = {},
+    onSelectFromPlaylist: (String) -> Unit = {},
     onSavePosition: (Long) -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
@@ -112,11 +124,13 @@ fun PreviewAudioScreen(
             is PreviewUiState.Success -> AudioContent(
                 state = state,
                 siblings = siblings,
+                playlist = playlist,
                 isStarred = isStarred,
                 onBack = onBack,
                 onPrev = onPrev,
                 onNext = onNext,
                 onToggleStar = onToggleStar,
+                onSelectFromPlaylist = onSelectFromPlaylist,
                 onSavePosition = onSavePosition,
             )
         }
@@ -135,11 +149,13 @@ fun PreviewAudioScreen(
 private fun AudioContent(
     state: PreviewUiState.Success,
     siblings: PreviewAudioViewModel.Siblings,
+    playlist: List<ParsedFileItem>,
     isStarred: Boolean,
     onBack: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onToggleStar: () -> Unit,
+    onSelectFromPlaylist: (String) -> Unit,
     onSavePosition: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -207,6 +223,10 @@ private fun AudioContent(
     }
 
     val onSeek: (Int) -> Unit = { ms -> player?.seekTo(ms.toLong()) }
+
+    // 8. 播放列表 ModalBottomSheet 显隐:AudioControls 第 5 按钮(Playlist)切换
+    //    用 rememberSaveable 让 sheet 状态在配置变更(旋转屏/进程死)后保留
+    var playlistVisible by rememberSaveable { mutableStateOf(false) }
 
     val onDownload: () -> Unit = remember(state) {
         {
@@ -291,6 +311,21 @@ private fun AudioContent(
             onPrev = onPrev,
             onNext = onNext,
             onToggleStar = onToggleStar,
+            onShowPlaylist = { playlistVisible = true },
+        )
+    }
+
+    // 9. 播放列表 ModalBottomSheet(手搓风格,跟 SortSheet / FolderSheet 对齐)
+    //    渲染在 Column 外、Box 内,这样 sheet 上方的 scrim 不会盖住 AudioControls
+    if (playlistVisible) {
+        PlaylistSheet(
+            currentFileId = state.metadata.fid,
+            items = playlist,
+            onPicked = { fid ->
+                playlistVisible = false
+                onSelectFromPlaylist(fid)
+            },
+            onDismiss = { playlistVisible = false },
         )
     }
 }
@@ -475,6 +510,7 @@ private fun AudioControls(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onToggleStar: () -> Unit,
+    onShowPlaylist: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
@@ -550,7 +586,7 @@ private fun AudioControls(
                 icon = Icons.Playlist,
                 contentDescription = "文件列表",
                 tint = c.fg,
-                onClick = { ToastBus.info("即将上线") },
+                onClick = onShowPlaylist,
             )
         }
     }
@@ -623,4 +659,219 @@ private fun buildAudioPlayer(context: Context, mediaUrl: String): ExoPlayer {
             playWhenReady = false
             prepare()
         }
+}
+
+/* ─────────────────── 播放列表 ModalBottomSheet ─────────────────── */
+
+/**
+ * 音频播放列表 BottomSheet（手搓 ModalBottomSheet 风格，对齐 [SortSheet] / `FolderSheet`）。
+ *
+ *  - 半透明 scrim(黑 0.4 alpha)+ 圆角顶 28dp 主体，跟项目其他 sheet 视觉一致
+ *  - LazyColumn 列同父目录 audio 文件；当前 fid 用 `▶` 前缀 + 加粗高亮
+ *  - 点选 → 调 [onPicked](fid) → Route 走 `nav.navigate(Route.PreviewAudio(...))` 切换
+ *  - 空 list(Search 入口 / 拉失败) → 显示"暂无播放列表"占位
+ *  - 标题显示 {N} 首,跟 FilesScreen type tab 数量徽标风格统一
+ *
+ *  用 [rememberLazyListState] 让 sheet 滚动位置在配置变更后保留
+ *  初次显示时 [LaunchedEffect] 滚到当前 fid,避免 50 首歌从第 1 首开始要滑很久
+ *
+ *  @param currentFileId  当前正在播放的 fid,用于高亮 + 初始滚动定位
+ *  @param items          父目录 audio 完整列表(已按 name asc,已过滤 audio)
+ *  @param onPicked       用户点某项(fileId)→ 关 sheet + Route 切歌
+ *  @param onDismiss      点 scrim / 系统返回 → 关 sheet
+ */
+@Composable
+private fun PlaylistSheet(
+    currentFileId: String,
+    items: List<ParsedFileItem>,
+    onPicked: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    val listState = rememberLazyListState()
+
+    // 初次进入 sheet:滚到当前 fid 所在行,避免从顶部 1 开始
+    val initialIndex = remember(items) { items.indexOfFirst { it.id == currentFileId }.coerceAtLeast(0) }
+    LaunchedEffect(items) {
+        if (items.isNotEmpty()) listState.scrollToItem(initialIndex)
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 半透明 scrim
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.4f))
+                .clickable(onClick = onDismiss),
+        )
+
+        // Sheet 主体(贴底,圆角顶,半屏高以容纳 5-7 行 + 标题)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(540.dp)
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(c.surface)
+                .padding(top = 12.dp, bottom = 24.dp),
+        ) {
+            // grabber
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(width = 32.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFFC4C4C4)),
+            )
+            Spacer(Modifier.height(20.dp))
+
+            // 标题:"播放列表" + 数量
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "播放列表",
+                    color = c.fg,
+                    style = t.title,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "共 ${items.size} 首",
+                    color = c.muted,
+                    style = t.micro,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = c.border, thickness = 1.dp)
+
+            if (items.isEmpty()) {
+                // 空态(Search 入口 / 拉取失败)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "暂无播放列表",
+                        color = c.muted,
+                        style = t.body,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                ) {
+                    items(items, key = { it.id }) { item ->
+                        PlaylistRow(
+                            item = item,
+                            isCurrent = item.id == currentFileId,
+                            onClick = { onPicked(item.id) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 播放列表单行:左侧 thumbnail 36dp(无则显示 Music icon)+ 文件名 + 副标题(size · duration)+ 右侧 ▶ 当前标记。
+ */
+@Composable
+private fun PlaylistRow(
+    item: ParsedFileItem,
+    isCurrent: Boolean,
+    onClick: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    val duration = formatPlayLong(item.playLong)
+    val subtitle = buildString {
+        append(formatFileSize(item.sizeBytes))
+        if (duration.isNotEmpty()) {
+            append(" · ")
+            append(duration)
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(if (isCurrent) c.accent.copy(alpha = 0.08f) else c.surface)
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // 左侧 thumbnail / fallback icon
+        if (item.thumbnailUrl.isNotBlank()) {
+            AsyncImage(
+                model = item.thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1A1A1A)),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1A1A1A)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Music,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.name,
+                color = c.fg,
+                style = t.body,
+                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                color = c.muted,
+                style = t.micro,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (isCurrent) {
+            Spacer(Modifier.size(8.dp))
+            Icon(
+                imageVector = Icons.Playlist, // ≡♪ 复用,小尺寸表示"在列表中"
+                contentDescription = "正在播放",
+                tint = c.accent,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/** playLong(秒) → "04:23" 或 "01:30:08";<=0 → ""(空字符串,subtitle 拼接自动跳过)。 */
+private fun formatPlayLong(seconds: Int): String {
+    if (seconds <= 0) return ""
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
