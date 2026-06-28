@@ -36,7 +36,8 @@ sealed interface PreviewUiState {
         /**
          * 清晰度名(VIDEO 才有,image 屏空串)。
          * 115 proapi `/open/video/play` 响应 `video_url[0].desc`,
-         * 取值如 "1080P"/"720P"/"4K"/"原画"。空 → UI fallback "—"。
+         * 取值如 "1080P"/"720P"/"4K"/"原画"。空 → UI fallback "原画"
+         * (单档文件 115 一般不返 desc,UI 用 "原画" 表明"原始/最高清晰度")。
          */
         val qualityChip: String = "",
         /**

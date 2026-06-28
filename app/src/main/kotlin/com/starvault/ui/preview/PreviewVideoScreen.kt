@@ -5,12 +5,6 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -80,7 +74,6 @@ import okhttp3.OkHttpClient
  *  ┌─ PreviewTopBar     56dp 黑底: ← 返回 / 字幕 / 投屏 / 更多
  *  ├─ PreviewCanvas     weight=1f 黑底 ExoPlayer + overlays
  *  │   ├─ AndroidView PlayerView(useController=false)
- *  │   ├─ 左上 ● pulse + "在线播放 · 已缓冲 X MB"
  *  │   ├─ 右上 3 chip (qualityChip / 倍速 / 原声)
  *  │   └─ 中心 76dp play 圆(play/pause 双向)
  *  └─ PreviewControls   黑底: seek 进度条 + 时间 + 6 圆按钮
@@ -206,18 +199,7 @@ private fun VideoContent(
         }
     }
 
-    // 9. 已缓冲 MB 文本(按 bufferedMs/durationMs * sizeBytes 估算)
-    val bufferedMb = remember(snapshot, state.metadata.sizeBytes) {
-        if (snapshot.durationMs > 0) {
-            val frac = snapshot.bufferedMs.toDouble() / snapshot.durationMs
-            val bytes = (frac * state.metadata.sizeBytes).toLong()
-            "%.1f".format(bytes / 1024.0 / 1024.0)
-        } else {
-            "0.0"
-        }
-    }
-
-    // 10. 全屏切换:
+    // 9. 全屏切换:
     //   - 横屏(landscape) + immersive sticky 隐藏系统栏
     //   - 顶栏整条收起(对齐 YouTube/B 站,横屏纯视频模式)
     //   - orientation 改变默认会重建 Activity;ExoPlayer 由 composition remember 持有,
@@ -270,7 +252,6 @@ private fun VideoContent(
             qualityOptions = state.qualityOptions,
             currentQualityUrl = state.mediaUrl,
             speedChip = speedLabel,
-            bufferedMb = bufferedMb,
             onTogglePlay = onTogglePlay,
             onSelectQuality = onSelectQuality,
             modifier = Modifier.weight(1f),
@@ -316,7 +297,7 @@ private fun buildPlayer(context: Context, mediaUrl: String): ExoPlayer {
  * 字段:
  *  - positionMs : 当前位置(playhead),从 player.currentPosition 读
  *  - durationMs : 总时长,coerceAtLeast(0) 防 UNKNOWN_TIME(-9223372036854775807)
- *  - bufferedMs : 已缓冲位置,从 player.bufferedPosition 读(用于已缓冲 MB 估算)
+ *  - bufferedMs : 已缓冲位置,从 player.bufferedPosition 读(给 seek 进度条画灰条用)
  *  - isPlaying  : 当前是否播放中,player.isPlaying 同步 playWhenReady + STATE_READY
  */
 private data class PlayerSnapshot(
@@ -446,7 +427,6 @@ private fun PreviewIconBtn(
 /**
  * 黑底视频画布:
  *  - AndroidView PlayerView 占满(useController=false,我们自己画控件)
- *  - 左上 ● pulse + "在线播放 · 已缓冲 X MB"
  *  - 右上 3 chip(qualityChip 蓝底 / 倍速 / 原声)
  *  - 中心 76dp 大圆 play 按钮(play/pause 双向同步)
  */
@@ -458,7 +438,6 @@ private fun PreviewCanvas(
     qualityOptions: List<VideoM3u8>,
     currentQualityUrl: String,
     speedChip: String,
-    bufferedMb: String,
     onTogglePlay: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit,
     modifier: Modifier = Modifier,
@@ -488,24 +467,9 @@ private fun PreviewCanvas(
             },
         )
 
-        // 左上:pulse + 缓冲状态
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 12.dp, top = 12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black.copy(alpha = 0.4f))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            PreviewPulseDot()
-            Text(
-                text = "在线播放 · 已缓冲 $bufferedMb MB",
-                style = t.micro,
-                color = Color.White,
-            )
-        }
+        // 左上原本是 ● pulse + "在线播放 · 已缓冲 X MB" 状态行,
+        // 用户认为冗余,删掉。视频画布纯展示 + 右上 3 chip(quality/speed/原声)已够。
+
 
         // 右上:3 chip。quality chip 可点(有 options 时)→ DropdownMenu 切档;
         // 单档 / 列表为空时降级为只读,避免点开空菜单。
@@ -516,7 +480,7 @@ private fun PreviewCanvas(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             QualityChipWithMenu(
-                currentDesc = qualityChip.ifBlank { "—" },
+                currentDesc = qualityChip.ifBlank { "原画" },
                 options = qualityOptions,
                 currentUrl = currentQualityUrl,
                 onSelect = onSelectQuality,
@@ -632,43 +596,8 @@ private fun QualityChipWithMenu(
     }
 }
 
-/**
- * 6dp 蓝点 + 1.6s pulse 环(对位 PlayerScreen.kt:PulseDot)。
- *
- *  用 [rememberInfiniteTransition] + ringAlpha(0.7→0)做外圈淡出动画,
- *  中心 6dp 实心蓝点固定。
- */
-@Composable
-private fun PreviewPulseDot() {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val ringAlpha by transition.animateFloat(
-        initialValue = 0.7f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "pulse-ring",
-    )
-    Box(contentAlignment = Alignment.Center) {
-        // 外圈:从 14dp 缩到 6dp + alpha 衰减
-        Box(
-            modifier = Modifier
-                .size((6 + 8 * (1 - ringAlpha / 0.7f)).dp.coerceAtLeast(6.dp))
-                .clip(CircleShape)
-                .background(Color(0xFF2F6FEB).copy(alpha = ringAlpha)),
-        )
-        // 中心实心 6dp
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF2F6FEB)),
-        )
-    }
-}
-
 /* ─────────────────── 底部控制条 ─────────────────── */
+
 
 /**
  * 底部控制条(黑底):
@@ -798,7 +727,7 @@ private fun PreviewSeekBar(
     ) {
         val trackW = maxWidth
         // buffered 灰条(占满;当前用 positionMs 蓝条叠加显示进度,buffered 信息
-        // 已通过 Canvas 左上 "已缓冲 X MB" 文本展示,这里简化不画 buffered 灰条)
+        // 不再通过 Canvas 文本展示,这里保留 bufferedMs 字段作后续扩展)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
