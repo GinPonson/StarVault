@@ -103,15 +103,14 @@ fun PreviewImageScreen(
                 TopInfoBar(
                     visible = uiVisible.value,
                     fileName = state.metadata.name,
-                    isStarred = isStarred,
                     onBack = onBack,
-                    onToggleStar = onToggleStar,
                 )
 
                 BottomActionBar(
                     visible = uiVisible.value,
+                    isStarred = isStarred,
                     onShare = { /* TODO: 调 AndroidSharesheet 分享原图 */ },
-                    onFavorite = { /* TODO: 调收藏 toggle（需先决定收藏 source 概念） */ },
+                    onFavorite = onToggleStar,
                     onDelete = { /* TODO: 调 115 files/delete */ },
                 )
             }
@@ -245,9 +244,7 @@ private fun ImageContent(
 private fun BoxScope.TopInfoBar(
     visible: Boolean,
     fileName: String,
-    isStarred: Boolean,
     onBack: () -> Unit,
-    onToggleStar: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     Box(
@@ -293,20 +290,8 @@ private fun BoxScope.TopInfoBar(
                         .weight(1f)
                         .padding(horizontal = 4.dp),
                 )
-                // 右侧 ❤️ 星标(跟 PreviewVideo/PreviewAudio 用同一组 HeartFilled/HeartOutline icon)
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .pointerInput(Unit) { detectTapGestures(onTap = { onToggleStar() }) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
-                        contentDescription = if (isStarred) "已收藏" else "收藏",
-                        tint = c.fg,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                // 右侧空白占位(40dp),与原来 ❤️ 对齐宽度 — 避免文件名挤压
+                Box(modifier = Modifier.size(40.dp))
             }
         }
     }
@@ -326,6 +311,7 @@ private fun BoxScope.TopInfoBar(
 @Composable
 private fun BoxScope.BottomActionBar(
     visible: Boolean,
+    isStarred: Boolean,
     onShare: () -> Unit,
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
@@ -356,8 +342,9 @@ private fun BoxScope.BottomActionBar(
                     modifier = Modifier.weight(1f),
                 )
                 OutlinedActionButton(
-                    iconRes = android.R.drawable.btn_star_big_off,
-                    label = "收藏",
+                    iconVector = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
+                    iconTint = if (isStarred) c.accent else c.fg,
+                    label = if (isStarred) "已收藏" else "收藏",
                     onClick = onFavorite,
                     modifier = Modifier.weight(1f),
                 )
@@ -380,12 +367,15 @@ private fun BoxScope.BottomActionBar(
  */
 @Composable
 private fun OutlinedActionButton(
-    iconRes: Int,
+    iconRes: Int? = null,
+    iconVector: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconTint: androidx.compose.ui.graphics.Color? = null,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = StarVaultTheme.colors
+    val resolvedTint = iconTint ?: c.fg
     androidx.compose.material3.OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(40.dp),
@@ -396,12 +386,21 @@ private fun OutlinedActionButton(
             contentColor = c.fg,
         ),
     ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = c.fg,
-        )
+        if (iconVector != null) {
+            Icon(
+                imageVector = iconVector,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = resolvedTint,
+            )
+        } else if (iconRes != null) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = c.fg,
+            )
+        }
         Spacer(Modifier.width(6.dp))
         Text(label, fontSize = 13.sp, color = c.fg)
     }
