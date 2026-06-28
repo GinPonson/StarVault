@@ -8,20 +8,27 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import coil3.compose.AsyncImage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +39,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -424,4 +434,225 @@ private fun MoreMenuItem(
         },
         onClick = onClick,
     )
+}
+
+/* ─────────────────── 播放列表 sheet(VIDEO / AUDIO 屏族共用) ─────────────────── */
+
+/**
+ * 播放列表底部弹层,显示同父目录的全部 media 项(AUDIO / VIDEO),
+ * 点击某项触发 [onPicked](fid),Route 切到对应 Preview 屏。
+ *
+ *  与 [PreviewAudioScreen] / [PreviewVideoScreen] 的"上下首/集"按钮互补:
+ *  - 按钮适合顺序浏览(连续看),sheet 适合跳看(看第 5 集不必 4 次 Next)
+ *  - sheet 显示当前 fid 高亮 + 初始自动滚到该行(避免 50 首列表从第 1 开始)
+ *
+ *  实现选型 — 不用 material3 的 ModalBottomSheet:
+ *  - 项目约定用 SortSheet / FolderSheet 的手写 pattern(scrim Box + 贴底 Column + 圆角顶);
+ *    material3 的 ModalBottomSheet 默认 M3 动效,与现有 SortSheet 风格不一致
+ *  - scrim 用 `Color.Black.copy(alpha = 0.4f)` + clickable dismiss,匹配 SortSheet
+ *
+ *  复用注意事项:
+ *  - 当前 fid 黄色 accent 高亮(`c.accent.copy(alpha = 0.08f)`)+ 右侧 ≡♪ Icons.Playlist
+ *  - 标题固定"播放列表 共 {N} 首"(N=items.size,空时显示"暂无播放列表")
+ *  - 空态(Search 入口 / 拉失败):居中 muted 文字"暂无播放列表"
+ *  - [placeholderIcon] 给 thumbnailUrl 为空时的 fallback:
+ *    audio 传 [Icons.Music],video 传 [Icons.Video]
+ *
+ *  @param currentFileId  当前播放 fid,用于高亮 + 初始滚动定位
+ *  @param items          父目录 media 列表(已过滤 audio/video,已按 name asc)
+ *  @param placeholderIcon 无 thumbnailUrl 时显示的 fallback icon(Icons.Music / Icons.Video)
+ *  @param onPicked       用户点某项(fileId)→ 关 sheet + Route 切歌
+ *  @param onDismiss      点 scrim / 系统返回 → 关 sheet
+ */
+@Composable
+internal fun PlaylistSheet(
+    currentFileId: String,
+    mediaItems: List<com.starvault.data.remote.cloud115.ParsedFileItem>,
+    placeholderIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    onPicked: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    val listState = rememberLazyListState()
+
+    val initialIndex = remember(mediaItems) { mediaItems.indexOfFirst { it.id == currentFileId }.coerceAtLeast(0) }
+    LaunchedEffect(mediaItems) {
+        if (mediaItems.isNotEmpty()) listState.scrollToItem(initialIndex)
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.4f))
+                .clickable(onClick = onDismiss),
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(540.dp)
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(c.surface)
+                .padding(top = 12.dp, bottom = 24.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(width = 32.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFFC4C4C4)),
+            )
+            Spacer(Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "播放列表",
+                    color = c.fg,
+                    style = t.title,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "共 ${mediaItems.size} 首",
+                    color = c.muted,
+                    style = t.micro,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = c.border, thickness = 1.dp)
+
+            if (mediaItems.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "暂无播放列表",
+                        color = c.muted,
+                        style = t.body,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                ) {
+                    items(mediaItems, key = { it.id }) { item ->
+                        PlaylistRow(
+                            item = item,
+                            isCurrent = item.id == currentFileId,
+                            placeholderIcon = placeholderIcon,
+                            onClick = { onPicked(item.id) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 播放列表单行:左侧 thumbnail 36dp(无则 [placeholderIcon] fallback) + 文件名 +
+ * 副标题(size · duration)+ 右侧 ≡♪ 当前标记。
+ */
+@Composable
+internal fun PlaylistRow(
+    item: com.starvault.data.remote.cloud115.ParsedFileItem,
+    isCurrent: Boolean,
+    placeholderIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    val duration = formatPlayLong(item.playLong)
+    val subtitle = buildString {
+        append(formatFileSize(item.sizeBytes))
+        if (duration.isNotEmpty()) {
+            append(" · ")
+            append(duration)
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(if (isCurrent) c.accent.copy(alpha = 0.08f) else c.surface)
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (item.thumbnailUrl.isNotBlank()) {
+            coil3.compose.AsyncImage(
+                model = item.thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1A1A1A)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1A1A1A)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = placeholderIcon,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.name,
+                color = c.fg,
+                style = t.body,
+                fontWeight = if (isCurrent) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                color = c.muted,
+                style = t.micro,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        }
+        if (isCurrent) {
+            Spacer(Modifier.size(8.dp))
+            Icon(
+                imageVector = Icons.Playlist,
+                contentDescription = "正在播放",
+                tint = c.accent,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/** playLong(秒) → "04:23" 或 "01:30:08";<=0 → ""(空字符串,subtitle 拼接自动跳过)。 */
+internal fun formatPlayLong(seconds: Int): String {
+    if (seconds <= 0) return ""
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
