@@ -178,4 +178,29 @@ interface OpenFileApiService {
     suspend fun videoPlay(
         @Query("pick_code") pickCode: String,
     ): Response<OpenVideoPlayResponse>
+
+    /**
+     * POST /open/ufile/update — 更新文件(夹)元数据(星标 / 重命名 / 备注 等)。
+     *
+     * 官方文档:https://www.yuque.com/115yun/open/gyrpw5a0zc4sengm
+     * OpenList 同步实现:OpenListTeam/115-sdk-go/fs.go:25-35(Update)。
+     * p115client 封装:client.py:3386 fs_star_set → fs_update_open (client.py:3673 fs_update)。
+     *
+     * **必须走 form-urlencoded body**(对齐 OpenList `ReqWithForm(SetFormData(...))`)。
+     *
+     * 参数(MVP 只用 star;其他字段如 file_name 重命名 / 各 115 端私有字段按需扩展):
+     *  - file_id : 文件(夹)ID(必填);**注意单选,多选用 `file_id[0]` / `file_id[1]`**(p115client 支持,MVP 用不到)
+     *  - star    : 0=取消星标,1=设置星标
+     *
+     * 响应:[OpenFileUpdateResponse] — 顶层 `{state, code, message}` 三件套,无 data 字段(115 update 端点响应不带 data)。
+     *
+     * **对齐 115 文档**:star 操作在文件已被删除的情况下**仍可成功**(p115client 文档明确),
+     * 所以此处失败语义只有"网络错" / "鉴权错"(401) / "参数错"(code 非 0)。
+     */
+    @FormUrlEncoded
+    @POST("open/ufile/update")
+    suspend fun updateFile(
+        @Field("file_id") fileId: String,
+        @Field("star") star: Int,
+    ): Response<OpenFileUpdateResponse>
 }

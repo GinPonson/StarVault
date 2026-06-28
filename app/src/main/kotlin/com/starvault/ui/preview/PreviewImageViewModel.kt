@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
  * PreviewImage ViewModel：拿 IMAGE 文件的原图 URL。
  *
  *  流程：
- *  1. [MediaPreviewRepository.fetchMetadata] 拿 pickcode + name + size
+ *  1. [MediaPreviewRepository.fetchMetadata] 拿 pickcode + name + size + isMark
  *  2. [MediaPreviewRepository.fetchImageOriginalUrl] 拿 file_url
  *  3. 暴露 [PreviewUiState.Success]（mediaUrl = file_url）
  *
@@ -22,6 +22,11 @@ import kotlinx.coroutines.launch
  *
  *  复用 [FilesViewModel] 的 markPending 风格不可行——Preview 是只读屏（不切目录），所以状态机简单：
  *  init → Loading → Success / Error。不会中途再切状态。
+ *
+ *  星标([toggleStar]):
+ *  - 初始值取 [MediaPreviewRepository.MediaMetadata.isMark] (`"1"`=已星标)
+ *  - 乐观更新 + 失败回滚:点 ❤️ → 立刻翻本地 → 调 `repo.setStar` → 失败 ToastBus + 回滚
+ *  - 文件 star 状态不影响图片渲染(图片直链走 downurl)
  */
 class PreviewImageViewModel(
     private val fileId: String,
@@ -30,6 +35,12 @@ class PreviewImageViewModel(
 
     private val _state = MutableStateFlow<PreviewUiState>(PreviewUiState.Loading)
     val state: StateFlow<PreviewUiState> = _state.asStateFlow()
+
+    /**
+     * 当前文件星标状态。初始 false,Success emit 时由 metadata.isMark 同步;toggleStar 时翻。
+     */
+    private val _isStarred = MutableStateFlow(false)
+    val isStarred: StateFlow<Boolean> = _isStarred.asStateFlow()
 
     init {
         load()
@@ -49,6 +60,7 @@ class PreviewImageViewModel(
                     val url = repo.fetchImageOriginalUrl(fileId = meta.fid, pickCode = meta.pickCode)
                     url.fold(
                         onSuccess = { u ->
+                            _isStarred.value = meta.isMark == "1"
                             _state.value = PreviewUiState.Success(meta, u, qualityChip = "")
                         },
                         onFailure = { e ->
@@ -62,6 +74,24 @@ class PreviewImageViewModel(
                     ToastBus.error(e.message ?: "文件不存在或已删除")
                 },
             )
+        }
+    }
+
+    /**
+     * 切换星标(❤️/♡):乐观更新 + 失败回滚。
+     *
+     * Loading 状态时 noop(无 fid 可用);Success 状态时取 meta.fid,115 /open/ufile/update 不需要 pick_code。
+     */
+    fun toggleStar() {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        val next = !_isStarred.value
+        _isStarred.value = next
+        viewModelScope.launch {
+            repo.setStar(fileId = current.metadata.fid, star = next)
+                .onFailure { e ->
+                    _isStarred.value = !next
+                    ToastBus.error(e.message ?: "星标失败")
+                }
         }
     }
 }

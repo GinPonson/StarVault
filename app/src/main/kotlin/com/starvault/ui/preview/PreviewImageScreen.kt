@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
+import com.starvault.component.Icons
 import com.starvault.theme.StarVaultTheme
 
 /**
@@ -69,13 +70,21 @@ import com.starvault.theme.StarVaultTheme
  *  `ImageContent` 设计为返回 `uiVisible: MutableState<Boolean>` 的 Composable，
  *  让外层 Box 拿这个状态 + 渲染顶 / 底栏。
  *
+ *  星标(❤️/♡):加在 TopInfoBar 右侧(文件名右边) — 用户指示:PreviewImage 没有播放按钮,
+ *  用 TopBar 右侧(更多按钮左边)对齐 PreviewVideo/PreviewAudio 的 toggle 入口;
+ *  fill/outline 由 isStarred 决定,ViewModel 走 toggleStar 乐观更新。
+ *
  *  @param state VM 暴露的 PreviewUiState
+ *  @param isStarred 当前星标状态(VM.isStarred StateFlow 注入)
  *  @param onBack 返回（屏内 BackHandler + 顶部"返回"按钮都调它）
+ *  @param onToggleStar 点 ❤️ 触发(VM.toggleStar:乐观更新 + 失败回滚)
  */
 @Composable
 fun PreviewImageScreen(
     state: PreviewUiState,
+    isStarred: Boolean = false,
     onBack: () -> Unit,
+    onToggleStar: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     BackHandler(enabled = true) { onBack() }
@@ -94,7 +103,9 @@ fun PreviewImageScreen(
                 TopInfoBar(
                     visible = uiVisible.value,
                     fileName = state.metadata.name,
+                    isStarred = isStarred,
                     onBack = onBack,
+                    onToggleStar = onToggleStar,
                 )
 
                 BottomActionBar(
@@ -222,19 +233,21 @@ private fun ImageContent(
  *
  *  - surface 白底（不透明），与下方黑底图片形成"白底 vs 黑底"强对比（明显分割）
  *  - 不用 1dp 灰线 —— 靠"白底栏 vs 黑底图片"的色差自然分割（Photos 同款）
- *  - 左侧 ← 返回 icon + 中间文件名 `titleMedium` 居中（maxLines=1）
- *  - 右侧留白占位（后续可加收藏/分享 icon）
+ *  - 左侧 ← 返回 icon + 中间文件名 `titleMedium` 居中（maxLines=1）+ 右侧 ❤️ 星标
  *  - 16dp 横向 padding + 12dp 纵向 padding
  *  - 作为 BoxScope 扩展，钉到外层 Box 的 [Alignment.TopCenter]
  *  - 显隐由 [visible] 控制（外层 [AnimatedVisibility] 包裹 fadeIn/fadeOut）
  *
  *  顶 / 底与图片之间的"明显分割线"由黑底图片 + 白底栏的强对比实现 —— 不再画灰线。
+ *  ❤️ 用 androidx vector icon（之前是 android.R 系统 drawable），跟 PreviewVideo/Audio ❤️ 一致。
  */
 @Composable
 private fun BoxScope.TopInfoBar(
     visible: Boolean,
     fileName: String,
+    isStarred: Boolean,
     onBack: () -> Unit,
+    onToggleStar: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     Box(
@@ -280,8 +293,20 @@ private fun BoxScope.TopInfoBar(
                         .weight(1f)
                         .padding(horizontal = 4.dp),
                 )
-                // 右侧占位（保留空间对齐 Photos 风格）
-                Box(modifier = Modifier.size(40.dp))
+                // 右侧 ❤️ 星标(跟 PreviewVideo/PreviewAudio 用同一组 HeartFilled/HeartOutline icon)
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .pointerInput(Unit) { detectTapGestures(onTap = { onToggleStar() }) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
+                        contentDescription = if (isStarred) "已收藏" else "收藏",
+                        tint = c.fg,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
         }
     }

@@ -372,3 +372,23 @@ data class OpenFolderAddData(
     /** 新建文件夹 ID。 */
     @SerialName("file_id") val fileId: String = "",
 )
+
+// ─────────────────── /open/ufile/update 响应(星标 / 重命名 等)───────────────────
+
+/**
+ * POST /open/ufile/update 响应(star / file_name 重命名 等共用)。
+ *
+ * 115 update 端点**不带 data 字段** — 顶层 `{state, code, message}` 三件套即业务结果。
+ *
+ *  - state   : boolean  true=业务成功
+ *  - message : 失败文本(成功时为空)
+ *  - code    : 错误码(成功时为 0;失败时与 webapi errno / open 401 拦截家族对齐)
+ *
+ *  HTTP 失败由 Retrofit Response.isSuccessful 判定,跟其他 open 端点一致处理。
+ */
+@Serializable
+data class OpenFileUpdateResponse(
+    val state: Boolean? = null,
+    val message: String? = null,
+    val code: Int = 0,
+)

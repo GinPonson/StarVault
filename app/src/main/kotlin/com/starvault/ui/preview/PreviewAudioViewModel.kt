@@ -54,6 +54,13 @@ class PreviewAudioViewModel(
     val state: StateFlow<PreviewUiState> = _state.asStateFlow()
 
     /**
+     * 当前文件星标状态。初始 false,首次 Success emit 时由 metadata.isMark 同步。
+     * 二次 emit(拿到 URL 后)保持同值不动 — metadata 引用不变。
+     */
+    private val _isStarred = MutableStateFlow(false)
+    val isStarred: StateFlow<Boolean> = _isStarred.asStateFlow()
+
+    /**
      * 兄弟文件状态(用于"上一首/下一首"按钮)。
      *
      *  - [prevId] : 上一首 fileId;null = 没有上一首(已是第一首)或未拉
@@ -82,7 +89,8 @@ class PreviewAudioViewModel(
             val metadata = repo.fetchMetadata(fileId)
             metadata.fold(
                 onSuccess = { meta ->
-                    // 第一次 emit: 立刻给 UI 封面/标题/进度条 0/0(+resumePositionMs)
+                    // 第一次 emit: 立刻给 UI 封面/标题/进度条 0/0(+resumePositionMs + isMark 同步 ❤️ 初始态)
+                    _isStarred.value = meta.isMark == "1"
                     _state.value = PreviewUiState.Success(
                         metadata = meta,
                         mediaUrl = "",
@@ -111,6 +119,25 @@ class PreviewAudioViewModel(
                     ToastBus.error(e.message ?: "文件不存在或已删除")
                 },
             )
+        }
+    }
+
+    /**
+     * 切换星标(❤️/♡):乐观更新 + 失败回滚。
+     *
+     * 首次 emit Success(metadata, mediaUrl="") 后 ❤️ 即可点(此时 metadata 已就绪);
+     * 二次 emit 后 player 重建不影响星标态 — _isStarred 独立于 _state。
+     */
+    fun toggleStar() {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        val next = !_isStarred.value
+        _isStarred.value = next
+        viewModelScope.launch {
+            repo.setStar(fileId = current.metadata.fid, star = next)
+                .onFailure { e ->
+                    _isStarred.value = !next
+                    ToastBus.error(e.message ?: "星标失败")
+                }
         }
     }
 

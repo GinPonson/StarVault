@@ -113,21 +113,31 @@ import kotlinx.coroutines.delay
  *
  *  Noop + ToastBus:投屏 / 重命名 / 移动 / 删除 / 分享 / 属性(更多菜单内 5 项 + 顶栏投屏)。
  *
+ *  星标(❤️/♡):最左位置在播放控制行的左侧(用户指示:和播放按钮同一行最左);
+ *  PreviewCtrlBtn 36dp 默认白底透明 + 白 icon(视频黑底屏面下统一白色 tint);
+ *  fill/outline 由 isStarred 决定。星标和 prev/play/next / 倍速 / 全屏 并存于一行,
+ *  用 SpaceBetween 分布:左 4 按钮(❤️ / Prev / Play / Next),右 2 按钮(倍速 / 全屏)。
+ *
  *  @param state VM 暴露的 [PreviewUiState]
  *  @param siblings 上一集/下一集 fid(从 [PreviewVideoViewModel.siblings] 来,null = 不可点)
+ *  @param isStarred 当前星标状态(VM.isStarred StateFlow 注入)
  *  @param onBack 返回(BackHandler + 顶部"返回"按钮都调它)
  *  @param onSelectQuality 切档(VM 收到后改 Success.mediaUrl,Screen 侧 remember 重建 player)
  *  @param onPrev 上一集(Screen 只在 prevId 非空时调;Route 负责 nav 跳转)
  *  @param onNext 下一集(同 onPrev)
+ *  @param onToggleStar 点 ❤️ 触发(VM.toggleStar:乐观更新 + 失败回滚)
+ *  @param onSavePosition 5s 节流 + onDispose 兜底,把 player.currentPosition 写盘
  */
 @Composable
 fun PreviewVideoScreen(
     state: PreviewUiState,
     siblings: PreviewVideoViewModel.Siblings = PreviewVideoViewModel.Siblings(),
+    isStarred: Boolean = false,
     onBack: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit = {},
     onPrev: () -> Unit = {},
     onNext: () -> Unit = {},
+    onToggleStar: () -> Unit = {},
     onSavePosition: (Long) -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
@@ -140,7 +150,17 @@ fun PreviewVideoScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Success -> VideoContent(state, siblings, onBack, onSelectQuality, onPrev, onNext, onSavePosition)
+            is PreviewUiState.Success -> VideoContent(
+                state = state,
+                siblings = siblings,
+                isStarred = isStarred,
+                onBack = onBack,
+                onSelectQuality = onSelectQuality,
+                onPrev = onPrev,
+                onNext = onNext,
+                onToggleStar = onToggleStar,
+                onSavePosition = onSavePosition,
+            )
         }
     }
 }
@@ -163,10 +183,12 @@ fun PreviewVideoScreen(
 private fun VideoContent(
     state: PreviewUiState.Success,
     siblings: PreviewVideoViewModel.Siblings,
+    isStarred: Boolean,
     onBack: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onToggleStar: () -> Unit,
     onSavePosition: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -353,12 +375,14 @@ private fun VideoContent(
             isFullscreen = isFullscreen,
             hasPrev = siblings.prevId != null,
             hasNext = siblings.nextId != null,
+            isStarred = isStarred,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onCycleSpeed = onCycleSpeed,
             onToggleFullscreen = onToggleFullscreen,
             onPrev = onPrev,
             onNext = onNext,
+            onToggleStar = onToggleStar,
         )
     }
 }
@@ -938,11 +962,12 @@ private fun TextChipWithMenu(
  * 底部控制条(黑底):
  *  - 进度条([PreviewSeekBar]:3dp 灰底 + accent 蓝填充 + 12dp 白 thumb)
  *  - 时间文本(32:14 / 1:42:08)
- *  - 5 圆按钮:上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 全屏
+ *  - 6 圆按钮:❤️ / 上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 全屏
  *
- *  之前这里有 6 圆按钮(含"下载");下载已下移到顶栏"更多" DropdownMenu,控制条瘦身。
+ *  之前这里有 5 圆按钮;新增 ❤️ 在最左(用户指示:和播放按钮同一行最左)。
  *  上一集/下一集:有 prev/next 时真接 [onPrev]/[onNext](Route 跳到兄弟文件);
  *  没 prev/next 时(单文件/无 parentCid/已是首尾集) → ToastBus.info 提示。
+ *  ❤️ 始终可点:星标不影响视频播放,只通过 [onToggleStar] 回调 VM.toggleStar。
  */
 @Composable
 private fun PreviewControls(
@@ -951,12 +976,14 @@ private fun PreviewControls(
     isFullscreen: Boolean,
     hasPrev: Boolean,
     hasNext: Boolean,
+    isStarred: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Int) -> Unit,
     onCycleSpeed: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onToggleStar: () -> Unit,
 ) {
     val t = StarVaultTheme.typography
     Column(
@@ -987,14 +1014,19 @@ private fun PreviewControls(
             )
         }
         Spacer(Modifier.height(8.dp))
-        // 5 圆按钮(下载已下移)
+        // 6 圆按钮(❤️ + 上一集/播放/下一集 | 倍速/全屏)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // 左:上一集 / 播放 / 下一集
+            // 左:❤️ / 上一集 / 播放 / 下一集 — ❤️ 在最左,跟用户指示"和播放按钮同一行最左"对齐
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PreviewCtrlBtn(
+                    icon = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
+                    contentDescription = if (isStarred) "已收藏" else "收藏",
+                    onClick = onToggleStar,
+                )
                 PreviewCtrlBtn(
                     icon = Icons.Prev,
                     contentDescription = "上一集",

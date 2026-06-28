@@ -42,12 +42,15 @@ fun PreviewAudioRoute(
     )
     val state by vm.state.collectAsStateWithLifecycle()
     val siblings by vm.siblings.collectAsStateWithLifecycle()
+    val isStarred by vm.isStarred.collectAsStateWithLifecycle()
     PreviewAudioScreen(
         state = state,
         siblings = siblings,
+        isStarred = isStarred,
         onBack = onBack,
         onPrev = { siblings.prevId?.let { nav.navigate(Route.PreviewAudio(it, args.parentCid)) } },
         onNext = { siblings.nextId?.let { nav.navigate(Route.PreviewAudio(it, args.parentCid)) } },
+        onToggleStar = vm::toggleStar,
         onSavePosition = vm::savePosition,
     )
 }

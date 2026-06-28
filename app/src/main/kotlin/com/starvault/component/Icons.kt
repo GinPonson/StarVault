@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Fullscreen
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.RestoreFromTrash
@@ -105,6 +107,8 @@ object Icons {
     val Next: ImageVector         get() = MaterialIcons.Outlined.SkipNext
     val Play: ImageVector         get() = MaterialIcons.Filled.PlayArrow
     val Pause: ImageVector        get() = MaterialIcons.Filled.Pause
+    /** 播放列表(≡+♪);Audio 屏"文件列表"按钮。 */
+    val Playlist: ImageVector     get() = MaterialIcons.Outlined.QueueMusic
 
     /* ─────────────────── Transfers / common (5) ─────────────────── */
     val Minimize: ImageVector get() = MaterialIcons.Outlined.Remove
@@ -146,6 +150,10 @@ object Icons {
     val Camera: ImageVector    get() = MaterialIcons.Outlined.CameraAlt
     val PlaySmall: ImageVector get() = MaterialIcons.Filled.PlayArrow
     val Heart: ImageVector     get() = MaterialIcons.Filled.Favorite
+    /** 实心 ❤️；Preview 屏 star toggle 用,区别于 Icons.Heart(相册喜欢)。 */
+    val HeartFilled: ImageVector  get() = MaterialIcons.Filled.Favorite
+    /** 空心 ♡；Preview 屏 star 未收藏态。 */
+    val HeartOutline: ImageVector get() = MaterialIcons.Outlined.FavoriteBorder
 
     /* ─────────────────── Login (2) ─────────────────── */
     val CheckBold: ImageVector  get() = MaterialIcons.Filled.CheckCircle

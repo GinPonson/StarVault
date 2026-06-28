@@ -53,6 +53,12 @@ class PreviewVideoViewModel(
     val state: StateFlow<PreviewUiState> = _state.asStateFlow()
 
     /**
+     * 当前文件星标状态。初始 false,Success emit 时由 metadata.isMark 同步;toggleStar 时翻。
+     */
+    private val _isStarred = MutableStateFlow(false)
+    val isStarred: StateFlow<Boolean> = _isStarred.asStateFlow()
+
+    /**
      * 兄弟文件状态(用于"上一集/下一集"按钮)。
      *
      *  - [prevId] : 上一集 fileId;null = 没有上一集(已是第一集)或未拉
@@ -84,6 +90,7 @@ class PreviewVideoViewModel(
                     options.fold(
                         onSuccess = { list ->
                             val first = list.first()
+                            _isStarred.value = meta.isMark == "1"
                             _state.value = PreviewUiState.Success(
                                 metadata = meta,
                                 mediaUrl = first.url,
@@ -103,6 +110,25 @@ class PreviewVideoViewModel(
                     ToastBus.error(e.message ?: "文件不存在或已删除")
                 },
             )
+        }
+    }
+
+    /**
+     * 切换星标(❤️/♡):乐观更新 + 失败回滚。
+     *
+     * Loading 状态时 noop;Success 状态时取 meta.fid 调 /open/ufile/update。
+     * 切清晰度([selectQuality])不会影响星标态 — 走 _state.copy 不动 _isStarred。
+     */
+    fun toggleStar() {
+        val current = _state.value as? PreviewUiState.Success ?: return
+        val next = !_isStarred.value
+        _isStarred.value = next
+        viewModelScope.launch {
+            repo.setStar(fileId = current.metadata.fid, star = next)
+                .onFailure { e ->
+                    _isStarred.value = !next
+                    ToastBus.error(e.message ?: "星标失败")
+                }
         }
     }
 

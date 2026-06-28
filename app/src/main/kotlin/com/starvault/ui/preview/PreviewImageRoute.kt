@@ -29,5 +29,6 @@ fun PreviewImageRoute(
         },
     )
     val state by vm.state.collectAsStateWithLifecycle()
-    PreviewImageScreen(state = state, onBack = onBack)
+    val isStarred by vm.isStarred.collectAsStateWithLifecycle()
+    PreviewImageScreen(state = state, isStarred = isStarred, onBack = onBack, onToggleStar = vm::toggleStar)
 }

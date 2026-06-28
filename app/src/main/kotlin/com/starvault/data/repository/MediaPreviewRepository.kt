@@ -73,6 +73,8 @@ class MediaPreviewRepository(
                 thumbnailUrl = "",  // proapi get_info 不返回 thumbnailUrl;走 Files 列表的 `u` 字段
                 mtimeSec = mtimeSec,
                 fileCategory = data.fileCategory,
+                /** 115 星标状态:`"1"`=已星标,`"0"`=未星标;Preview 屏 ❤️ 按钮初始态用此字段。 */
+                isMark = data.isMark,
             )
         }
     }
@@ -169,6 +171,29 @@ class MediaPreviewRepository(
             options
         }
     }
+
+    /**
+     * 切换文件星标(❤️/♡)。走 `/open/ufile/update` 端点,只填 `file_id` + `star` 两个 field。
+     *
+     * **乐观更新策略**:`VM.toggleStar()` 先本地翻 `_isStarred`,再调本函数,
+     * 失败时 VM 回滚 `_isStarred = !nextStar` 并 `ToastBus.error` 提示。
+     *
+     * 字段映射:
+     *  - 115 端 `star` 接受 0/1;Kotlin 端用 Boolean,内部 `if (star) 1 else 0` 转 Int。
+     *  - 响应无 data,只校验 `state=true` 即视为成功。
+     *
+     * @param fileId  115 file id(从 [fetchMetadata] 拿)
+     * @param star    `true`=设置星标(实心 ❤️),`false`=取消星标(空心 ♡)
+     */
+    suspend fun setStar(fileId: String, star: Boolean): Result<Unit> {
+        return runCatching {
+            val body = api.updateFile(fileId = fileId, star = if (star) 1 else 0).requireSuccessful()
+            if (body.state != true) {
+                throw IllegalStateException(body.message ?: "code=${body.code} fileId=$fileId")
+            }
+            Unit
+        }
+    }
 }
 
 /**
@@ -207,4 +232,11 @@ data class MediaMetadata(
     val mtimeSec: Long = 0L,
     /** proapi 用 string 表示文件/文件夹(1/0),不是 Int。 */
     val fileCategory: String = "1",
+    /**
+     * 115 星标状态字符串:`"1"`=已星标,`"0"`=未星标,其他取值(包括空串)按未星标处理。
+     *
+     * 来源:`/open/folder/get_info` 响应的 `is_mark` 字段(见 [OpenFolderInfoData.isMark])。
+     * VM 在 toggle 前读 `isMark == "1"` 作为 ❤️ 实心初始态;toggle 后由 [setStar] 走 `/open/ufile/update`。
+     */
+    val isMark: String = "0",
 )

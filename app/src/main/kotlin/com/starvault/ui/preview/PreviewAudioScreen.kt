@@ -68,27 +68,35 @@ import okhttp3.OkHttpClient
  *  ├─ 标题 + 副标题        黑文件名 / 灰色 size · mtime
  *  ├─ PreviewSeekBar      PreviewShared 复用
  *  ├─ 时间文本             黑字 mm:ss / mm:ss
- *  └─ AudioControls       3 圆按钮：Prev / Play(中央 64dp) / Next
+ *  └─ AudioControls       5 圆按钮：❤️ / Prev / Play(中央 72dp) / Next / Playlist
  *
  *  设计取舍：
- *  - 不接倍速/全屏：音频是听感优先，倍速/全屏语义弱，删 2 按钮让控制栏聚焦核心 3 动作
- *  - 播放键居中 64dp：白底 + 黑 ▶ icon，与左右 36dp Prev/Next 形成"中间大、两侧小"层级
+ *  - 不接倍速/全屏：音频是听感优先，倍速/全屏语义弱，删 2 按钮让控制栏聚焦核心 4 动作 + ❤️
+ *  - 5 按钮 SpaceEvenly 横向均分,Play 在第 3 位 → 视觉居中(用户指示)
+ *  - 播放键居中 72dp：黑底白 ▶ icon，与左右 36dp Prev/Next/❤️/Playlist 形成"中间大、两侧小"层级
  *  - 唱碟圆形 + 旋转动效：唱碟旋转是 vinyl 物理直觉，旋转速度对应播放中状态（暂停则停转）
- *  - 整屏白底黑字：跟项目 Files/Search 等亮色屏一致，PreviewVideo 黑底专属于"视频沉浸式"
+ *  - 整屏白底黑字：跟项目 Files/Search 等亮色屏一致,PreviewVideo 黑底专属于"视频沉浸式"
+ *  - ❤️ 在最左：跟视频屏"播放按钮同一行最左"对齐(用户指示)；
+ *    切换用 PreviewCtrlBtn 36dp + tint=c.fg(白屏黑 icon),fill/outline 由 isStarred 决定
  *
- *  @param state     PreviewUiState.Loading / Success(metadata, mediaUrl, "", [])
- *  @param siblings  上一首/下一首（VM.loadSiblings 异步拉取）
- *  @param onBack    NavHost popBackStack
- *  @param onPrev    上一首(fileId 由 Route 注入 → nav.navigate 新 PreviewAudio)
- *  @param onNext    下一首
+ *  @param state         PreviewUiState.Loading / Success(metadata, mediaUrl, "", [])
+ *  @param siblings      上一首/下一首（VM.loadSiblings 异步拉取）
+ *  @param isStarred     当前星标状态,用于 ❤️/♡ 切换(VM.isStarred StateFlow 注入)
+ *  @param onBack        NavHost popBackStack
+ *  @param onPrev        上一首(fileId 由 Route 注入 → nav.navigate 新 PreviewAudio)
+ *  @param onNext        下一首
+ *  @param onToggleStar  点 ❤️ 触发(VM.toggleStar:乐观更新 + 失败回滚)
+ *  @param onSavePosition 5s 节流 + onDispose 兜底,把 player.currentPosition 写盘
  */
 @Composable
 fun PreviewAudioScreen(
     state: PreviewUiState,
     siblings: PreviewAudioViewModel.Siblings = PreviewAudioViewModel.Siblings(),
+    isStarred: Boolean = false,
     onBack: () -> Unit,
     onPrev: () -> Unit = {},
     onNext: () -> Unit = {},
+    onToggleStar: () -> Unit = {},
     onSavePosition: (Long) -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
@@ -101,7 +109,16 @@ fun PreviewAudioScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> AudioLoadingBlock()
-            is PreviewUiState.Success -> AudioContent(state, siblings, onBack, onPrev, onNext, onSavePosition)
+            is PreviewUiState.Success -> AudioContent(
+                state = state,
+                siblings = siblings,
+                isStarred = isStarred,
+                onBack = onBack,
+                onPrev = onPrev,
+                onNext = onNext,
+                onToggleStar = onToggleStar,
+                onSavePosition = onSavePosition,
+            )
         }
     }
 }
@@ -118,9 +135,11 @@ fun PreviewAudioScreen(
 private fun AudioContent(
     state: PreviewUiState.Success,
     siblings: PreviewAudioViewModel.Siblings,
+    isStarred: Boolean,
     onBack: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onToggleStar: () -> Unit,
     onSavePosition: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -266,10 +285,12 @@ private fun AudioContent(
             snapshot = snapshot,
             hasPrev = siblings.prevId != null,
             hasNext = siblings.nextId != null,
+            isStarred = isStarred,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onPrev = onPrev,
             onNext = onNext,
+            onToggleStar = onToggleStar,
         )
     }
 }
@@ -432,22 +453,28 @@ private fun VinylDisc(
 /* ─────────────────── 控制行（3 圆按钮，播放键居中）─────────────────── */
 
 /**
- * 进度条 + 时间 + 3 圆按钮（Prev / Play / Next，播放键居中且最大）。
+ * 进度条 + 时间 + 5 圆按钮(点赞 / 上一首 / 暂停·播放 / 下一首 / 文件列表, 播放键居中且最大)。
  *
- *  - Prev / Next 用 PreviewCtrlBtn 36dp 默认尺寸，黑 icon 透明底
- *  - Play 用 PreviewCtrlBtn 64dp isPrimary：白底 + 黑 ▶ icon
+ *  - 点赞 / 上一首 / 下一首 / 文件列表 用 PreviewCtrlBtn 36dp 默认尺寸,黑 icon 透明底
+ *  - 播放/暂停 用自定义 BigPlayButton 72dp：黑底 + 白 ▶ icon(亮色屏面下视觉重量更强)
  *  - 进度条 PreviewShared 复用：黑灰底 + accent 蓝填充 + 白 thumb
  *  - 时间文本用 StarVaultTheme.typography.micro + c.muted
+ *  - 5 按钮用 SpaceEvenly 横向均分;播放/暂停在 Row 顺序第 3 位 → 视觉居中(用户指示)
+ *  - ❤️ fill/outline 由 isStarred 决定:已星标=实心填充,未星标=空心描边(用 c.fg 黑)
+ *  - 文件列表(≡+♪)MVP 阶段 noop,ToastBus.info("即将上线") 兜底 —— 真要展开播放列表需另起
+ *    bottom sheet 容器,不在本任务范围
  */
 @Composable
 private fun AudioControls(
     snapshot: PlayerSnapshot,
     hasPrev: Boolean,
     hasNext: Boolean,
+    isStarred: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Int) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onToggleStar: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
@@ -481,7 +508,9 @@ private fun AudioControls(
             )
         }
         Spacer(Modifier.height(28.dp))
-        // 3 圆按钮：Prev(40dp 透明) / Play(72dp 黑底白 icon,中央) / Next(40dp 透明)
+        // 5 圆按钮：❤️ / Prev(36dp 黑 icon) / Play(72dp 黑底白 icon 中央) / Next(36dp 黑 icon) / Playlist(36dp)
+        // 顺序严格按用户指示:点赞 | 上一首 | 暂停/播放 | 下一首 | 文件列表
+        // SpaceEvenly 让 Play 在 Row 第 3 位 → 视觉居中
         // Play 用黑底白 icon 而非 PreviewCtrlBtn 的白底黑 icon —— 亮色屏面下黑底白 icon 视觉重量
         // 比白底黑 icon 强,中央层级更突出
         Row(
@@ -489,6 +518,12 @@ private fun AudioControls(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
+            PreviewCtrlBtn(
+                icon = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
+                contentDescription = if (isStarred) "已收藏" else "收藏",
+                tint = c.fg,
+                onClick = onToggleStar,
+            )
             PreviewCtrlBtn(
                 icon = Icons.Prev,
                 contentDescription = "上一首",
@@ -510,6 +545,12 @@ private fun AudioControls(
                 onClick = {
                     if (hasNext) onNext() else ToastBus.info("已是单文件")
                 },
+            )
+            PreviewCtrlBtn(
+                icon = Icons.Playlist,
+                contentDescription = "文件列表",
+                tint = c.fg,
+                onClick = { ToastBus.info("即将上线") },
             )
         }
     }
