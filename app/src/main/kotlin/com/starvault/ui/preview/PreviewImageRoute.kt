@@ -66,16 +66,7 @@ fun PreviewImageRoute(
         isStarred = isStarred,
         onBack = onBack,
         onToggleStar = vm::toggleStar,
-        onRename = vm::onRename,
-        onDelete = vm::onDelete,
         onShare = { vm.onShare(appContext) },
-        onDownload = vm::onDownload,
-        onMove = {
-            // excludeIds:仅自身 fid(MediaMetadata 不含 parentCid 字段,无法排除父目录)。
-            // 自身排除已防自循环;用户移到原父目录不会出错(同位置 move 在 115 端 noop 即可)。
-            val current = vm.state.value as? PreviewUiState.Success
-            val exclude = listOfNotNull(current?.metadata?.fid)
-            nav.navigate(Route.FolderPicker(excludeIds = exclude))
-        },
+        onDelete = vm::onDelete,
     )
 }
