@@ -88,6 +88,9 @@ class PreviewImageViewModel(
         _isStarred.value = next
         viewModelScope.launch {
             repo.setStar(fileId = current.metadata.fid, star = next)
+                .onSuccess {
+                    ToastBus.info(if (next) "已收藏" else "已取消收藏")
+                }
                 .onFailure { e ->
                     _isStarred.value = !next
                     ToastBus.error(e.message ?: "星标失败")

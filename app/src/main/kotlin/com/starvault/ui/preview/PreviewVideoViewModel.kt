@@ -6,6 +6,7 @@ import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
 import com.starvault.data.local.playback.MediaPositionStore
 import com.starvault.data.model.FileType
+import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.FilesRepository
 import com.starvault.data.repository.MediaPreviewRepository
 import com.starvault.data.repository.VideoM3u8
@@ -34,6 +35,7 @@ import kotlinx.coroutines.launch
  *    (115 webapi 排序对齐 listFolder 默认 — 修改时间降序;Preview 屏期望"按文件名
  *    自然顺序",如 S01E01 → S01E02 → S01E03,这里显式按 name asc)
  *  - 找到当前 [fileId] 的 index,前后两条作为 prev/next
+ *  - 同一调用顺手填充 [playlist](完整 video 列表),供 ModalBottomSheet 播放列表用
  *  - 失败/找不到 → siblings 保持空,UI 端上一集/下一集按钮降级为 noop
  *
  *  Siblings 单独走一个 StateFlow,跟 metadata 加载解耦:
@@ -71,6 +73,17 @@ class PreviewVideoViewModel(
 
     private val _siblings = MutableStateFlow(Siblings())
     val siblings: StateFlow<Siblings> = _siblings.asStateFlow()
+
+    /**
+     * 完整播放列表(同父目录 video 文件,按 name asc 排序)。
+     *
+     *  - 空 list = 无 parentCid(Search 入口)/ 未拉取完成 / 拉取失败
+     *  - 复用 [loadSiblings] 的 [FilesRepository.listFolder] 调用,顺手填充;不发起额外网络
+     *  - 1150 上限同 [loadSiblings] — 父目录 video 数 > 1150 时只显示前 1150
+     *  - 已过滤 [FileType.VIDEO] + !isFolder,Screen 端直接渲染无需再 filter
+     */
+    private val _playlist = MutableStateFlow<List<ParsedFileItem>>(emptyList())
+    val playlist: StateFlow<List<ParsedFileItem>> = _playlist.asStateFlow()
 
     init {
         load()
@@ -125,6 +138,9 @@ class PreviewVideoViewModel(
         _isStarred.value = next
         viewModelScope.launch {
             repo.setStar(fileId = current.metadata.fid, star = next)
+                .onSuccess {
+                    ToastBus.info(if (next) "已收藏" else "已取消收藏")
+                }
                 .onFailure { e ->
                     _isStarred.value = !next
                     ToastBus.error(e.message ?: "星标失败")
@@ -166,9 +182,12 @@ class PreviewVideoViewModel(
                         prevId = videos.getOrNull(idx - 1)?.id,
                         nextId = videos.getOrNull(idx + 1)?.id,
                     )
+                    // 完整列表(同 listFolder 调用,无额外网络):ModalBottomSheet 播放列表用
+                    _playlist.value = videos
                 }
                 .onFailure {
-                    // 拉兄弟失败不影响主播放;_siblings 保持初值,UI 端按钮降级为 noop
+                    // 拉兄弟失败不影响主播放;_siblings + _playlist 保持初值(empty),
+                    // UI 端按钮降级 noop / sheet 显示"暂无播放列表"占位
                 }
         }
     }

@@ -43,6 +43,7 @@ fun PreviewVideoRoute(
     val state by vm.state.collectAsStateWithLifecycle()
     val siblings by vm.siblings.collectAsStateWithLifecycle()
     val isStarred by vm.isStarred.collectAsStateWithLifecycle()
+    val playlist by vm.playlist.collectAsStateWithLifecycle()
     PreviewVideoScreen(
         state = state,
         siblings = siblings,
@@ -50,8 +51,9 @@ fun PreviewVideoRoute(
         onBack = onBack,
         onSelectQuality = vm::selectQuality,
         onPrev = { siblings.prevId?.let { nav.navigate(Route.PreviewVideo(it, args.parentCid)) } },
-        onNext = { siblings.nextId?.let { nav.navigate(Route.PreviewVideo(it, args.parentCid)) } },
         onToggleStar = vm::toggleStar,
         onSavePosition = vm::savePosition,
+        playlist = playlist,
+        onSelectFromPlaylist = { fid -> nav.navigate(Route.PreviewVideo(fid, args.parentCid)) },
     )
 }

@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -124,9 +128,10 @@ import kotlinx.coroutines.delay
  *  @param onBack 返回(BackHandler + 顶部"返回"按钮都调它)
  *  @param onSelectQuality 切档(VM 收到后改 Success.mediaUrl,Screen 侧 remember 重建 player)
  *  @param onPrev 上一集(Screen 只在 prevId 非空时调;Route 负责 nav 跳转)
- *  @param onNext 下一集(同 onPrev)
  *  @param onToggleStar 点 ❤️ 触发(VM.toggleStar:乐观更新 + 失败回滚)
  *  @param onSavePosition 5s 节流 + onDispose 兜底,把 player.currentPosition 写盘
+ *  @param playlist 同父目录 video 完整列表(VM.playlist StateFlow),供"播放列表" ModalBottomSheet 用
+ *  @param onSelectFromPlaylist 从播放列表点选(fileId 由 Route 注入 → nav.navigate 新 PreviewVideo)
  */
 @Composable
 fun PreviewVideoScreen(
@@ -136,9 +141,10 @@ fun PreviewVideoScreen(
     onBack: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit = {},
     onPrev: () -> Unit = {},
-    onNext: () -> Unit = {},
     onToggleStar: () -> Unit = {},
     onSavePosition: (Long) -> Unit = {},
+    playlist: List<com.starvault.data.remote.cloud115.ParsedFileItem> = emptyList(),
+    onSelectFromPlaylist: (String) -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
     KeepScreenOnEffect()
@@ -157,9 +163,10 @@ fun PreviewVideoScreen(
                 onBack = onBack,
                 onSelectQuality = onSelectQuality,
                 onPrev = onPrev,
-                onNext = onNext,
                 onToggleStar = onToggleStar,
                 onSavePosition = onSavePosition,
+                playlist = playlist,
+                onSelectFromPlaylist = onSelectFromPlaylist,
             )
         }
     }
@@ -187,9 +194,10 @@ private fun VideoContent(
     onBack: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit,
     onPrev: () -> Unit,
-    onNext: () -> Unit,
     onToggleStar: () -> Unit,
     onSavePosition: (Long) -> Unit,
+    playlist: List<com.starvault.data.remote.cloud115.ParsedFileItem>,
+    onSelectFromPlaylist: (String) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -215,6 +223,31 @@ private fun VideoContent(
             onSavePosition(player.currentPosition)
             player.release()
         }
+    }
+
+    // 3.5 离屏时彻底清掉 video surface,避免 nav pop 过渡帧闪现最后一帧视频内容。
+    //    仅 `playWhenReady = false` 不够 —— 已经渲染进 surface buffer 的最后一帧
+    //    不会被回收,Compose Navigation 的转场动画期间 PlayerView 会持续作为
+    //    visual placeholder 显示这一帧。两层修复叠加:
+    //    ① [ExoPlayer.clearVideoSurface] 解绑 surface,Media3 立刻清空后续帧的输出;
+    //    ② [canvasAlpha] 把画布整体 alpha 置 0,即使 surface 缓存里残留的最后像素
+    //       也透不出来 —— alpha=0 时整个 Box 在 graphicsLayer 层不绘制,nav 过渡期间
+    //       Files 页直接从底下顶上。
+    //    ON_STOP 是 LifecycleOwner 收到 back pop 的最早时机,比 ON_DESTROY 早 ~300ms,
+    //    提前清 surface + alpha 可让过渡期间画布空白,Files 页直接透出。
+    //    系统 Home / RecentApps 也走 ON_STOP,顺带触发(合理行为:预览屏切后台立刻停显)。
+    var canvasAlpha by remember { mutableStateOf(1f) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                player.playWhenReady = false
+                player.clearVideoSurface()
+                canvasAlpha = 0f
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 4. 恢复播放位置：player ready 后立刻 seekTo 到上次的 positionMs
@@ -314,6 +347,7 @@ private fun VideoContent(
     //     重建后会丢。预先把当前位置存到 rememberSaveable,新 player 起来后 seekTo 恢复。
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var resumePositionMs by rememberSaveable { mutableIntStateOf(0) }
+    var playlistVisible by rememberSaveable { mutableStateOf(false) }
     val localCtx = LocalContext.current
     DisposableEffect(isFullscreen) {
         val activity = localCtx as? Activity
@@ -372,6 +406,7 @@ private fun VideoContent(
             onSelectAudioTrack = onSelectAudioTrack,
             onSelectTextTrack = onSelectTextTrack,
             onDisableText = onDisableText,
+            canvasAlpha = canvasAlpha,
             modifier = Modifier.weight(1f),
         )
 
@@ -380,14 +415,28 @@ private fun VideoContent(
             speedLabel = speedLabel,
             isFullscreen = isFullscreen,
             hasPrev = siblings.prevId != null,
-            hasNext = siblings.nextId != null,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onCycleSpeed = onCycleSpeed,
             onToggleFullscreen = onToggleFullscreen,
             onPrev = onPrev,
-            onNext = onNext,
+            onShowPlaylist = { playlistVisible = true },
         )
+
+        // 9. 播放列表 sheet(手搓风格,跟 SortSheet / FolderSheet 对齐)
+        //    渲染在 Column 外、Box 内,这样 sheet 上方的 scrim 不会盖住 PreviewControls
+        if (playlistVisible) {
+            PlaylistSheet(
+                currentFileId = state.metadata.fid,
+                mediaItems = playlist,
+                placeholderIcon = Icons.Video,
+                onPicked = { fid ->
+                    playlistVisible = false
+                    onSelectFromPlaylist(fid)
+                },
+                onDismiss = { playlistVisible = false },
+            )
+        }
     }
 }
 
@@ -667,12 +716,17 @@ private fun PreviewCanvas(
     onSelectAudioTrack: (TrackOption) -> Unit,
     onSelectTextTrack: (TrackOption) -> Unit,
     onDisableText: () -> Unit,
+    canvasAlpha: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(Color.Black)
+            // ON_STOP 触发的 alpha 渐隐 —— 见 VideoContent.3.5 注释。让 nav 过渡期间
+            // 整个画布 graphicsLayer alpha=0,即使 surface 缓存还有最后一帧像素也透不出。
+            // 不影响点击 / 单击切换(此时 ON_STOP 已触发,屏要走了,点击也无意义)。
+            .graphicsLayer { alpha = canvasAlpha }
             // 单击视频画布(非 chip 行)= 切换播放/暂停
             // 对齐 ExoPlayer PlayerView 默认行为。子元素(chip 行)的 clickable
             // 会先消费 pointer event,不会冒泡到这里误触发。
@@ -974,13 +1028,18 @@ private fun TextChipWithMenu(
  * 底部控制条(黑底):
  *  - 进度条([PreviewSeekBar]:3dp 灰底 + accent 蓝填充 + 12dp 白 thumb)
  *  - 时间文本(32:14 / 1:42:08)
- *  - 5 圆按钮:上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 全屏
+ *  - 5 圆按钮:左组 播放(白底实心) / 上一集 / 播放列表(≡♪)| 右组 倍速(label 可点) / 全屏
  *
  *  ❤️ 之前在底栏控制条最左;本次移到顶栏 PreviewTopBar 替代 noop 投屏按钮,
  *  原因是 ❤️ 是真功能(VM.toggleStar),Cast 是 ToastBus "即将上线" noop,
- *  顶栏 slots 有限,真功能优先;底栏回归 5 按钮原始设计。
- *  上一集/下一集:有 prev/next 时真接 [onPrev]/[onNext](Route 跳到兄弟文件);
- *  没 prev/next 时(单文件/无 parentCid/已是首尾集) → ToastBus.info 提示。
+ *  顶栏 slots 有限,真功能优先。
+ *  下一集本次去掉:列表 sheet 提供跨集跳看(看第 5 集不必 4 次 Next);Prev 保留
+ *  方便顺序浏览"上一集",跟列表 sheet 互补。
+ *  上一集:有 prev 时真接 [onPrev](Route 跳到兄弟文件);没 prev 时(单文件/无 parentCid/已是首集)
+ *  → ToastBus.info 提示。
+ *  播放列表:[onShowPlaylist] 触发 ModalBottomSheet(复用 PreviewShared.PlaylistSheet,
+ *  placeholderIcon = Icons.Video;同父目录所有 video 列表,当前 fid 高亮 + 自动滚动)。
+ *  SpaceBetween:左 3 圆按钮紧凑靠左,右 2 按钮紧凑靠右;不用 SpaceEvenly(5 按钮分布不均会留大空隙)。
  */
 @Composable
 private fun PreviewControls(
@@ -988,13 +1047,12 @@ private fun PreviewControls(
     speedLabel: String,
     isFullscreen: Boolean,
     hasPrev: Boolean,
-    hasNext: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Int) -> Unit,
     onCycleSpeed: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onPrev: () -> Unit,
-    onNext: () -> Unit,
+    onShowPlaylist: () -> Unit,
 ) {
     val t = StarVaultTheme.typography
     Column(
@@ -1025,14 +1083,21 @@ private fun PreviewControls(
             )
         }
         Spacer(Modifier.height(8.dp))
-        // 5 圆按钮(上一集/播放/下一集 | 倍速/全屏);❤️ 已在 PreviewTopBar
+        // 5 圆按钮:左组 播放 / 上一集 / 列表,右组 倍速 / 全屏;❤️ 已在 PreviewTopBar,
+        // 下一集去掉(列表 sheet 提供跳看)。SpaceBetween:左 3 圆按钮靠最左,右 2 按钮靠最右。
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // 左:上一集 / 播放 / 下一集
+            // 左:播放 / 上一集 / 列表
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PreviewCtrlBtn(
+                    icon = if (snapshot.isPlaying) Icons.Pause else Icons.Play,
+                    contentDescription = "播放",
+                    onClick = onTogglePlay,
+                    isPrimary = true,
+                )
                 PreviewCtrlBtn(
                     icon = Icons.Prev,
                     contentDescription = "上一集",
@@ -1042,18 +1107,9 @@ private fun PreviewControls(
                     },
                 )
                 PreviewCtrlBtn(
-                    icon = if (snapshot.isPlaying) Icons.Pause else Icons.Play,
-                    contentDescription = "播放",
-                    onClick = onTogglePlay,
-                    isPrimary = true,
-                )
-                PreviewCtrlBtn(
-                    icon = Icons.Next,
-                    contentDescription = "下一集",
-                    enabled = hasNext,
-                    onClick = {
-                        if (hasNext) onNext() else ToastBus.info("已是最后一集")
-                    },
+                    icon = Icons.Playlist,
+                    contentDescription = "播放列表",
+                    onClick = onShowPlaylist,
                 )
             }
             // 右:倍速(label 可点循环) / 全屏
