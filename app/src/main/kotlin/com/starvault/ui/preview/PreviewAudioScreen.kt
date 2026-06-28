@@ -1,0 +1,582 @@
+package com.starvault.ui.preview
+
+import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import coil3.compose.AsyncImage
+import com.starvault.component.Icons
+import com.starvault.core.ServiceLocator
+import com.starvault.core.ToastBus
+import com.starvault.data.remote.cloud115.ParsedFileItem
+import com.starvault.theme.StarVaultTheme
+import okhttp3.OkHttpClient
+
+/**
+ * PreviewAudio 全屏屏幕（白底黑字音乐播放器，唱碟旋转）。
+ *
+ *  结构（垂直 Column 堆叠，白底黑字）：
+ *  ┌─ PreviewTopBarLite   56dp 白底: ← 返回 / 文件名 / 更多
+ *  ├─ VinylDisc           中段圆形唱碟（缩略图或音乐图标占位，播放时无限旋转 8s/圈）
+ *  ├─ 标题 + 副标题        黑文件名 / 灰色 size · mtime
+ *  ├─ PreviewSeekBar      PreviewShared 复用
+ *  ├─ 时间文本             黑字 mm:ss / mm:ss
+ *  └─ AudioControls       3 圆按钮：Prev / Play(中央 64dp) / Next
+ *
+ *  设计取舍：
+ *  - 不接倍速/全屏：音频是听感优先，倍速/全屏语义弱，删 2 按钮让控制栏聚焦核心 3 动作
+ *  - 播放键居中 64dp：白底 + 黑 ▶ icon，与左右 36dp Prev/Next 形成"中间大、两侧小"层级
+ *  - 唱碟圆形 + 旋转动效：唱碟旋转是 vinyl 物理直觉，旋转速度对应播放中状态（暂停则停转）
+ *  - 整屏白底黑字：跟项目 Files/Search 等亮色屏一致，PreviewVideo 黑底专属于"视频沉浸式"
+ *
+ *  @param state     PreviewUiState.Loading / Success(metadata, mediaUrl, "", [])
+ *  @param siblings  上一首/下一首（VM.loadSiblings 异步拉取）
+ *  @param onBack    NavHost popBackStack
+ *  @param onPrev    上一首(fileId 由 Route 注入 → nav.navigate 新 PreviewAudio)
+ *  @param onNext    下一首
+ */
+@Composable
+fun PreviewAudioScreen(
+    state: PreviewUiState,
+    siblings: PreviewAudioViewModel.Siblings = PreviewAudioViewModel.Siblings(),
+    onBack: () -> Unit,
+    onPrev: () -> Unit = {},
+    onNext: () -> Unit = {},
+    onSavePosition: (Long) -> Unit = {},
+) {
+    val c = StarVaultTheme.colors
+    KeepScreenOnEffect()
+    BackHandler(enabled = true) { onBack() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(c.bg),
+    ) {
+        when (state) {
+            is PreviewUiState.Loading -> AudioLoadingBlock()
+            is PreviewUiState.Success -> AudioContent(state, siblings, onBack, onPrev, onNext, onSavePosition)
+        }
+    }
+}
+
+/**
+ * Audio Content 主屏（Success 分支）。
+ *
+ *  - ExoPlayer 实例 `remember(state.mediaUrl)`：URL 变 → 重新 prepare
+ *  - 错误监听：onPlayerError → ToastBus 一次性提示
+ *  - 释放：onDispose { player.release() } 防泄漏
+ *  - 10Hz snapshot + seek + play/pause toggle 全部复用 PreviewShared
+ */
+@Composable
+private fun AudioContent(
+    state: PreviewUiState.Success,
+    siblings: PreviewAudioViewModel.Siblings,
+    onBack: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onSavePosition: (Long) -> Unit,
+) {
+    val context = LocalContext.current
+    val t = StarVaultTheme.typography
+    val c = StarVaultTheme.colors
+
+    val player = remember(state.mediaUrl) {
+        if (state.mediaUrl.isBlank()) null else buildAudioPlayer(context, state.mediaUrl)
+    }
+
+    DisposableEffect(player) {
+        if (player == null) return@DisposableEffect onDispose {}
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                ToastBus.error(error.message ?: "音频播放失败")
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    DisposableEffect(player) {
+        onDispose { player?.release() }
+    }
+
+    // 5. 恢复播放位置：player ready 后立刻 seekTo 到上次的 positionMs
+    //    state.resumePositionMs 由 VM 在 emit Success 之前从 AudioPositionStore 读出
+    //    只在第一次 emit 时 seek 一次：LaunchedEffect(player, state.resumePositionMs)
+    //    player 重建（如切 URL）后会重走,resumePositionMs 仍是 VM 当前 Success 里的值
+    val resumePositionMs = state.resumePositionMs
+    LaunchedEffect(player) {
+        if (player != null && resumePositionMs > 0) {
+            player.seekTo(resumePositionMs.toLong())
+        }
+    }
+
+    // 6. 节流保存播放位置（5s 一次）：player.currentPosition 写到 AudioPositionStore
+    //    通过 onSavePosition 回调给 VM（VM 内 viewModelScope.launch 调 positionStore.save）
+    //    暂停/退出屏时 player.currentPosition 仍可读,所以节流协程能持续跑
+    LaunchedEffect(player) {
+        if (player == null) return@LaunchedEffect
+        while (true) {
+            delay(5_000L)
+            onSavePosition(player.currentPosition)
+        }
+    }
+
+    // 7. 离屏兜底：onDispose 时 player 还在,last position 写一次（防快速返回丢进度）
+    //    必须放在 DisposableEffect(player) 之后,onDispose 顺序由 Compose 倒序执行
+    DisposableEffect(player) {
+        onDispose {
+            player?.let { onSavePosition(it.currentPosition) }
+        }
+    }
+
+    val snapshot: PlayerSnapshot = if (player != null) {
+        val s by rememberPlayerSnapshot(player)
+        s
+    } else {
+        PlayerSnapshot()
+    }
+
+    val onTogglePlay: () -> Unit = {
+        if (player != null) player.playWhenReady = !player.playWhenReady
+    }
+
+    val onSeek: (Int) -> Unit = { ms -> player?.seekTo(ms.toLong()) }
+
+    val onDownload: () -> Unit = remember(state) {
+        {
+            val m = state.metadata
+            val item = ParsedFileItem(
+                id = m.fid,
+                parentId = "",
+                name = m.name,
+                ico = m.ico,
+                sizeBytes = m.sizeBytes,
+                mtimeSec = m.mtimeSec,
+                pickCode = m.pickCode,
+                isFolder = false,
+                playLong = 0,
+                sha1 = m.sha1,
+                fileCategory = 3,                    // 115 webapi fc 约定：3=audio
+                thumbnailUrl = m.thumbnailUrl,
+            )
+            ServiceLocator.downloadRepository.enqueue(item)
+                .onSuccess { ToastBus.info("已加入下载队列") }
+                .onFailure { ToastBus.error(it.message ?: "下载失败") }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        PreviewTopBarLite(
+            name = state.metadata.name,
+            onBack = onBack,
+            onDownload = onDownload,
+        )
+
+        // 中段圆形唱碟（aspectRatio 1f 强制正方形后再 clip 圆）
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 32.dp, vertical = 16.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onTogglePlay() })
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            VinylDisc(
+                thumbnailUrl = state.metadata.thumbnailUrl.ifBlank { null },
+                isPlaying = snapshot.isPlaying,
+            )
+        }
+
+        // 标题 + 副标题
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        ) {
+            Text(
+                text = state.metadata.name,
+                color = c.fg,
+                style = t.title,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "${formatFileSize(state.metadata.sizeBytes)} · ${formatDate(state.metadata.mtimeSec)}",
+                color = c.muted,
+                style = t.micro,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        AudioControls(
+            snapshot = snapshot,
+            hasPrev = siblings.prevId != null,
+            hasNext = siblings.nextId != null,
+            onTogglePlay = onTogglePlay,
+            onSeek = onSeek,
+            onPrev = onPrev,
+            onNext = onNext,
+        )
+    }
+}
+
+/* ─────────────────── 顶栏 + 唱碟 ─────────────────── */
+
+/**
+ * 轻量顶栏：← 返回 / 文件名 / 更多（6 项 DropdownMenu 复用 PreviewShared.MoreMenu）。
+ *
+ *  白底黑字：跟 PreviewVideo 黑底区分（视频暗色沉浸，音频亮色日常）。
+ *  DropdownMenu 仍走 PreviewShared.MoreMenu 黑底半透（dark surface 在亮色顶栏上更聚焦）。
+ */
+@Composable
+private fun PreviewTopBarLite(
+    name: String,
+    onBack: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    var moreExpanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(c.bg)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TopBarIconBtn(Icons.Back, "返回", tint = c.fg, onClick = onBack)
+        Text(
+            text = name,
+            color = c.fg,
+            style = StarVaultTheme.typography.subtitle,
+            maxLines = 1,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+        )
+        Box {
+            TopBarIconBtn(Icons.More, "更多", tint = c.fg, onClick = { moreExpanded = true })
+            MoreMenu(
+                expanded = moreExpanded,
+                onDismiss = { moreExpanded = false },
+                onDownload = { moreExpanded = false; onDownload() },
+                onRename = { moreExpanded = false; ToastBus.info("重命名即将上线") },
+                onMove = { moreExpanded = false; ToastBus.info("移动即将上线") },
+                onDelete = { moreExpanded = false; ToastBus.info("删除即将上线") },
+                onShare = { moreExpanded = false; ToastBus.info("分享即将上线") },
+                onProperties = { moreExpanded = false; ToastBus.info("查看属性即将上线") },
+            )
+        }
+    }
+}
+
+/** 顶栏 40dp 圆按钮（无背景 + tint 色 icon），跟 PreviewVideoScreen.PreviewIconBtn 形态一致但 tint 由调用方控制。 */
+@Composable
+private fun TopBarIconBtn(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * 黑胶唱碟（圆形 + 播放时无限旋转 8s/圈）。
+ *
+ *  视觉分层（从外到内）：
+ *  - 12dp shadow + 圆形 clip：让唱碟在白底屏上有立体感
+ *  - 外圈深灰底 0xFF111111：黑胶颜色
+ *  - 中心圆形 thumbnail（padding 28dp 留出黑胶外圈）或音乐图标占位
+ *  - 中心 16dp 黑色小圆：模拟唱片中心孔
+ *
+ *  旋转动效（仅 [isPlaying] 时启动）：
+ *  - rememberInfiniteTransition + animateFloat 0°→360°
+ *  - tween 8000ms LinearEasing：1 圈 8 秒，跟 33⅓ RPM 黑胶近似（真黑胶 1.8s/圈,这里放慢让旋转有视觉缓冲不晕)
+ *  - 暂停时通过 transition.targetValue 切到 0f(不旋转)：
+ *      实现方式：把 isPlaying 用 key 区分 transition —— 不行,会重建。
+ *      实际写法:用 animateFloat 的初始值 vs 目标值都设 0f,然后 isPlaying 时让 progress 走完;
+ *      或者:外部用 modifier.graphicsLayer { rotationZ = if (isPlaying) animatedDeg else 0f }。
+ *      这里采用第二种,不重建 transition,只决定是否应用动画值。
+ */
+@Composable
+private fun VinylDisc(
+    thumbnailUrl: String?,
+    isPlaying: Boolean,
+) {
+    val transition = rememberInfiniteTransition(label = "vinyl-spin")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "vinyl-rotation",
+    )
+    val angle = if (isPlaying) rotation else 0f
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .shadow(elevation = 12.dp, shape = CircleShape)
+            .clip(CircleShape)
+            .background(Color(0xFF111111))
+            .graphicsLayer { rotationZ = angle },
+    ) {
+        // 中心圆形 thumbnail（占满 padding 28dp → 中心圆形图）
+        if (thumbnailUrl != null) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(28.dp)
+                    .fillMaxSize()
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .padding(28.dp)
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(Color(0xFF222222)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Music,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(72.dp),
+                )
+            }
+        }
+        // 中心孔（16dp 黑圆，叠在 thumbnail 中心；不旋转单独叠加避免 graphicsLayer 把它一起转）
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(16.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF000000)),
+        )
+    }
+}
+
+/* ─────────────────── 控制行（3 圆按钮，播放键居中）─────────────────── */
+
+/**
+ * 进度条 + 时间 + 3 圆按钮（Prev / Play / Next，播放键居中且最大）。
+ *
+ *  - Prev / Next 用 PreviewCtrlBtn 36dp 默认尺寸，黑 icon 透明底
+ *  - Play 用 PreviewCtrlBtn 64dp isPrimary：白底 + 黑 ▶ icon
+ *  - 进度条 PreviewShared 复用：黑灰底 + accent 蓝填充 + 白 thumb
+ *  - 时间文本用 StarVaultTheme.typography.micro + c.muted
+ */
+@Composable
+private fun AudioControls(
+    snapshot: PlayerSnapshot,
+    hasPrev: Boolean,
+    hasNext: Boolean,
+    onTogglePlay: () -> Unit,
+    onSeek: (Int) -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val c = StarVaultTheme.colors
+    val t = StarVaultTheme.typography
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(c.bg)
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
+    ) {
+        PreviewSeekBar(
+            positionMs = snapshot.positionMs,
+            durationMs = snapshot.durationMs,
+            bufferedMs = snapshot.bufferedMs,
+            onSeek = onSeek,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = millisToClock(snapshot.positionMs),
+                style = t.micro,
+                color = c.muted,
+            )
+            Text(
+                text = millisToClock(snapshot.durationMs),
+                style = t.micro,
+                color = c.muted,
+            )
+        }
+        Spacer(Modifier.height(28.dp))
+        // 3 圆按钮：Prev(40dp 透明) / Play(72dp 黑底白 icon,中央) / Next(40dp 透明)
+        // Play 用黑底白 icon 而非 PreviewCtrlBtn 的白底黑 icon —— 亮色屏面下黑底白 icon 视觉重量
+        // 比白底黑 icon 强,中央层级更突出
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            PreviewCtrlBtn(
+                icon = Icons.Prev,
+                contentDescription = "上一首",
+                enabled = hasPrev,
+                tint = c.fg,
+                onClick = {
+                    if (hasPrev) onPrev() else ToastBus.info("已是单文件")
+                },
+            )
+            BigPlayButton(
+                isPlaying = snapshot.isPlaying,
+                onClick = onTogglePlay,
+            )
+            PreviewCtrlBtn(
+                icon = Icons.Next,
+                contentDescription = "下一首",
+                enabled = hasNext,
+                tint = c.fg,
+                onClick = {
+                    if (hasNext) onNext() else ToastBus.info("已是单文件")
+                },
+            )
+        }
+    }
+}
+
+/**
+ * 中央 72dp 播放键（黑底 + 白 icon）。
+ *
+ *  不复用 PreviewShared.PreviewCtrlBtn(isPrimary=true) —— 后者是白底黑 icon（为黑底屏设计），
+ *  亮色屏面下视觉重量不够。这里独立实现：黑底 + 白 icon + 轻微 shadow 让按钮在白屏上有立体感。
+ */
+@Composable
+private fun BigPlayButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .shadow(elevation = 8.dp, shape = CircleShape)
+            .clip(CircleShape)
+            .background(Color(0xFF111111))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (isPlaying) Icons.Pause else Icons.Play,
+            contentDescription = "播放",
+            tint = Color.White,
+            modifier = Modifier.size(32.dp),
+        )
+    }
+}
+
+/* ─────────────────── Loading ─────────────────── */
+
+/** 全屏 spinner（白底，accent 色）。 */
+@Composable
+private fun AudioLoadingBlock() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(StarVaultTheme.colors.bg),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(color = StarVaultTheme.colors.accent)
+    }
+}
+
+/* ─────────────────── ExoPlayer 工厂 ─────────────────── */
+
+/**
+ * 构造 ExoPlayer + OkHttpDataSource.Factory（115 Bearer 拦截）+ ProgressiveMediaSource。
+ *
+ *  PreviewVideo 用 HlsMediaSource（m3u8 段）；PreviewAudio 用 ProgressiveMediaSource（mp3/flac 单文件）。
+ */
+private fun buildAudioPlayer(context: Context, mediaUrl: String): ExoPlayer {
+    val okHttpClient: OkHttpClient = ServiceLocator.okHttpClient
+    val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+        .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0")
+    val mediaSourceFactory = ProgressiveMediaSource.Factory(dataSourceFactory)
+    return ExoPlayer.Builder(context)
+        .setMediaSourceFactory(mediaSourceFactory)
+        .build()
+        .apply {
+            setMediaItem(MediaItem.fromUri(mediaUrl))
+            playWhenReady = true
+            prepare()
+        }
+}

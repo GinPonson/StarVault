@@ -65,6 +65,14 @@ object ServiceLocator {
     lateinit var tokenStore: OpenAuthStore
         private set
 
+    /**
+     * 音频播放进度记忆(M5)— [com.starvault.ui.preview.PreviewAudioViewModel]
+     * 加载时调 [com.starvault.data.local.playback.AudioPositionStore.load] 读上次位置,
+     * [com.starvault.ui.preview.PreviewAudioScreen] 5s 节流 + onDispose 调 [save] 写当前进度。
+     */
+    lateinit var audioPositionStore: com.starvault.data.local.playback.AudioPositionStore
+        private set
+
     lateinit var openAuthApi: OpenAuthApiService
         private set
 
@@ -296,6 +304,7 @@ object ServiceLocator {
         val appContext = context.applicationContext
         this.appContext = appContext
         tokenStore = OpenAuthStore(appContext)
+        audioPositionStore = com.starvault.data.local.playback.AudioPositionStore(appContext)
         val tokenProvider = tokenStore::accessTokenBlocking
 
         // M2 upload 完成 → Files 自动刷新的 cross-VM trigger(Phase 6,详见字段 KDoc)
