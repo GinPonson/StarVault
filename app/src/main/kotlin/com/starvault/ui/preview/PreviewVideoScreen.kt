@@ -457,21 +457,25 @@ private fun PreviewCanvas(
         }
 
         // 中心:76dp 大圆 play 圆
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(76.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.92f))
-                .clickable(onClick = onTogglePlay),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = if (snapshot.isPlaying) Icons.Pause else Icons.Play,
-                contentDescription = if (snapshot.isPlaying) "暂停" else "播放",
-                tint = Color(0xFF111111),
-                modifier = Modifier.size(32.dp),
-            )
+        // 播放时常驻的"播放"按钮会和底部暂停按钮冗余，所以播放时整块隐藏。
+        // 暂停时显示，给用户一个最显眼的恢复入口。
+        if (!snapshot.isPlaying) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.92f))
+                    .clickable(onClick = onTogglePlay),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Play,
+                    contentDescription = "播放",
+                    tint = Color(0xFF111111),
+                    modifier = Modifier.size(32.dp),
+                )
+            }
         }
     }
 }
