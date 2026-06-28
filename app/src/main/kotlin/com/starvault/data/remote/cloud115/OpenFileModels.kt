@@ -392,3 +392,39 @@ data class OpenFileUpdateResponse(
     val message: String? = null,
     val code: Int = 0,
 )
+
+// ─────────────────── /open/ufile/delete 响应(批量删除)───────────────────
+
+/**
+ * POST /open/ufile/delete 响应(批量删除文件/夹, M5 CRUD 切片接入)。
+ *
+ * 与 [OpenFileUpdateResponse] 同 shape(state / code / message 三件套,无 data)。
+ *
+ *  - state   : boolean  true=业务成功
+ *  - message : 失败文本(成功时为空)
+ *  - code    : 错误码(成功为 0;失败对齐 401 家族)
+ */
+@Serializable
+data class OpenFileDeleteResponse(
+    val state: Boolean? = null,
+    val message: String? = null,
+    val code: Int = 0,
+)
+
+// ─────────────────── /open/ufile/move 响应(批量移动)───────────────────
+
+/**
+ * POST /open/ufile/move 响应(批量移动文件/夹到目标目录, M5 CRUD 切片接入)。
+ *
+ * 与 [OpenFileUpdateResponse] 同 shape(state / code / message 三件套,无 data)。
+ *
+ *  - state   : boolean  true=业务成功
+ *  - message : 失败文本(成功时为空)
+ *  - code    : 错误码(成功为 0;失败对齐 401 家族 / 990001 目标无效 等)
+ */
+@Serializable
+data class OpenFileMoveResponse(
+    val state: Boolean? = null,
+    val message: String? = null,
+    val code: Int = 0,
+)

@@ -21,6 +21,9 @@ import retrofit2.http.Query
  *  - /open/folder/add           POST  新建空文件夹(Files 屏 AddMenu)
  *  - /open/ufile/downurl        POST  原图/文件直链(**必须传 UA,见 downloadUrl 注释**)
  *  - /open/video/play           GET   视频 m3u8(多清晰度,取 video_url[0])
+ *  - /open/ufile/update         POST  星标 / 重命名(form 字段二选一,Retrofit null 自动省略)
+ *  - /open/ufile/delete         POST  批量删除(逗号分隔 file_ids,M5 CRUD)
+ *  - /open/ufile/move           POST  批量移动(逗号分隔 file_ids + to_cid,M5 CRUD)
  *
  *  所有端点需登录态(Bearer 由 [AuthHeaderInterceptor] 注入)。
  */
@@ -188,19 +191,85 @@ interface OpenFileApiService {
      *
      * **必须走 form-urlencoded body**(对齐 OpenList `ReqWithForm(SetFormData(...))`)。
      *
-     * 参数(MVP 只用 star;其他字段如 file_name 重命名 / 各 115 端私有字段按需扩展):
-     *  - file_id : 文件(夹)ID(必填);**注意单选,多选用 `file_id[0]` / `file_id[1]`**(p115client 支持,MVP 用不到)
-     *  - star    : 0=取消星标,1=设置星标
+     * 参数(对齐 115 文档,所有可更新字段都 optional,但 115 端要求至少传一个):
+     *  - file_id  : 文件(夹)ID(必填);**注意单选,多选用 `file_id[0]` / `file_id[1]`**(p115client 支持,MVP 用不到)
+     *  - star     : 0=取消星标,1=设置星标(null 时不更新星标)
+     *  - file_name: 新文件名(null 时不更新文件名)
+     *
+     * **Retrofit null 行为**(2.6+):可空字段值为 null 时**自动从 form body 省略**,不会发送
+     * 字符串 "null"。所以 `updateFile(fileId, star = 1)` 只发 file_id + star,`updateFile(
+     * fileId, fileName = "新名")` 只发 file_id + file_name — 不会互相覆盖,不会误清星标。
      *
      * 响应:[OpenFileUpdateResponse] — 顶层 `{state, code, message}` 三件套,无 data 字段(115 update 端点响应不带 data)。
      *
      * **对齐 115 文档**:star 操作在文件已被删除的情况下**仍可成功**(p115client 文档明确),
      * 所以此处失败语义只有"网络错" / "鉴权错"(401) / "参数错"(code 非 0)。
+     *
+     * **重命名单文件限制**:115 update 端点**单文件**(不接 `file_ids` 多选,多选 rename 要循环
+     * 串行调)。Repository 层封装了循环(见 [FilesRepository.renameFile])。
      */
     @FormUrlEncoded
     @POST("open/ufile/update")
     suspend fun updateFile(
         @Field("file_id") fileId: String,
-        @Field("star") star: Int,
+        @Field("star") star: Int? = null,
+        @Field("file_name") fileName: String? = null,
     ): Response<OpenFileUpdateResponse>
+
+    /**
+     * POST /open/ufile/delete — 批量删除文件/夹(走回收站,可恢复 7 天内)。
+     *
+     * OpenList 同步实现:OpenListTeam/115-sdk-go/fs.go:36-46(Delete)。
+     *
+     * **必须走 form-urlencoded body**;`file_ids` 是**逗号分隔的字符串**(对齐 OpenList
+     * `SetFormData(map[string]string{"file_ids": strings.Join(ids, ",")})`),Retrofit @Field
+     * 不能直接接 List<String>。Repository 层负责 join。
+     *
+     * 参数:
+     *  - file_ids : 逗号分隔的 fid 列表,e.g. `"123,456,789"`,空字符串 115 端会拒
+     *
+     * 响应:[OpenFileDeleteResponse] — 顶层 `{state, code, message}`,无 data 字段。
+     *
+     * **错误场景**:
+     *  - 部分 id 不存在 / 已删除 → 115 端会成功(回收站幂等)或 state=false + message 非空
+     *  - 越权(删他人分享的文件)→ 40140123 等 401 家族
+     *  - 网络错 / 鉴权错 → Retrofit 层 / Token401Interceptor
+     *
+     * **删除不可逆语义**:虽然 115 有 7 天回收站,但客户端 UI 不提供"恢复"功能;Files 屏
+     * 调用前必须弹 [ConfirmDialog] 让用户确认(见 FilesViewModel.bulk DELETE 路径)。
+     */
+    @FormUrlEncoded
+    @POST("open/ufile/delete")
+    suspend fun deleteFiles(
+        @Field("file_ids") fileIds: String,
+    ): Response<OpenFileDeleteResponse>
+
+    /**
+     * POST /open/ufile/move — 批量移动文件/夹到目标目录。
+     *
+     * OpenList 同步实现:OpenListTeam/115-sdk-go/fs.go:48-72(Move)。
+     *
+     * **必须走 form-urlencoded body**;`file_ids` 同 [deleteFiles] 是逗号分隔字符串。
+     *
+     * 参数:
+     *  - file_ids : 逗号分隔的 fid 列表
+     *  - to_cid   : 目标目录 cid;根目录传 "0",不能传文件 fid(会报错 code=990001)
+     *
+     * 响应:[OpenFileMoveResponse] — 顶层 `{state, code, message}`,无 data 字段。
+     *
+     * **错误场景**:
+     *  - to_cid 指向文件 / 不存在 → state=false + message 非空(990001 家族)
+     *  - file_ids 包含目标目录的子项(自循环)→ 115 端拒
+     *  - 跨盘 / 权限不足 → 40140123
+     *
+     * **FolderPicker excludeIds** :UI 层(见 [FolderPickerRoute])需把"不允许选中的目录
+     * id 集合"(当前已选 + 其所有祖先)传给 FilesViewModel 过滤行,避免移到自身/祖先造成
+     * 自循环;此端点本身无 exclude 机制。
+     */
+    @FormUrlEncoded
+    @POST("open/ufile/move")
+    suspend fun moveFiles(
+        @Field("file_ids") fileIds: String,
+        @Field("to_cid") toCid: String,
+    ): Response<OpenFileMoveResponse>
 }

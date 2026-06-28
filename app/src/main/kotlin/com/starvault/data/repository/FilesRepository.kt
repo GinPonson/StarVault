@@ -157,6 +157,79 @@ class FilesRepository(
         }
     }
 
+    /**
+     * 批量删除文件 / 文件夹(走 115 回收站,7 天内可恢复;客户端 UI 不提供恢复)。
+     *
+     *  调用 115 `POST /open/ufile/delete`,`file_ids` 字段是**逗号分隔字符串**(对齐
+     *  OpenList `strings.Join(ids, ",")`;Retrofit @Field 不能接 List<String>)。
+     *
+     * @param ids  要删除的 fid 列表;为空时直接 Result.success 不发请求
+     * @return     成功 Result.success(Unit);失败 Result.failure(IllegalStateException,message
+     *             来自 115 state=false.message 或 errno=code)
+     *
+     *  错误处理:对齐 [createFolder] 模式 — HTTP 失败 / state=false → IllegalStateException
+     */
+    suspend fun deleteFiles(ids: List<String>): Result<Unit> {
+        if (ids.isEmpty()) return Result.success(Unit)
+        return runCatching {
+            val body = api.deleteFiles(fileIds = ids.joinToString(",")).requireSuccessful()
+            if (body.state != true) {
+                throw IllegalStateException(body.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 批量移动文件 / 文件夹到目标目录。
+     *
+     *  调用 115 `POST /open/ufile/move`,`file_ids` 同 [deleteFiles] 逗号分隔。
+     *  目标目录需为有效 folder cid(根目录传 "0");UI 层 (FolderPicker) 负责排除当前已选
+     *  及其祖先 cid 防自循环,此方法不做校验。
+     *
+     * @param ids   要移动的 fid 列表;为空时直接 Result.success 不发请求
+     * @param toCid 目标目录 cid
+     * @return      成功 Result.success(Unit);失败 Result.failure(IllegalStateException,message
+     *              来自 115 state=false.message 或 errno=code)
+     *
+     *  错误处理:对齐 [createFolder] 模式
+     */
+    suspend fun moveFiles(ids: List<String>, toCid: String): Result<Unit> {
+        if (ids.isEmpty()) return Result.success(Unit)
+        return runCatching {
+            val body = api.moveFiles(fileIds = ids.joinToString(","), toCid = toCid).requireSuccessful()
+            if (body.state != true) {
+                throw IllegalStateException(body.message ?: "移动失败")
+            }
+        }
+    }
+
+    /**
+     * 重命名单个文件 / 文件夹(115 update 端点一次只能改一个)。
+     *
+     *  调用 115 `POST /open/ufile/update` 只传 `file_id` + `file_name`,**不传 `star`**
+     *  字段(Retrofit 2.6+ 的 @Field null 自动从 form body 省略,不会误清星标 — 见
+     *  [OpenFileApiService.updateFile] 注释)。
+     *
+     *  批量重命名:115 端点单文件限制,UI 层 [FilesViewModel] 走 N>1 直接 ToastBus.error
+     *  拒绝,只在 N==1 时弹 RenameDialog 调此方法;不在此方法内做循环(避免 partial fail
+     *  难回滚)。
+     *
+     * @param id      要重命名的 fid
+     * @param newName 新文件名(已由 UI 层 trim 完;为空不抛 — 改由 VM 拦截)
+     * @return        成功 Result.success(Unit);失败 Result.failure(IllegalStateException,
+     *                message 来自 115 state=false.message)
+     *
+     *  错误处理:对齐 [createFolder] 模式
+     */
+    suspend fun renameFile(id: String, newName: String): Result<Unit> {
+        return runCatching {
+            val body = api.updateFile(fileId = id, fileName = newName).requireSuccessful()
+            if (body.state != true) {
+                throw IllegalStateException(body.message ?: "重命名失败")
+            }
+        }
+    }
+
     companion object {
         /**
          * 默认单页大小 50。
