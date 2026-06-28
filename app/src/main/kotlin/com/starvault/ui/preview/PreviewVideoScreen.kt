@@ -73,7 +73,7 @@ import kotlinx.coroutines.delay
  * PreviewVideo 全屏屏幕（黑底 Media3 风格播放器 chrome）。
  *
  *  结构（垂直 Column 堆叠）：
- *  ┌─ PreviewTopBar     56dp 黑底: ← 返回 / 投屏 / 更多(DropdownMenu 收纳 6 项)
+ *  ┌─ PreviewTopBar     56dp 黑底: ← 返回 / 点赞(❤️/♡) / 更多(DropdownMenu 收纳 6 项)
  *  ├─ PreviewCanvas     weight=1f 黑底 ExoPlayer + overlays
  *  │   ├─ AndroidView PlayerView(useController=false)
  *  │   ├─ 右上 3 chip(qualityChip / 倍速 / 原声 | 字幕),音轨/字幕有 ≥2 条时 chip 可点开 DropdownMenu
@@ -350,7 +350,13 @@ private fun VideoContent(
         // 全屏时隐藏顶栏:横屏下返回用 BackHandler / 系统手势即可,
         // 留顶栏反而挤压视频画布(对齐 YouTube/B 站视频横屏体验)
         if (!isFullscreen) {
-            PreviewTopBar(name = state.metadata.name, onBack = onBack, onDownload = onDownload)
+            PreviewTopBar(
+                name = state.metadata.name,
+                isStarred = isStarred,
+                onBack = onBack,
+                onDownload = onDownload,
+                onToggleStar = onToggleStar,
+            )
         }
 
         PreviewCanvas(
@@ -375,14 +381,12 @@ private fun VideoContent(
             isFullscreen = isFullscreen,
             hasPrev = siblings.prevId != null,
             hasNext = siblings.nextId != null,
-            isStarred = isStarred,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onCycleSpeed = onCycleSpeed,
             onToggleFullscreen = onToggleFullscreen,
             onPrev = onPrev,
             onNext = onNext,
-            onToggleStar = onToggleStar,
         )
     }
 }
@@ -545,18 +549,22 @@ private fun parseTracksFromTracks(tracks: Tracks, player: ExoPlayer): TracksSnap
  * 顶部工具栏(56dp 黑底):
  *  - 左侧 ← 返回 图标
  *  - 中间 文件名(titleMedium,maxLines=1,weight=1f)
- *  - 右侧 投屏(noop) / 更多(DropdownMenu,6 项:下载/重命名/移动/删除/分享/属性)
+ *  - 右侧 点赞(❤️/♡ 真功能) / 更多(DropdownMenu,6 项:下载/重命名/移动/删除/分享/属性)
  *
  *  字幕入口已下沉到画布 chip 行的"字幕" chip([TextChipWithMenu],接 ExoPlayer 字幕轨真切换),
  *  不再在顶栏放 CC icon——避免两个"字幕"入口冲突(顶栏 noop vs chip 真功能)。
  *  "下载" 从原底部控制栏下移到更多菜单(用户偏好:用下拉收纳一次性操作,不放主控制条);
  *  重命名/移动/删除/分享/属性 本期 noop + ToastBus 提示。
+ *  点赞:[isStarred] 控制 HeartFilled / HeartOutline 切换;[onToggleStar] 回调
+ *  [com.starvault.ui.preview.PreviewVideoViewModel.toggleStar] 乐观更新 + 失败回滚。
  */
 @Composable
 private fun PreviewTopBar(
     name: String,
+    isStarred: Boolean,
     onBack: () -> Unit,
     onDownload: () -> Unit,
+    onToggleStar: () -> Unit,
 ) {
     var moreExpanded by remember { mutableStateOf(false) }
 
@@ -577,7 +585,11 @@ private fun PreviewTopBar(
                 .weight(1f)
                 .padding(horizontal = 8.dp),
         )
-        PreviewIconBtn(Icons.Cast, "投屏") { ToastBus.info("投屏功能即将上线") }
+        PreviewIconBtn(
+            icon = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
+            contentDescription = if (isStarred) "已收藏" else "收藏",
+            onClick = onToggleStar,
+        )
         Box {
             PreviewIconBtn(Icons.More, "更多", onClick = { moreExpanded = true })
             // 6 项 DropdownMenu,深色背景,白文字,带分隔线
@@ -962,12 +974,13 @@ private fun TextChipWithMenu(
  * 底部控制条(黑底):
  *  - 进度条([PreviewSeekBar]:3dp 灰底 + accent 蓝填充 + 12dp 白 thumb)
  *  - 时间文本(32:14 / 1:42:08)
- *  - 6 圆按钮:❤️ / 上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 全屏
+ *  - 5 圆按钮:上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 全屏
  *
- *  之前这里有 5 圆按钮;新增 ❤️ 在最左(用户指示:和播放按钮同一行最左)。
+ *  ❤️ 之前在底栏控制条最左;本次移到顶栏 PreviewTopBar 替代 noop 投屏按钮,
+ *  原因是 ❤️ 是真功能(VM.toggleStar),Cast 是 ToastBus "即将上线" noop,
+ *  顶栏 slots 有限,真功能优先;底栏回归 5 按钮原始设计。
  *  上一集/下一集:有 prev/next 时真接 [onPrev]/[onNext](Route 跳到兄弟文件);
  *  没 prev/next 时(单文件/无 parentCid/已是首尾集) → ToastBus.info 提示。
- *  ❤️ 始终可点:星标不影响视频播放,只通过 [onToggleStar] 回调 VM.toggleStar。
  */
 @Composable
 private fun PreviewControls(
@@ -976,14 +989,12 @@ private fun PreviewControls(
     isFullscreen: Boolean,
     hasPrev: Boolean,
     hasNext: Boolean,
-    isStarred: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Int) -> Unit,
     onCycleSpeed: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
-    onToggleStar: () -> Unit,
 ) {
     val t = StarVaultTheme.typography
     Column(
@@ -1014,19 +1025,14 @@ private fun PreviewControls(
             )
         }
         Spacer(Modifier.height(8.dp))
-        // 6 圆按钮(❤️ + 上一集/播放/下一集 | 倍速/全屏)
+        // 5 圆按钮(上一集/播放/下一集 | 倍速/全屏);❤️ 已在 PreviewTopBar
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // 左:❤️ / 上一集 / 播放 / 下一集 — ❤️ 在最左,跟用户指示"和播放按钮同一行最左"对齐
+            // 左:上一集 / 播放 / 下一集
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PreviewCtrlBtn(
-                    icon = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
-                    contentDescription = if (isStarred) "已收藏" else "收藏",
-                    onClick = onToggleStar,
-                )
                 PreviewCtrlBtn(
                     icon = Icons.Prev,
                     contentDescription = "上一集",
