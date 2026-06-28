@@ -49,7 +49,7 @@ class PreviewImageViewModel(
                     val url = repo.fetchImageOriginalUrl(fileId = meta.fid, pickCode = meta.pickCode)
                     url.fold(
                         onSuccess = { u ->
-                            _state.value = PreviewUiState.Success(meta, u)
+                            _state.value = PreviewUiState.Success(meta, u, qualityChip = "")
                         },
                         onFailure = { e ->
                             // 失败：_state 保持 Loading,仅 ToastBus 提示

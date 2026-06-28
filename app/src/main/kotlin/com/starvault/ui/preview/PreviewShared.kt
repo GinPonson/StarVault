@@ -32,6 +32,12 @@ sealed interface PreviewUiState {
          *  - VIDEO：m3u8 video_url（Media3 直接播放）
          */
         val mediaUrl: String,
+        /**
+         * 清晰度名(VIDEO 才有,image 屏空串)。
+         * 115 proapi `/open/video/play` 响应 `video_url[0].desc`,
+         * 取值如 "1080P"/"720P"/"4K"/"原画"。空 → UI fallback "—"。
+         */
+        val qualityChip: String = "",
     ) : PreviewUiState
 }
 

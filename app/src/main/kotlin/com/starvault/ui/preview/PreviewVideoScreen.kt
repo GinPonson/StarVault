@@ -1,81 +1,113 @@
 package com.starvault.ui.preview
 
+import android.content.Context
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.PlayerView
+import com.starvault.component.Icons
 import com.starvault.core.ServiceLocator
 import com.starvault.core.ToastBus
+import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.theme.StarVaultTheme
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 
 /**
- * PreviewVideo 全屏屏幕（浅色主题 + 浅色顶/底栏）。
+ * PreviewVideo 全屏屏幕（黑底 Media3 风格播放器 chrome）。
  *
- *  视觉：
- *  - 屏背景：`StarVaultTheme.colors.bg` (#FAFAFA) — 不用黑色
- *  - 视频区：Media3 PlayerView 自带黑底（这是 ExoPlayer 控件系统配色，不可改，
- *    行业标准 letterbox；不放大到顶 / 底栏区域时也不会被用户看到，所以视觉仍是浅色）
- *  - 顶部信息栏：surface 白底（不透明）+ 1dp `border` 分隔线 + 文件名 + 元数据
- *  - 底部操作栏：surface 白底 + 1dp `border` 分隔线 + 三等宽 OutlinedButton
- *  - 顶 / 底栏共用 [uiVisible]，[AnimatedVisibility] fadeIn/fadeOut 切换
+ *  结构（垂直 Column 堆叠）：
+ *  ┌─ PreviewTopBar     56dp 黑底: ← 返回 / 字幕 / 投屏 / 更多
+ *  ├─ PreviewCanvas     weight=1f 黑底 ExoPlayer + overlays
+ *  │   ├─ AndroidView PlayerView(useController=false)
+ *  │   ├─ 左上 ● pulse + "在线播放 · 已缓冲 X MB"
+ *  │   ├─ 右上 3 chip (qualityChip / 倍速 / 原声)
+ *  │   └─ 中心 76dp play 圆(play/pause 双向)
+ *  └─ PreviewControls   黑底: seek 进度条 + 时间 + 6 圆按钮
  *
  *  Media3 + 115 Bearer 桥接：
- *  - 用 [OkHttpDataSource.Factory] 包装 [ServiceLocator.okHttpClient]，由拦截器自动注入 115 Bearer + 浏览器伪装头
- *  - Media3 拉 m3u8 主索引 + 分片都自动带 115 Bearer
- *  - ExoPlayer 实例由 Composable 持有，dispose 时 [Player.release] 防泄漏
+ *  - 用 [OkHttpDataSource.Factory] 包装 [ServiceLocator.okHttpClient]，
+ *    拦截器自动注入 115 Bearer + 浏览器伪装头(Media3 拉的 m3u8 + segment 都自动带 Bearer)
+ *  - [HlsMediaSource.Factory] 解析 m3u8 manifest + 段地址
+ *  - ExoPlayer 由 Composable 持有，dispose 时 release 防泄漏
  *
- *  状态机：错误回调 → 自定义 error slot 显示。
+ *  状态机：
+ *  - Loading  → 全屏 spinner(c.bg 浅色)
+ *  - Success  → 上面 3 段布局
+ *  - Error    → 不显示屏占位,ToastBus 一次性 Snackbar(DisposableEffect 内 send)
  *
- *  @param state VM 暴露的 PreviewUiState
- *  @param onBack 返回（屏内 BackHandler + 顶部"返回"按钮都调它）
+ *  状态同步：
+ *  - [rememberPlayerSnapshot] 用 10 Hz LaunchedEffect 协程读
+ *    player.currentPosition / duration / bufferedPosition / isPlaying
+ *  - 不用 Player.Listener:Media3 1.4.1 没有 progress callback,
+ *    media3-ui-compose 是 1.6+ 才有,1.9+ 才有 rememberProgressStateWithTickInterval
+ *  - 中心 play 圆 + 控制行 play ↔ ExoPlayer.playWhenReady 双向:
+ *    player.playWhenReady = !player.playWhenReady 切一次,
+ *    下次 100ms 轮询 player.isPlaying 同步 icon
+ *
+ *  倍速：4 档循环(1.0× → 1.5× → 2.0× → 0.5× → 1.0×),对齐 VLC / Media3 PlayerView 默认档。
+ *  不是 B 站式 1.0/1.25/1.5/2.0(1.25× 不是业内常见档)。
+ *
+ *  下载：构造合成 [ParsedFileItem](从 [com.starvault.data.repository.MediaMetadata])
+ *  → [com.starvault.data.repository.DownloadRepository.enqueue]。
+ *  MediaMetadata.fileCategory 是 String "1" 而 ParsedFileItem.fileCategory 是 Int 2,
+ *  同名不同义,合成处显式注释。
+ *
+ *  Noop + ToastBus:字幕 / 投屏 / 更多 / 上一集 / 下一集 / 全屏。
+ *
+ *  @param state VM 暴露的 [PreviewUiState]
+ *  @param onBack 返回(BackHandler + 顶部"返回"按钮都调它)
  */
 @Composable
 fun PreviewVideoScreen(
@@ -84,7 +116,6 @@ fun PreviewVideoScreen(
 ) {
     val c = StarVaultTheme.colors
     BackHandler(enabled = true) { onBack() }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -92,81 +123,290 @@ fun PreviewVideoScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Success -> VideoContent(
-                state = state,
-                onBack = onBack,
-            )
+            is PreviewUiState.Success -> VideoContent(state, onBack)
         }
     }
 }
 
 /* ─────────────────── 视频内容 ─────────────────── */
 
-/**
- * 视频播放器。ExoPlayer 由 Composable 持有，dispose 时 release。
- *
- *  Player 创建：每次 [state.metadata.fid] 或 [state.mediaUrl] 变化重新 prepare
- *  - 这样同一 Preview 屏被复用（compose 重组但 PlayerView 不重建）时也能正确切源
- *
- *  关键依赖：
- *  - [OkHttpDataSource.Factory] 复用 ServiceLocator 的 [OkHttpClient]，让 Media3 拉的
- *    m3u8 主索引 / 分片都带 115 Bearer（115 m3u8 签名 URL 必须登录态）
- *
- *  顶 / 底栏通过 BoxScope 扩展函数（[TopInfoBar] / [BottomActionBar]）挂在外层 Box 的
- *  TopCenter / BottomCenter，这是 [BoxScope.align] 唯一能用的调用场景。
- */
 @Composable
 private fun VideoContent(
     state: PreviewUiState.Success,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val uiVisible = remember { mutableStateOf(true) }
 
-    // 1. ExoPlayer 实例：依赖 ServiceLocator.okHttpClient，由 115 Bearer 拦截器自动注入 token
-    val player = remember(state.mediaUrl) {
-        val okHttpClient: OkHttpClient = ServiceLocator.okHttpClient
-        val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
-            .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0")
-        // 115 /open/video/play 返回的是 HLS manifest (m3u8)，不是 mp4 二进制。
-        // 之前用 DefaultMediaSourceFactory 时 ExoPlayer 抛
-        // `UnrecognizedInputFormatException: dataType=1`（= C.DATA_TYPE_MANIFEST）。
-        // 切到 HlsMediaSource.Factory 后 manifest 解析 + segment URL 注入 Bearer 都交给 HLS 管线。
-        val mediaSourceFactory = HlsMediaSource.Factory(dataSourceFactory)
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build()
-            .apply {
-                setMediaItem(MediaItem.fromUri(state.mediaUrl))
-                playWhenReady = true
-                prepare()
-            }
-    }
+    // 1. ExoPlayer 实例(URL 变 → 重新 prepare,同一 Preview 屏被复用也能正确切源)
+    val player = remember(state.mediaUrl) { buildPlayer(context, state.mediaUrl) }
 
-    // 2. 错误监听：Media3 拉流失败时走 ToastBus 一次性提示（不再屏占位）
-    var playerError by remember { mutableStateOf<String?>(null) }
+    // 2. 错误监听(Media3 拉流失败 → ToastBus 一次性提示,不显示屏占位)
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                val msg = error.message ?: "视频播放失败"
-                playerError = msg
-                ToastBus.error(msg)
+                ToastBus.error(error.message ?: "视频播放失败")
             }
         }
         player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-        }
+        onDispose { player.removeListener(listener) }
     }
 
-    // 3. 释放：Composable 离屏时 release ExoPlayer（防泄漏）
+    // 3. 释放(Composable 离屏时 release ExoPlayer 防泄漏)
     DisposableEffect(player) {
-        onDispose {
-            player.release()
+        onDispose { player.release() }
+    }
+
+    // 4. 10 Hz 状态同步(单 source 写多字段)
+    val snapshot by rememberPlayerSnapshot(player)
+
+    // 5. 倍速循环(返回 (label, cycleFn))
+    val (speedLabel, onCycleSpeed) = rememberSpeedCycler(player)
+
+    // 6. play/pause toggle(playWhenReady 双向)
+    val onTogglePlay: () -> Unit = { player.playWhenReady = !player.playWhenReady }
+
+    // 7. seek
+    val onSeek: (Int) -> Unit = { ms -> player.seekTo(ms.toLong()) }
+
+    // 8. 下载触发(合成 ParsedFileItem)
+    //    MediaMetadata.fileCategory 是 String "1"(proapi),ParsedFileItem.fileCategory
+    //    是 Int 2(115 webapi 约定 video),同名不同义。
+    val onDownload: () -> Unit = remember(state) {
+        {
+            val m = state.metadata
+            val item = ParsedFileItem(
+                id = m.fid,
+                parentId = "",                      // Preview 没拿 parent cid,DownloadWorker 不读
+                name = m.name,
+                ico = m.ico,                        // "mp4" / "mkv"
+                sizeBytes = m.sizeBytes,
+                mtimeSec = m.mtimeSec,
+                pickCode = m.pickCode,
+                isFolder = false,
+                playLong = 0,
+                sha1 = m.sha1,
+                fileCategory = 2,                   // 115 webapi fc 约定:2=video
+                thumbnailUrl = m.thumbnailUrl,
+            )
+            ServiceLocator.downloadRepository.enqueue(item)
+                .onSuccess { ToastBus.info("已加入下载队列") }
+                .onFailure { ToastBus.error(it.message ?: "下载失败") }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // 9. 已缓冲 MB 文本(按 bufferedMs/durationMs * sizeBytes 估算)
+    val bufferedMb = remember(snapshot, state.metadata.sizeBytes) {
+        if (snapshot.durationMs > 0) {
+            val frac = snapshot.bufferedMs.toDouble() / snapshot.durationMs
+            val bytes = (frac * state.metadata.sizeBytes).toLong()
+            "%.1f".format(bytes / 1024.0 / 1024.0)
+        } else {
+            "0.0"
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        PreviewTopBar(name = state.metadata.name, onBack = onBack)
+
+        PreviewCanvas(
+            player = player,
+            snapshot = snapshot,
+            qualityChip = state.qualityChip,
+            speedChip = speedLabel,
+            bufferedMb = bufferedMb,
+            onTogglePlay = onTogglePlay,
+            modifier = Modifier.weight(1f),
+        )
+
+        PreviewControls(
+            snapshot = snapshot,
+            speedLabel = speedLabel,
+            onTogglePlay = onTogglePlay,
+            onSeek = onSeek,
+            onCycleSpeed = onCycleSpeed,
+            onDownload = onDownload,
+        )
+    }
+}
+
+/**
+ * 构造 ExoPlayer + 注入 OkHttpDataSource.Factory(115 Bearer 拦截)+ HlsMediaSource。
+ * 提到顶层函数避免 remember block 太长。
+ */
+private fun buildPlayer(context: Context, mediaUrl: String): ExoPlayer {
+    val okHttpClient: OkHttpClient = ServiceLocator.okHttpClient
+    val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+        .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0")
+    val mediaSourceFactory = HlsMediaSource.Factory(dataSourceFactory)
+    return ExoPlayer.Builder(context)
+        .setMediaSourceFactory(mediaSourceFactory)
+        .build()
+        .apply {
+            setMediaItem(MediaItem.fromUri(mediaUrl))
+            playWhenReady = true
+            prepare()
+        }
+}
+
+/* ─────────────────── Snapshot 状态同步 ─────────────────── */
+
+/**
+ * ExoPlayer 状态快照(每 100ms 刷新一次,供 Canvas / Controls 共用同一 source)。
+ *
+ * 字段:
+ *  - positionMs : 当前位置(playhead),从 player.currentPosition 读
+ *  - durationMs : 总时长,coerceAtLeast(0) 防 UNKNOWN_TIME(-9223372036854775807)
+ *  - bufferedMs : 已缓冲位置,从 player.bufferedPosition 读(用于已缓冲 MB 估算)
+ *  - isPlaying  : 当前是否播放中,player.isPlaying 同步 playWhenReady + STATE_READY
+ */
+private data class PlayerSnapshot(
+    val positionMs: Int = 0,
+    val durationMs: Int = 0,
+    val bufferedMs: Int = 0,
+    val isPlaying: Boolean = false,
+)
+
+/**
+ * 10 Hz LaunchedEffect 协程循环读 4 个字段,写到一个 [mutableStateOf]。
+ *
+ * 为什么用 LaunchedEffect 不用 produceState:一次 snapshot 写入覆盖 4 字段,
+ * 所有 chip / progress / play 按钮从同一 source 读,一次重组全更新。
+ * 比 4 个独立 state 干净。
+ *
+ * 为什么不用 Player.Listener:
+ *  - Media3 1.4.1 没有 progress callback
+ *  - media3-ui-compose 1.6+ 才有,1.9+ 才有 rememberProgressStateWithTickInterval
+ *  - listener 没有 onProgressChanged,只有 onIsPlayingChanged 等事件
+ */
+@Composable
+private fun rememberPlayerSnapshot(player: ExoPlayer): State<PlayerSnapshot> {
+    val snapshot = remember(player) { mutableStateOf(PlayerSnapshot()) }
+    LaunchedEffect(player) {
+        while (true) {
+            snapshot.value = PlayerSnapshot(
+                positionMs = player.currentPosition.toInt(),
+                durationMs = player.duration.coerceAtLeast(0L).toInt(),
+                bufferedMs = player.bufferedPosition.toInt(),
+                isPlaying = player.isPlaying,
+            )
+            delay(100L)
+        }
+    }
+    return snapshot
+}
+
+/* ─────────────────── 倍速 4 档循环 ─────────────────── */
+
+/** VLC / Media3 PlayerView 默认档(不是 B 站式 1.0/1.25/1.5/2.0)。 */
+private val speedSteps = listOf(1.0f, 1.5f, 2.0f, 0.5f)
+
+/**
+ * 4 档循环 + 应用到 ExoPlayer.playbackParameters。
+ *
+ *  返回 (label, cycleFn):
+ *  - label : 当前档位显示文本("1.0×"/"1.5×"/"2.0×"/"0.5×")
+ *  - cycleFn : 切下一档 + 立即 apply
+ *
+ *  LaunchedEffect(player) 初始 apply 一次(1.0× 起步)。
+ */
+@Composable
+private fun rememberSpeedCycler(player: ExoPlayer): Pair<String, () -> Unit> {
+    var idx by remember(player) { mutableIntStateOf(0) }
+    val apply = { player.playbackParameters = PlaybackParameters(speedSteps[idx]) }
+    LaunchedEffect(player) { apply() }
+    val label = speedLabel(speedSteps[idx])
+    return label to {
+        idx = (idx + 1) % speedSteps.size
+        apply()
+    }
+}
+
+/** 整数倍(1×/2×)显示 "Nx";小数倍(1.5×/0.5×)显示 "N.N×"。 */
+private fun speedLabel(v: Float): String =
+    if (v == v.toInt().toFloat()) "${v.toInt()}×" else "${v}×"
+
+/* ─────────────────── 顶部 toolbar ─────────────────── */
+
+/**
+ * 顶部工具栏(56dp 黑底):
+ *  - 左侧 ← 返回 图标
+ *  - 中间 文件名(titleMedium,maxLines=1,weight=1f)
+ *  - 右侧 字幕 / 投屏 / 更多 3 图标
+ *  - 后 3 个是 noop + ToastBus 提示
+ */
+@Composable
+private fun PreviewTopBar(name: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PreviewIconBtn(Icons.Back, "返回", onBack)
+        Text(
+            text = name,
+            color = Color.White,
+            style = StarVaultTheme.typography.subtitle,
+            maxLines = 1,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+        )
+        PreviewIconBtn(Icons.Subtitle, "字幕") { ToastBus.info("字幕切换即将上线") }
+        PreviewIconBtn(Icons.Cast, "投屏") { ToastBus.info("投屏功能即将上线") }
+        PreviewIconBtn(Icons.More, "更多") { ToastBus.info("更多操作即将上线") }
+    }
+}
+
+@Composable
+private fun PreviewIconBtn(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/* ─────────────────── 视频画布 ─────────────────── */
+
+/**
+ * 黑底视频画布:
+ *  - AndroidView PlayerView 占满(useController=false,我们自己画控件)
+ *  - 左上 ● pulse + "在线播放 · 已缓冲 X MB"
+ *  - 右上 3 chip(qualityChip 蓝底 / 倍速 / 原声)
+ *  - 中心 76dp 大圆 play 按钮(play/pause 双向同步)
+ */
+@Composable
+private fun PreviewCanvas(
+    player: ExoPlayer,
+    snapshot: PlayerSnapshot,
+    qualityChip: String,
+    speedChip: String,
+    bufferedMb: String,
+    onTogglePlay: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val t = StarVaultTheme.typography
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black),
+    ) {
+        // ExoPlayer 全屏画布
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -175,12 +415,8 @@ private fun VideoContent(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                    useController = true          // 显示自带控件（play/pause/seekbar/10s skip）
-                    controllerHideOnTouch = true   // 点击后自动隐藏
-                    setShowSubtitleButton(false)   // 不要字幕切换（115 m3u8 多音轨由 URL 参数控制）
-                    setShowFastForwardButton(true) // 显式开 10s skip
-                    setShowNextButton(false)       // 单视频，不要下一首
-                    setShowPreviousButton(false)
+                    useController = false             // 不显示 Media3 自带控件,我们自己画
+                    setShowSubtitleButton(false)      // 防御:字幕切换由 URL 参数控制
                     this.player = player
                 }
             },
@@ -189,186 +425,314 @@ private fun VideoContent(
             },
         )
 
-        // player 错误:用 ToastBus 一次性 Snackbar 提示(已在 DisposableEffect 中 send),
-        // 这里 no-op 渲染(屏已被 PlayerView 占满,不显示 ErrorBlock 屏占位)
-        playerError?.let { /* 错误已发 ToastBus,屏不渲染占位 */ }
+        // 左上:pulse + 缓冲状态
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 12.dp, top = 12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.Black.copy(alpha = 0.4f))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            PreviewPulseDot()
+            Text(
+                text = "在线播放 · 已缓冲 $bufferedMb MB",
+                style = t.micro,
+                color = Color.White,
+            )
+        }
 
-        // 顶 / 底信息栏：参考 Google Photos 风格（白底 vs 视频黑底强对比）
-        TopInfoBar(
-            visible = uiVisible.value,
-            fileName = state.metadata.name,
-            onBack = onBack,
-        )
+        // 右上:3 chip
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 12.dp, top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            PreviewChip(text = qualityChip.ifBlank { "—" }, accent = true)
+            PreviewChip(text = speedChip, accent = false)
+            PreviewChip(text = "原声", accent = false)
+        }
 
-        BottomActionBar(
-            visible = uiVisible.value,
-            onShare = { /* TODO: 调 AndroidSharesheet 分享视频 */ },
-            onFavorite = { /* TODO: 调收藏 toggle */ },
-            onDelete = { /* TODO: 调 115 files/delete */ },
+        // 中心:76dp 大圆 play 圆
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(76.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.92f))
+                .clickable(onClick = onTogglePlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (snapshot.isPlaying) Icons.Pause else Icons.Play,
+                contentDescription = if (snapshot.isPlaying) "暂停" else "播放",
+                tint = Color(0xFF111111),
+                modifier = Modifier.size(32.dp),
+            )
+        }
+    }
+}
+
+/** 半透明 chip:accent=true 蓝底(qualityChip),其它 50% 黑底。 */
+@Composable
+private fun PreviewChip(text: String, accent: Boolean) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (accent) Color(0xD92F6FEB)   // rgba(47,111,235,0.85)
+                else Color.Black.copy(alpha = 0.5f),
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            style = StarVaultTheme.typography.micro,
+            color = Color.White,
         )
     }
 }
 
-/* ─────────────────── 顶 / 底 浮层（与 PreviewImage 完全一致） ─────────────────── */
-
 /**
- * 顶部信息栏（参考 Google Photos lightbox 风格）。
+ * 6dp 蓝点 + 1.6s pulse 环(对位 PlayerScreen.kt:PulseDot)。
  *
- *  - surface 白底（不透明），与下方黑底视频形成"白底 vs 黑底"强对比（明显分割）
- *  - 不用 1dp 灰线 —— 靠"白底栏 vs 黑底视频"的色差自然分割（Photos 同款）
- *  - 左侧 ← 返回 icon + 中间文件名 `titleMedium` 居中（maxLines=1）
- *  - 右侧留白占位
- *  - 8dp 横向 padding + 8dp 纵向 padding（更紧凑，Photos 同款）
- *  - 作为 BoxScope 扩展，钉到外层 Box 的 [Alignment.TopCenter]
+ *  用 [rememberInfiniteTransition] + ringAlpha(0.7→0)做外圈淡出动画,
+ *  中心 6dp 实心蓝点固定。
  */
 @Composable
-private fun BoxScope.TopInfoBar(
-    visible: Boolean,
-    fileName: String,
-    onBack: () -> Unit,
+private fun PreviewPulseDot() {
+    val transition = rememberInfiniteTransition(label = "pulse")
+    val ringAlpha by transition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "pulse-ring",
+    )
+    Box(contentAlignment = Alignment.Center) {
+        // 外圈:从 14dp 缩到 6dp + alpha 衰减
+        Box(
+            modifier = Modifier
+                .size((6 + 8 * (1 - ringAlpha / 0.7f)).dp.coerceAtLeast(6.dp))
+                .clip(CircleShape)
+                .background(Color(0xFF2F6FEB).copy(alpha = ringAlpha)),
+        )
+        // 中心实心 6dp
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF2F6FEB)),
+        )
+    }
+}
+
+/* ─────────────────── 底部控制条 ─────────────────── */
+
+/**
+ * 底部控制条(黑底):
+ *  - 进度条([PreviewSeekBar]:3dp 灰底 + accent 蓝填充 + 12dp 白 thumb)
+ *  - 时间文本(32:14 / 1:42:08)
+ *  - 6 圆按钮:上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 下载 / 全屏
+ */
+@Composable
+private fun PreviewControls(
+    snapshot: PlayerSnapshot,
+    speedLabel: String,
+    onTogglePlay: () -> Unit,
+    onSeek: (Int) -> Unit,
+    onCycleSpeed: () -> Unit,
+    onDownload: () -> Unit,
 ) {
-    val c = StarVaultTheme.colors
-    Box(
+    val t = StarVaultTheme.typography
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .align(Alignment.TopCenter)
-            .background(c.surface),
+            .background(Color.Black)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxWidth(),
+        // 进度条 + 时间
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            PreviewSeekBar(
+                positionMs = snapshot.positionMs,
+                durationMs = snapshot.durationMs,
+                bufferedMs = snapshot.bufferedMs,
+                onSeek = onSeek,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "${millisToClock(snapshot.positionMs)} / ${millisToClock(snapshot.durationMs)}",
+                style = t.micro,
+                color = Color.White.copy(alpha = 0.7f),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        // 6 圆按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            // 左:上一集 / 播放 / 下一集
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PreviewCtrlBtn(Icons.Prev, "上一集") { ToastBus.info("已是单视频") }
+                PreviewCtrlBtn(
+                    icon = if (snapshot.isPlaying) Icons.Pause else Icons.Play,
+                    contentDescription = "播放",
+                    onClick = onTogglePlay,
+                    isPrimary = true,
+                )
+                PreviewCtrlBtn(Icons.Next, "下一集") { ToastBus.info("已是单视频") }
+            }
+            // 右:倍速(label 可点循环) / 下载 / 全屏
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .pointerInput(Unit) { detectTapGestures(onTap = { onBack() }) },
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onCycleSpeed),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        painter = painterResource(id = android.R.drawable.ic_menu_revert),
-                        contentDescription = "返回",
-                        tint = c.fg,
-                        modifier = Modifier.size(22.dp),
+                    Text(
+                        text = speedLabel,
+                        color = Color.White,
+                        style = t.micro,
                     )
                 }
-                Text(
-                    text = fileName,
-                    color = c.fg,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 4.dp),
-                )
-                Box(modifier = Modifier.size(40.dp))
+                PreviewCtrlBtn(Icons.DownloadInto, "下载", onClick = onDownload)
+                PreviewCtrlBtn(Icons.Fullscreen, "全屏") { ToastBus.info("全屏即将上线") }
             }
         }
     }
 }
 
 /**
- * 底部操作栏（参考 Google Photos lightbox 风格）。
+ * 可拖动 seek 进度条。
  *
- *  - surface 白底（不透明），与上方黑底视频形成"白底 vs 黑底"强对比（明显分割）
- *  - 不用 1dp 灰线 —— 靠色差自然分割（Photos 同款）
- *  - 16dp padding
- *  - 三等宽 [OutlinedButton]（`weight(1f)`），border 边 + fg 文字 + 透明容器
- *  - 按钮间 8dp 间距
- *  - 作为 BoxScope 扩展，钉到外层 Box 的 [Alignment.BottomCenter]
+ *  - 3dp 灰底 + accent 蓝填充 + 12dp 白 thumb
+ *  - 拖动([detectDragGestures])→ onSeek(ms)→ ExoPlayer.seekTo
+ *  - [BoxWithConstraints] 拿父宽推 thumb offset(Media3 PlayerView seekbar 标准写法)
+ *
+ *  为什么不用 Material3 Slider:Slider 的 track / thumb / 拖动手柄都不可定制到
+ *  "3dp 灰底 + 12dp 白 thumb"细颗粒;改 SliderColors 只能换色,改不了尺寸/形状。
  */
 @Composable
-private fun BoxScope.BottomActionBar(
-    visible: Boolean,
-    onShare: () -> Unit,
-    onFavorite: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val c = StarVaultTheme.colors
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .align(Alignment.BottomCenter)
-            .background(c.surface),
-    ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedActionButton(
-                    iconRes = android.R.drawable.ic_menu_share,
-                    label = "分享",
-                    onClick = onShare,
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedActionButton(
-                    iconRes = android.R.drawable.btn_star_big_off,
-                    label = "收藏",
-                    onClick = onFavorite,
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedActionButton(
-                    iconRes = android.R.drawable.ic_menu_delete,
-                    label = "删除",
-                    onClick = onDelete,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-/**
- * 浅色 OutlinedButton 风格（border 边 + fg 文字 + 透明容器）。
- * 视频屏与图片屏共用，所以定义在 PreviewVideoScreen 里。
- */
-@Composable
-private fun OutlinedActionButton(
-    iconRes: Int,
-    label: String,
-    onClick: () -> Unit,
+private fun PreviewSeekBar(
+    positionMs: Int,
+    durationMs: Int,
+    bufferedMs: Int,
+    onSeek: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = StarVaultTheme.colors
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, c.border),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = c.fg),
+    BoxWithConstraints(
+        modifier = modifier
+            .height(18.dp)
+            .pointerInput(durationMs) {
+                detectDragGestures(
+                    onDragStart = { off ->
+                        val frac = (off.x / size.width).coerceIn(0f, 1f)
+                        onSeek((frac * durationMs).toInt())
+                    },
+                    onDrag = { ch, _ ->
+                        val frac = (ch.position.x / size.width).coerceIn(0f, 1f)
+                        onSeek((frac * durationMs).toInt())
+                        ch.consume()
+                    },
+                )
+            },
     ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = c.fg,
+        val trackW = maxWidth
+        // buffered 灰条(占满;当前用 positionMs 蓝条叠加显示进度,buffered 信息
+        // 已通过 Canvas 左上 "已缓冲 X MB" 文本展示,这里简化不画 buffered 灰条)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color.White.copy(alpha = 0.18f))
+                .align(Alignment.Center),
         )
-        Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 13.sp, color = c.fg)
+        // progress 蓝条(按 frac 填充)
+        val frac = (positionMs.toFloat() / durationMs.coerceAtLeast(1))
+            .coerceIn(0f, 1f)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(frac)
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(c.accent)
+                .align(Alignment.CenterStart),
+        )
+        // thumb(12dp 白圆)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = (trackW - 12.dp) * frac)
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(Color.White),
+        )
     }
 }
 
-/* ─────────────────── Loading / Error 共享块 ─────────────────── */
+/** 36dp 圆按钮(primary 44dp 白底 + 黑 icon)。 */
+@Composable
+private fun PreviewCtrlBtn(
+    icon: ImageVector,
+    contentDescription: String,
+    isPrimary: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val size = if (isPrimary) 44.dp else 36.dp
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(if (isPrimary) Color.White else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (isPrimary) Color(0xFF111111) else Color.White,
+            modifier = Modifier.size(if (isPrimary) 22.dp else 20.dp),
+        )
+    }
+}
 
+/* ─────────────────── Loading ─────────────────── */
+
+/** 全屏 spinner(c.bg 浅色,跟视频屏黑底过渡)。 */
 @Composable
 private fun LoadingBlock() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
         CircularProgressIndicator(color = StarVaultTheme.colors.accent)
     }
+}
+
+/* ─────────────────── 工具 ─────────────────── */
+
+/** 毫秒 → "mm:ss" 或 "h:mm:ss"(超过 1 小时加 h)。 */
+private fun millisToClock(ms: Int): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }

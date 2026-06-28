@@ -44,7 +44,7 @@ class PreviewVideoViewModel(
                     val url = repo.fetchVideoM3u8Url(meta.pickCode)
                     url.fold(
                         onSuccess = { u ->
-                            _state.value = PreviewUiState.Success(meta, u)
+                            _state.value = PreviewUiState.Success(meta, u.url, qualityChip = u.qualityDesc)
                         },
                         onFailure = { e ->
                             // 失败：_state 保持 Loading,仅 ToastBus 提示
