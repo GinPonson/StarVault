@@ -88,6 +88,12 @@ data class FileEntry(
     val thumbnailUrl: String? = null,
     val pickCode: String = "",       // 115 文件下载码（pc），folder 留空
     val sizeBytes: Long = 0L,        // 字节数，folder = 0
+    /**
+     * 父目录 cid(115 webapi `cid` / proapi `pid`)。folder = 同 cid。
+     * 用于 Preview 屏兄弟文件导航(上一集/下一集):
+     * Route 跳 PreviewVideo 时把 entry.parentId 传进 Route.PreviewVideo.parentCid。
+     */
+    val parentId: String = "",
 )
 
 /**

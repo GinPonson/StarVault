@@ -20,7 +20,28 @@ sealed interface Route {
     @Serializable data object  Profile                                            : Route
     @Serializable data class   Files(val folderId: String? = null)                : Route
     @Serializable data class   PreviewImage(val fileId: String)                   : Route
-    @Serializable data class   PreviewVideo(val fileId: String)                   : Route
+    /**
+     * 视频预览。
+     *
+     *  - [fileId]  : 115 文件 id
+     *  - [parentCid]: 父目录 cid,用于上一集/下一集兄弟文件导航;
+     *                null = 入口不传父目录(例如 Search 屏直跳),VM 不拉 siblings,
+     *                上一集/下一集按钮降级为 noop + ToastBus
+     */
+    @Serializable data class   PreviewVideo(
+        val fileId: String,
+        val parentCid: String? = null,
+    )                                                                          : Route
+    /**
+     * 音频预览(mp3/flac/wav 等,走 115 downurl 5min 签名直链 + ExoPlayer ProgressiveMediaSource)。
+     *
+     *  - [fileId]  : 115 文件 id
+     *  - [parentCid]: 父目录 cid,用于上一首/下一首兄弟文件导航;null = 单首,按钮降级为 noop
+     */
+    @Serializable data class   PreviewAudio(
+        val fileId: String,
+        val parentCid: String? = null,
+    )                                                                          : Route
     @Serializable data object  Album                                              : Route
     @Serializable data object  Wallpaper                                          : Route
     @Serializable data object  ThumbLab                                           : Route

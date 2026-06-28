@@ -77,12 +77,13 @@ fun FilesRoute(
             onOpen = { e ->
                 // 文件夹 → 切子目录
                 // IMAGE   → PreviewImage
-                // VIDEO   → PreviewVideo
-                // AUDIO / DOC / ZIP / OTHER → 当前 phase 不接预览，noop（后续 phase）
+                // VIDEO   → PreviewVideo(带上 parentCid 供上一集/下一集兄弟导航)
+                // AUDIO / DOC / ZIP / OTHER → 当前 phase 不接预览,noop(后续 phase)
                 when {
                     e.isFolder -> vm.setFolder(e.id, e.name)
                     e.type == FileType.IMAGE -> nav.navigate(Route.PreviewImage(e.id))
-                    e.type == FileType.VIDEO -> nav.navigate(Route.PreviewVideo(e.id))
+                    e.type == FileType.VIDEO -> nav.navigate(Route.PreviewVideo(e.id, e.parentId))
+                    e.type == FileType.AUDIO -> nav.navigate(Route.PreviewAudio(e.id, e.parentId))
                     else -> { /* TODO: 详情页 / 下载 */ }
                 }
             },

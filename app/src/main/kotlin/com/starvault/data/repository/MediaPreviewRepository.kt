@@ -110,6 +110,39 @@ class MediaPreviewRepository(
     }
 
     /**
+     * 拿音频直链(mp3/flac/wav 等,带 115 5min 签名,给 Media3 ProgressiveMediaSource 播放)。
+     *
+     * **流程**:
+     *  1. 调 [fetchMetadata] 拿到 fileId + pickCode
+     *  2. 调 downurl,响应是 `Map<file_id, item>`,跟 fetchImageOriginalUrl 1:1 同模式
+     *  3. 取 `resp.data[fileId].url.url`
+     *
+     * 跟 fetchImageOriginalUrl 几乎 1:1 复制 — 唯一区别是 KDoc 描述("音频" / "mp3/flac/wav")。
+     * 115 downurl 对所有"非视频"文件(图片/音频/文档)都返回直链 URL,签发规则统一。
+     *
+     * @param fileId 115 文件 id(用于从 downurl 响应的 Map 里精确取值,跟 OpenList 一致)
+     * @param pickCode 调 getInfo 拿到的 pick_code 字段
+     * @return Result.success(url) / Result.failure
+     */
+    suspend fun fetchAudioStreamUrl(fileId: String, pickCode: String): Result<String> {
+        return runCatching {
+            val body = api.downloadUrl(pickCode = pickCode).requireSuccessful()
+            if (body.state != true) {
+                throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
+            }
+            body
+        }.mapCatching { body ->
+            // 优先按 fileId 精确取(跟 OpenList 一致);取不到就 fallback 第一个 entry
+            val item = body.data[fileId]
+                ?: body.data.values.firstOrNull()
+                ?: throw IllegalStateException("无法获取音频 URL:downurl 返回空")
+            val url = item.url.url.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("无法获取音频 URL")
+            url
+        }
+    }
+
+    /**
      * 拿视频全部可用 m3u8 列表(带 115 签名,可直接给 Media3 播放)。
      *
      * **字段差异**:

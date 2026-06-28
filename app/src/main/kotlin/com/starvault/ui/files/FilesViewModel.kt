@@ -448,6 +448,9 @@ class FilesViewModel(
             // 文件下载入口所需的两个字段(folder 无意义,默认 0 / 空)
             pickCode = pickCode,
             sizeBytes = sizeBytes,
+            // 父目录 cid:用于 Preview 屏兄弟文件导航(上一集/下一集)。
+            // folder 时 parentId 同自身 cid(ParsedFileItem.parentId 已经这么填了)。
+            parentId = parentId,
         )
     }
 }

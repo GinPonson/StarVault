@@ -7,17 +7,15 @@ import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,15 +44,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
-import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -64,61 +66,70 @@ import com.starvault.core.ToastBus
 import com.starvault.data.remote.cloud115.ParsedFileItem
 import com.starvault.data.repository.VideoM3u8
 import com.starvault.theme.StarVaultTheme
-import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 
 /**
  * PreviewVideo 全屏屏幕（黑底 Media3 风格播放器 chrome）。
  *
  *  结构（垂直 Column 堆叠）：
- *  ┌─ PreviewTopBar     56dp 黑底: ← 返回 / 字幕 / 投屏 / 更多
+ *  ┌─ PreviewTopBar     56dp 黑底: ← 返回 / 投屏 / 更多(DropdownMenu 收纳 6 项)
  *  ├─ PreviewCanvas     weight=1f 黑底 ExoPlayer + overlays
  *  │   ├─ AndroidView PlayerView(useController=false)
- *  │   ├─ 右上 3 chip (qualityChip / 倍速 / 原声)
- *  │   └─ 中心 76dp play 圆(play/pause 双向)
- *  └─ PreviewControls   黑底: seek 进度条 + 时间 + 6 圆按钮
+ *  │   ├─ 右上 3 chip(qualityChip / 倍速 / 原声 | 字幕),音轨/字幕有 ≥2 条时 chip 可点开 DropdownMenu
+ *  │   └─ 单击画布切换 play/pause(对齐 ExoPlayer PlayerView 默认行为)
+ *  └─ PreviewControls   黑底: seek 进度条 + 时间 + 5 圆按钮(Prev/Play/Next | 倍速/全屏)
  *
- *  Media3 + 115 Bearer 桥接：
- *  - 用 [OkHttpDataSource.Factory] 包装 [ServiceLocator.okHttpClient]，
+ *  屏幕常亮([KeepScreenOnEffect]):进入 PreviewVideo 即给当前 window 加 [WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON],
+ *  离开 Composable 时清掉,避免回到 Files 屏后屏幕不再灭(常见副作用:忘了加 onDispose)。
+ *
+ *  媒体 3 + 115 Bearer 桥接:
+ *  - 用 [OkHttpDataSource.Factory] 包装 [ServiceLocator.okHttpClient],
  *    拦截器自动注入 115 Bearer + 浏览器伪装头(Media3 拉的 m3u8 + segment 都自动带 Bearer)
  *  - [HlsMediaSource.Factory] 解析 m3u8 manifest + 段地址
- *  - ExoPlayer 由 Composable 持有，dispose 时 release 防泄漏
+ *  - ExoPlayer 由 Composable 持有,dispose 时 release 防泄漏
  *
- *  状态机：
+ *  状态机:
  *  - Loading  → 全屏 spinner(c.bg 浅色)
  *  - Success  → 上面 3 段布局
  *  - Error    → 不显示屏占位,ToastBus 一次性 Snackbar(DisposableEffect 内 send)
  *
- *  状态同步：
+ *  状态同步:
  *  - [rememberPlayerSnapshot] 用 10 Hz LaunchedEffect 协程读
  *    player.currentPosition / duration / bufferedPosition / isPlaying
- *  - 不用 Player.Listener:Media3 1.4.1 没有 progress callback,
- *    media3-ui-compose 是 1.6+ 才有,1.9+ 才有 rememberProgressStateWithTickInterval
- *  - 中心 play 圆 + 控制行 play ↔ ExoPlayer.playWhenReady 双向:
- *    player.playWhenReady = !player.playWhenReady 切一次,
- *    下次 100ms 轮询 player.isPlaying 同步 icon
+ *  - [rememberTracksSnapshot] 通过 Player.Listener.onTracksChanged 监听 currentTracks,
+ *    解出 audio/text 各 track 列表(用于原声 / 字幕 chip + DropdownMenu 切轨)
  *
- *  倍速：4 档循环(1.0× → 1.5× → 2.0× → 0.5× → 1.0×),对齐 VLC / Media3 PlayerView 默认档。
+ *  倍速:4 档循环(1.0× → 1.5× → 2.0× → 0.5× → 1.0×),对齐 VLC / Media3 PlayerView 默认档。
  *  不是 B 站式 1.0/1.25/1.5/2.0(1.25× 不是业内常见档)。
  *
- *  下载：构造合成 [ParsedFileItem](从 [com.starvault.data.repository.MediaMetadata])
- *  → [com.starvault.data.repository.DownloadRepository.enqueue]。
+ *  下载:由 [PreviewTopBar] 的"更多" DropdownMenu 触发(原位从底部控制栏下移),构造
+ *  合成 [ParsedFileItem] → [com.starvault.data.repository.DownloadRepository.enqueue]。
  *  MediaMetadata.fileCategory 是 String "1" 而 ParsedFileItem.fileCategory 是 Int 2,
  *  同名不同义,合成处显式注释。
  *
- *  Noop + ToastBus:字幕 / 投屏 / 更多 / 上一集 / 下一集(全屏已接,见 VideoContent.isFullscreen)。
+ *  上一集/下一集:接 [PreviewVideoViewModel.Siblings];prev/next fid 由 Route 解析到 nav 跳转;
+ *  无父目录(Route.parentCid == null)或没拉到 → 按钮降级为 noop + ToastBus。
+ *
+ *  Noop + ToastBus:投屏 / 重命名 / 移动 / 删除 / 分享 / 属性(更多菜单内 5 项 + 顶栏投屏)。
  *
  *  @param state VM 暴露的 [PreviewUiState]
+ *  @param siblings 上一集/下一集 fid(从 [PreviewVideoViewModel.siblings] 来,null = 不可点)
  *  @param onBack 返回(BackHandler + 顶部"返回"按钮都调它)
  *  @param onSelectQuality 切档(VM 收到后改 Success.mediaUrl,Screen 侧 remember 重建 player)
+ *  @param onPrev 上一集(Screen 只在 prevId 非空时调;Route 负责 nav 跳转)
+ *  @param onNext 下一集(同 onPrev)
  */
 @Composable
 fun PreviewVideoScreen(
     state: PreviewUiState,
+    siblings: PreviewVideoViewModel.Siblings = PreviewVideoViewModel.Siblings(),
     onBack: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit = {},
+    onPrev: () -> Unit = {},
+    onNext: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
+    KeepScreenOnEffect()
     BackHandler(enabled = true) { onBack() }
     Box(
         modifier = Modifier
@@ -127,18 +138,33 @@ fun PreviewVideoScreen(
     ) {
         when (state) {
             is PreviewUiState.Loading -> LoadingBlock()
-            is PreviewUiState.Success -> VideoContent(state, onBack, onSelectQuality)
+            is PreviewUiState.Success -> VideoContent(state, siblings, onBack, onSelectQuality, onPrev, onNext)
         }
     }
 }
+
+/**
+ * 屏幕常亮:进入 Composable 时给当前 window 加 [WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON],
+ * 离开(onDispose)时清回默认。
+ *
+ *  - 实现:用 [LocalView] 拿到 host view,沿 view tree 找到 Activity(window 持有者),
+ *    直接改 [Activity.getWindow] 的 flag。这是 Compose 推荐做法,比 remember 一个
+ *    Activity 引用更安全(LocalView 在 Composition 销毁时自动失效)。
+ *  - 生命周期:DisposableEffect onDispose 由 Composable 离屏触发(包括 nav pop / 屏销毁)。
+ *    不会泄漏到其他屏。
+ */
+// KeepScreenOnEffect 已抽到 PreviewShared.kt(VIDEO / AUDIO 屏族共享)。
 
 /* ─────────────────── 视频内容 ─────────────────── */
 
 @Composable
 private fun VideoContent(
     state: PreviewUiState.Success,
+    siblings: PreviewVideoViewModel.Siblings,
     onBack: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -164,16 +190,19 @@ private fun VideoContent(
     // 4. 10 Hz 状态同步(单 source 写多字段)
     val snapshot by rememberPlayerSnapshot(player)
 
-    // 5. 倍速循环(返回 (label, cycleFn))
+    // 5. tracks 监听(audio/text chip + 切轨用)
+    val tracks by rememberTracksSnapshot(player)
+
+    // 6. 倍速循环(返回 (label, cycleFn))
     val (speedLabel, onCycleSpeed) = rememberSpeedCycler(player)
 
-    // 6. play/pause toggle(playWhenReady 双向)
+    // 7. play/pause toggle(playWhenReady 双向)
     val onTogglePlay: () -> Unit = { player.playWhenReady = !player.playWhenReady }
 
-    // 7. seek
+    // 8. seek
     val onSeek: (Int) -> Unit = { ms -> player.seekTo(ms.toLong()) }
 
-    // 8. 下载触发(合成 ParsedFileItem)
+    // 9. 下载触发(合成 ParsedFileItem,移动到"更多"菜单后这里依然保留为回调)
     //    MediaMetadata.fileCategory 是 String "1"(proapi),ParsedFileItem.fileCategory
     //    是 Int 2(115 webapi 约定 video),同名不同义。
     val onDownload: () -> Unit = remember(state) {
@@ -199,7 +228,36 @@ private fun VideoContent(
         }
     }
 
-    // 9. 全屏切换:
+    // 10. 音轨选择(audio chip 点击 + DropdownMenu 选中 → TrackSelectionOverride)
+    val onSelectAudioTrack: (TrackOption) -> Unit = { opt ->
+        val params: TrackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+            .addOverride(TrackSelectionOverride(opt.trackGroup, opt.trackIndex))
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    // 11. 字幕轨选择(同 audio,类型 TRACK_TYPE_TEXT)
+    val onSelectTextTrack: (TrackOption) -> Unit = { opt ->
+        val params: TrackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .addOverride(TrackSelectionOverride(opt.trackGroup, opt.trackIndex))
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    // 12. 关闭字幕(清 override + 标记 TEXT 类型 disabled)
+    val onDisableText: () -> Unit = {
+        val params = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    // 13. 全屏切换:
     //   - 横屏(landscape) + immersive sticky 隐藏系统栏
     //   - 顶栏整条收起(对齐 YouTube/B 站,横屏纯视频模式)
     //   - orientation 改变默认会重建 Activity;ExoPlayer 由 composition remember 持有,
@@ -242,7 +300,7 @@ private fun VideoContent(
         // 全屏时隐藏顶栏:横屏下返回用 BackHandler / 系统手势即可,
         // 留顶栏反而挤压视频画布(对齐 YouTube/B 站视频横屏体验)
         if (!isFullscreen) {
-            PreviewTopBar(name = state.metadata.name, onBack = onBack)
+            PreviewTopBar(name = state.metadata.name, onBack = onBack, onDownload = onDownload)
         }
 
         PreviewCanvas(
@@ -252,8 +310,12 @@ private fun VideoContent(
             qualityOptions = state.qualityOptions,
             currentQualityUrl = state.mediaUrl,
             speedChip = speedLabel,
+            tracks = tracks,
             onTogglePlay = onTogglePlay,
             onSelectQuality = onSelectQuality,
+            onSelectAudioTrack = onSelectAudioTrack,
+            onSelectTextTrack = onSelectTextTrack,
+            onDisableText = onDisableText,
             modifier = Modifier.weight(1f),
         )
 
@@ -261,11 +323,14 @@ private fun VideoContent(
             snapshot = snapshot,
             speedLabel = speedLabel,
             isFullscreen = isFullscreen,
+            hasPrev = siblings.prevId != null,
+            hasNext = siblings.nextId != null,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onCycleSpeed = onCycleSpeed,
-            onDownload = onDownload,
             onToggleFullscreen = onToggleFullscreen,
+            onPrev = onPrev,
+            onNext = onNext,
         )
     }
 }
@@ -290,81 +355,134 @@ private fun buildPlayer(context: Context, mediaUrl: String): ExoPlayer {
 }
 
 /* ─────────────────── Snapshot 状态同步 ─────────────────── */
+// PlayerSnapshot + rememberPlayerSnapshot 已抽到 PreviewShared.kt。
+
+/* ─────────────────── Tracks 监听(原声 / 字幕 chip 用)─────────────────── */
 
 /**
- * ExoPlayer 状态快照(每 100ms 刷新一次,供 Canvas / Controls 共用同一 source)。
+ * 一条可被用户选择的音轨 / 字幕轨。
  *
- * 字段:
- *  - positionMs : 当前位置(playhead),从 player.currentPosition 读
- *  - durationMs : 总时长,coerceAtLeast(0) 防 UNKNOWN_TIME(-9223372036854775807)
- *  - bufferedMs : 已缓冲位置,从 player.bufferedPosition 读(给 seek 进度条画灰条用)
- *  - isPlaying  : 当前是否播放中,player.isPlaying 同步 playWhenReady + STATE_READY
+ *  - [trackGroup]:ExoPlayer 的 TrackGroup,用于构造 [TrackSelectionOverride](不可为 null)
+ *  - [trackIndex]:Group 内第几条
+ *  - [label]:UI 显示文案,优先 [androidx.media3.common.Format.label],否则 language code,否则 "音轨 N"
  */
-private data class PlayerSnapshot(
-    val positionMs: Int = 0,
-    val durationMs: Int = 0,
-    val bufferedMs: Int = 0,
-    val isPlaying: Boolean = false,
+data class TrackOption(
+    val trackGroup: androidx.media3.common.TrackGroup,
+    val trackIndex: Int,
+    val label: String,
 )
 
 /**
- * 10 Hz LaunchedEffect 协程循环读 4 个字段,写到一个 [mutableStateOf]。
+ * 播放器当前可用音轨 + 字幕轨快照(由 Player.Listener.onTracksChanged 触发更新)。
  *
- * 为什么用 LaunchedEffect 不用 produceState:一次 snapshot 写入覆盖 4 字段,
- * 所有 chip / progress / play 按钮从同一 source 读,一次重组全更新。
- * 比 4 个独立 state 干净。
+ *  - [audioTracks]:当前音轨列表(可能为空 — 某些流只有 1 条且 isSelected=true,仍列出来)
+ *  - [selectedAudioIndex]:当前选中 index,用于 DropdownMenu 项打勾
+ *  - [textTracks]:字幕轨列表;空 = 该媒体无字幕轨
+ *  - [selectedTextIndex]:当前选中字幕;null = 用户已手动关闭字幕
+ *  - [textDisabled]:用户禁用了字幕(TrackSelectionParameters.setTrackTypeDisabled TEXT true)
  *
- * 为什么不用 Player.Listener:
- *  - Media3 1.4.1 没有 progress callback
- *  - media3-ui-compose 1.6+ 才有,1.9+ 才有 rememberProgressStateWithTickInterval
- *  - listener 没有 onProgressChanged,只有 onIsPlayingChanged 等事件
+ * 解码约定:每个 [Tracks.Group] 表示一种"轨类型 + 轨集合"——同一 Group 内 N 条互斥可选
+ * (原声 vs 粤语);不同 Group 一般不能跨选(类型不同,如一条 audio + 一条 text 是两个 Group)。
+ * 这里 UI 层只列 Group 内的所有 track,用首个 Group 暴露给用户。
+ */
+data class TracksSnapshot(
+    val audioTracks: List<TrackOption> = emptyList(),
+    val selectedAudioIndex: Int? = null,
+    val textTracks: List<TrackOption> = emptyList(),
+    val selectedTextIndex: Int? = null,
+    val textDisabled: Boolean = false,
+)
+
+/**
+ * 监听 [Player.Listener.onTracksChanged] + 初始 poll 一次,解出 [TracksSnapshot]。
+ *
+ * 为什么初始要主动 poll:listener 在第一次 onTracksChanged 触发前 player.currentTracks 已经是
+ * 已知值(115 单音轨 m3u8 立即 ready,没第二个 trigger)。不 poll 的话 UI 永远看不到 1 条音轨。
  */
 @Composable
-private fun rememberPlayerSnapshot(player: ExoPlayer): State<PlayerSnapshot> {
-    val snapshot = remember(player) { mutableStateOf(PlayerSnapshot()) }
-    LaunchedEffect(player) {
-        while (true) {
-            snapshot.value = PlayerSnapshot(
-                positionMs = player.currentPosition.toInt(),
-                durationMs = player.duration.coerceAtLeast(0L).toInt(),
-                bufferedMs = player.bufferedPosition.toInt(),
-                isPlaying = player.isPlaying,
-            )
-            delay(100L)
+private fun rememberTracksSnapshot(player: ExoPlayer): State<TracksSnapshot> {
+    val state = remember(player) { mutableStateOf(parseTracks(player)) }
+    LaunchedEffect(player) { state.value = parseTracks(player) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                state.value = parseTracksFromTracks(tracks, player)
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    return state
+}
+
+/**
+ * 主动 poll 一份 snapshot(进入 Composable 时调,或 listener 第一帧前).
+ * 比 parseTracksFromTracks 多读一次 player,但语义最简单。
+ */
+private fun parseTracks(player: ExoPlayer): TracksSnapshot {
+    val tracks = player.currentTracks
+    return parseTracksFromTracks(tracks, player)
+}
+
+/**
+ * 核心解码:[Tracks] → [TracksSnapshot]。
+ *
+ *  - 按 Group.type 分 audio / text
+ *  - Group.length=0(空轨)跳过
+ *  - 选中态:group.isSelected && isTrackSelected(index)
+ *  - label:Format.label → "音轨 N"(兜底)
+ *  - textDisabled:从 TrackSelectionParameters 读 TRACK_TYPE_TEXT disabled 态
+ */
+private fun parseTracksFromTracks(tracks: Tracks, player: ExoPlayer): TracksSnapshot {
+    val audios = mutableListOf<TrackOption>()
+    var selectedAudio: Int? = null
+    val texts = mutableListOf<TrackOption>()
+    var selectedText: Int? = null
+
+    tracks.groups.forEach { group ->
+        if (group.length == 0) return@forEach
+        when (group.type) {
+            C.TRACK_TYPE_AUDIO -> {
+                val mediaGroup = group.mediaTrackGroup
+                for (i in 0 until group.length) {
+                    val fmt = group.getTrackFormat(i)
+                    audios += TrackOption(
+                        trackGroup = mediaGroup,
+                        trackIndex = i,
+                        label = fmt.label?.takeIf { it.isNotBlank() }
+                            ?: "音轨 ${audios.size + 1}",
+                    )
+                    if (group.isTrackSelected(i)) selectedAudio = audios.lastIndex
+                }
+            }
+            C.TRACK_TYPE_TEXT -> {
+                val mediaGroup = group.mediaTrackGroup
+                for (i in 0 until group.length) {
+                    val fmt = group.getTrackFormat(i)
+                    texts += TrackOption(
+                        trackGroup = mediaGroup,
+                        trackIndex = i,
+                        label = fmt.label?.takeIf { it.isNotBlank() }
+                            ?: fmt.language?.takeIf { it.isNotBlank() }
+                            ?: "字幕 ${texts.size + 1}",
+                    )
+                    if (group.isTrackSelected(i)) selectedText = texts.lastIndex
+                }
+            }
         }
     }
-    return snapshot
+    val textDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+    return TracksSnapshot(
+        audioTracks = audios,
+        selectedAudioIndex = selectedAudio,
+        textTracks = texts,
+        selectedTextIndex = if (textDisabled) null else selectedText,
+        textDisabled = textDisabled,
+    )
 }
 
 /* ─────────────────── 倍速 4 档循环 ─────────────────── */
-
-/** VLC / Media3 PlayerView 默认档(不是 B 站式 1.0/1.25/1.5/2.0)。 */
-private val speedSteps = listOf(1.0f, 1.5f, 2.0f, 0.5f)
-
-/**
- * 4 档循环 + 应用到 ExoPlayer.playbackParameters。
- *
- *  返回 (label, cycleFn):
- *  - label : 当前档位显示文本("1.0×"/"1.5×"/"2.0×"/"0.5×")
- *  - cycleFn : 切下一档 + 立即 apply
- *
- *  LaunchedEffect(player) 初始 apply 一次(1.0× 起步)。
- */
-@Composable
-private fun rememberSpeedCycler(player: ExoPlayer): Pair<String, () -> Unit> {
-    var idx by remember(player) { mutableIntStateOf(0) }
-    val apply = { player.playbackParameters = PlaybackParameters(speedSteps[idx]) }
-    LaunchedEffect(player) { apply() }
-    val label = speedLabel(speedSteps[idx])
-    return label to {
-        idx = (idx + 1) % speedSteps.size
-        apply()
-    }
-}
-
-/** 整数倍(1×/2×)显示 "Nx";小数倍(1.5×/0.5×)显示 "N.N×"。 */
-private fun speedLabel(v: Float): String =
-    if (v == v.toInt().toFloat()) "${v.toInt()}×" else "${v}×"
+// speedSteps + rememberSpeedCycler + speedLabel 已抽到 PreviewShared.kt。
 
 /* ─────────────────── 顶部 toolbar ─────────────────── */
 
@@ -372,11 +490,21 @@ private fun speedLabel(v: Float): String =
  * 顶部工具栏(56dp 黑底):
  *  - 左侧 ← 返回 图标
  *  - 中间 文件名(titleMedium,maxLines=1,weight=1f)
- *  - 右侧 字幕 / 投屏 / 更多 3 图标
- *  - 后 3 个是 noop + ToastBus 提示
+ *  - 右侧 投屏(noop) / 更多(DropdownMenu,6 项:下载/重命名/移动/删除/分享/属性)
+ *
+ *  字幕入口已下沉到画布 chip 行的"字幕" chip([TextChipWithMenu],接 ExoPlayer 字幕轨真切换),
+ *  不再在顶栏放 CC icon——避免两个"字幕"入口冲突(顶栏 noop vs chip 真功能)。
+ *  "下载" 从原底部控制栏下移到更多菜单(用户偏好:用下拉收纳一次性操作,不放主控制条);
+ *  重命名/移动/删除/分享/属性 本期 noop + ToastBus 提示。
  */
 @Composable
-private fun PreviewTopBar(name: String, onBack: () -> Unit) {
+private fun PreviewTopBar(
+    name: String,
+    onBack: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    var moreExpanded by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -384,7 +512,7 @@ private fun PreviewTopBar(name: String, onBack: () -> Unit) {
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PreviewIconBtn(Icons.Back, "返回", onBack)
+        PreviewIconBtn(Icons.Back, "返回", onClick = onBack)
         Text(
             text = name,
             color = Color.White,
@@ -394,12 +522,35 @@ private fun PreviewTopBar(name: String, onBack: () -> Unit) {
                 .weight(1f)
                 .padding(horizontal = 8.dp),
         )
-        PreviewIconBtn(Icons.Subtitle, "字幕") { ToastBus.info("字幕切换即将上线") }
         PreviewIconBtn(Icons.Cast, "投屏") { ToastBus.info("投屏功能即将上线") }
-        PreviewIconBtn(Icons.More, "更多") { ToastBus.info("更多操作即将上线") }
+        Box {
+            PreviewIconBtn(Icons.More, "更多", onClick = { moreExpanded = true })
+            // 6 项 DropdownMenu,深色背景,白文字,带分隔线
+            MoreMenu(
+                expanded = moreExpanded,
+                onDismiss = { moreExpanded = false },
+                onDownload = {
+                    moreExpanded = false
+                    onDownload()
+                },
+                onRename = { moreExpanded = false; ToastBus.info("重命名即将上线") },
+                onMove = { moreExpanded = false; ToastBus.info("移动即将上线") },
+                onDelete = { moreExpanded = false; ToastBus.info("删除即将上线") },
+                onShare = { moreExpanded = false; ToastBus.info("分享即将上线") },
+                onProperties = { moreExpanded = false; ToastBus.info("查看属性即将上线") },
+            )
+        }
     }
 }
 
+/**
+ * "更多" DropdownMenu:6 项 + 第 1/2 项间分隔线。
+ *
+ *  - 下载:从原底部控制栏下移;真接 [com.starvault.data.repository.DownloadRepository.enqueue]
+ *  - 重命名 / 移动 / 删除 / 分享 / 属性:本期 noop,均 ToastBus 提示
+ *
+ *  MoreMenu + MoreMenuItem 已抽到 PreviewShared.kt(VIDEO / AUDIO 屏族共享)。
+ */
 @Composable
 private fun PreviewIconBtn(
     icon: ImageVector,
@@ -427,8 +578,13 @@ private fun PreviewIconBtn(
 /**
  * 黑底视频画布:
  *  - AndroidView PlayerView 占满(useController=false,我们自己画控件)
- *  - 右上 3 chip(qualityChip 蓝底 / 倍速 / 原声)
- *  - 中心 76dp 大圆 play 按钮(play/pause 双向同步)
+ *  - 右上 4 chip(qualityChip / 倍速 / 原声 | 字幕,均 50% 黑底统一)
+ *    字幕/清晰度 ≥2 档时 chip 可点开 DropdownMenu 切轨或切档)
+ *  - 单击画布 = 切换 play/pause(对齐 ExoPlayer PlayerView 默认行为)
+ *
+ *  原声 / 字幕 chip 行为:
+ *  - 原声:1 条音轨 → 不可点(只展示当前 label);≥2 条 → 点开 DropdownMenu 切轨
+ *  - 字幕:无字幕轨 → 不可点(只展示 "字幕");有字幕轨 → 点开 DropdownMenu 切轨或"关闭字幕"
  */
 @Composable
 private fun PreviewCanvas(
@@ -438,15 +594,24 @@ private fun PreviewCanvas(
     qualityOptions: List<VideoM3u8>,
     currentQualityUrl: String,
     speedChip: String,
+    tracks: TracksSnapshot,
     onTogglePlay: () -> Unit,
     onSelectQuality: (VideoM3u8) -> Unit,
+    onSelectAudioTrack: (TrackOption) -> Unit,
+    onSelectTextTrack: (TrackOption) -> Unit,
+    onDisableText: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val t = StarVaultTheme.typography
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black),
+            .background(Color.Black)
+            // 单击视频画布(非 chip 行)= 切换播放/暂停
+            // 对齐 ExoPlayer PlayerView 默认行为。子元素(chip 行)的 clickable
+            // 会先消费 pointer event,不会冒泡到这里误触发。
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onTogglePlay() })
+            },
     ) {
         // ExoPlayer 全屏画布
         AndroidView(
@@ -467,12 +632,8 @@ private fun PreviewCanvas(
             },
         )
 
-        // 左上原本是 ● pulse + "在线播放 · 已缓冲 X MB" 状态行,
-        // 用户认为冗余,删掉。视频画布纯展示 + 右上 3 chip(quality/speed/原声)已够。
-
-
-        // 右上:3 chip。quality chip 可点(有 options 时)→ DropdownMenu 切档;
-        // 单档 / 列表为空时降级为只读,避免点开空菜单。
+        // 右上:chip 行。quality + speed(固定) + audio chip + text chip
+        // 每行水平排列,横向 6dp 间隔,顶部 12dp + 右侧 12dp 边距
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -486,43 +647,32 @@ private fun PreviewCanvas(
                 onSelect = onSelectQuality,
             )
             PreviewChip(text = speedChip, accent = false)
-            PreviewChip(text = "原声", accent = false)
+            AudioChipWithMenu(
+                tracks = tracks.audioTracks,
+                selectedIndex = tracks.selectedAudioIndex,
+                onSelect = onSelectAudioTrack,
+            )
+            TextChipWithMenu(
+                tracks = tracks.textTracks,
+                selectedIndex = tracks.selectedTextIndex,
+                textDisabled = tracks.textDisabled,
+                onSelect = onSelectTextTrack,
+                onDisable = onDisableText,
+            )
         }
 
-        // 中心:76dp 大圆 play 圆
-        // 播放时常驻的"播放"按钮会和底部暂停按钮冗余，所以播放时整块隐藏。
-        // 暂停时显示，给用户一个最显眼的恢复入口。
-        if (!snapshot.isPlaying) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(76.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.92f))
-                    .clickable(onClick = onTogglePlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Play,
-                    contentDescription = "播放",
-                    tint = Color(0xFF111111),
-                    modifier = Modifier.size(32.dp),
-                )
-            }
-        }
+        // 中心 play 圆已移除:画布整体 .pointerInput { detectTapGestures(onTap) }
+        // 已接管播放/暂停切换(对齐 ExoPlayer PlayerView 默认行为),center 圆冗余
     }
 }
 
-/** 半透明 chip:accent=true 蓝底(qualityChip),其它 50% 黑底。 */
+/** 半透明 chip:所有 chip 统一 50% 黑底(用户反馈:清晰度不再用蓝底强调,4 chip 视觉一致)。 */
 @Composable
-private fun PreviewChip(text: String, accent: Boolean) {
+private fun PreviewChip(text: String, accent: Boolean = false) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(
-                if (accent) Color(0xD92F6FEB)   // rgba(47,111,235,0.85)
-                else Color.Black.copy(alpha = 0.5f),
-            )
+            .background(Color.Black.copy(alpha = 0.5f))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Text(
@@ -536,7 +686,7 @@ private fun PreviewChip(text: String, accent: Boolean) {
 /**
  * 清晰度 chip + DropdownMenu 切档。
  *
- *  - [currentDesc]: 蓝底 chip 显示当前 desc(如 "1080P",空 → UI fallback "—")
+ *  - [currentDesc]: 50% 黑底 chip 显示当前 desc(如 "1080P",空 → UI fallback "—")
  *  - [options]: 全部可用清晰度(来自 /open/video/play 的 video_url[])
  *  - [currentUrl]: 当前正在播放的 url,用于菜单项打勾
  *  - [onSelect]: 选中后调 → VM 改 Success.mediaUrl → Screen 重建 player
@@ -556,9 +706,10 @@ private fun QualityChipWithMenu(
 
     Box {
         // chip 本体:有 ≥2 档才加 clickable;否则纯展示
+        // 跟其他 chip 一致用 50% 黑底(用户反馈:清晰度 chip 不再强调,跟 倍速/原声/字幕 一致)
         val chipModifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xD92F6FEB))
+            .background(Color.Black.copy(alpha = 0.5f))
             .then(
                 if (isInteractive) Modifier.clickable { expanded = true }
                 else Modifier,
@@ -572,9 +723,11 @@ private fun QualityChipWithMenu(
             )
         }
         // DropdownMenu:挂在 chip 父 Box 上,系统会自动定位到 anchor 下方
+        // 显式 modifier.background 覆盖 M3 默认白底 surface,跟黑底 Preview 屏融合
         DropdownMenu(
             expanded = expanded && isInteractive,
             onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color(0xFF1A1A1A)),
         ) {
             options.forEach { opt ->
                 val isCurrent = opt.url == currentUrl
@@ -596,6 +749,157 @@ private fun QualityChipWithMenu(
     }
 }
 
+/**
+ * 原声 / 音轨 chip + DropdownMenu 切轨。
+ *
+ *  - 0 条音轨 → 不可点 + 显示 "原声"(理论上不会有,ExoPlayer 必有 audio;纯防御)
+ *  - 1 条音轨 → 不可点 + 显示 "原声"(没切换意义,不展示"音轨 1"这种技术性 label)
+ *  - ≥2 条 → 点开 DropdownMenu 切换,选中态打勾,chip 显示当前选中轨 label
+ *
+ *  chip 配色:4 chip(清晰度/倍速/原声/字幕)统一 50% 黑底,无视觉等级差异。
+ */
+@Composable
+private fun AudioChipWithMenu(
+    tracks: List<TrackOption>,
+    selectedIndex: Int?,
+    onSelect: (TrackOption) -> Unit,
+) {
+    val currentLabel = if (tracks.size > 1) {
+        selectedIndex?.let { tracks.getOrNull(it)?.label } ?: "原声"
+    } else {
+        "原声"
+    }
+    var expanded by remember { mutableStateOf(false) }
+    val isInteractive = tracks.size > 1
+
+    Box {
+        val chipModifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.5f))
+            .then(
+                if (isInteractive) Modifier.clickable { expanded = true }
+                else Modifier,
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+        Box(modifier = chipModifier) {
+            Text(
+                text = currentLabel,
+                style = StarVaultTheme.typography.micro,
+                color = Color.White,
+            )
+        }
+        if (isInteractive) {
+            // 显式 modifier.background 覆盖 M3 默认白底 surface,跟黑底 Preview 屏融合
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1A1A1A)),
+            ) {
+                tracks.forEachIndexed { idx, opt ->
+                    val isCurrent = idx == selectedIndex
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = opt.label,
+                                color = if (isCurrent) Color(0xFF2F6FEB) else Color.White,
+                                style = StarVaultTheme.typography.body,
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            if (!isCurrent) onSelect(opt)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 字幕 chip + DropdownMenu 切轨。
+ *
+ *  - 0 字幕轨 → 显示 "字幕",不可点(媒体本身没字幕,菜单没意义)
+ *  - 有字幕轨但用户主动关闭 → 显示 "字幕",菜单里有"开启"项
+ *  - 有字幕轨 + 选中态 → 显示当前字幕 label,菜单有"关闭字幕"项
+ *
+ *  设计取舍:即使 0 字幕轨也保留 chip,给用户视觉一致性(顶栏 4 chip 数量稳定);
+ *  不可点只是不响应 click,不影响显示。
+ */
+@Composable
+private fun TextChipWithMenu(
+    tracks: List<TrackOption>,
+    selectedIndex: Int?,
+    textDisabled: Boolean,
+    onSelect: (TrackOption) -> Unit,
+    onDisable: () -> Unit,
+) {
+    val currentLabel: String = when {
+        tracks.isEmpty() -> "字幕"
+        textDisabled -> "字幕"
+        else -> selectedIndex?.let { tracks.getOrNull(it)?.label } ?: "字幕"
+    }
+    var expanded by remember { mutableStateOf(false) }
+    val isInteractive = tracks.isNotEmpty()
+
+    Box {
+        val chipModifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.5f))
+            .then(
+                if (isInteractive) Modifier.clickable { expanded = true }
+                else Modifier,
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+        Box(modifier = chipModifier) {
+            Text(
+                text = currentLabel,
+                style = StarVaultTheme.typography.micro,
+                color = Color.White,
+            )
+        }
+        if (isInteractive) {
+            // 显式 modifier.background 覆盖 M3 默认白底 surface,跟黑底 Preview 屏融合
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1A1A1A)),
+            ) {
+                tracks.forEachIndexed { idx, opt ->
+                    val isCurrent = idx == selectedIndex && !textDisabled
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = opt.label,
+                                color = if (isCurrent) Color(0xFF2F6FEB) else Color.White,
+                                style = StarVaultTheme.typography.body,
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect(opt)
+                        },
+                    )
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = if (textDisabled) "开启字幕" else "关闭字幕",
+                            color = Color.White,
+                            style = StarVaultTheme.typography.body,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onDisable()
+                    },
+                )
+            }
+        }
+    }
+}
+
 /* ─────────────────── 底部控制条 ─────────────────── */
 
 
@@ -603,18 +907,25 @@ private fun QualityChipWithMenu(
  * 底部控制条(黑底):
  *  - 进度条([PreviewSeekBar]:3dp 灰底 + accent 蓝填充 + 12dp 白 thumb)
  *  - 时间文本(32:14 / 1:42:08)
- *  - 6 圆按钮:上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 下载 / 全屏
+ *  - 5 圆按钮:上一集 / 播放(白底实心) / 下一集 | 倍速(label 可点) / 全屏
+ *
+ *  之前这里有 6 圆按钮(含"下载");下载已下移到顶栏"更多" DropdownMenu,控制条瘦身。
+ *  上一集/下一集:有 prev/next 时真接 [onPrev]/[onNext](Route 跳到兄弟文件);
+ *  没 prev/next 时(单文件/无 parentCid/已是首尾集) → ToastBus.info 提示。
  */
 @Composable
 private fun PreviewControls(
     snapshot: PlayerSnapshot,
     speedLabel: String,
     isFullscreen: Boolean,
+    hasPrev: Boolean,
+    hasNext: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Int) -> Unit,
     onCycleSpeed: () -> Unit,
-    onDownload: () -> Unit,
     onToggleFullscreen: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
 ) {
     val t = StarVaultTheme.typography
     Column(
@@ -645,7 +956,7 @@ private fun PreviewControls(
             )
         }
         Spacer(Modifier.height(8.dp))
-        // 6 圆按钮
+        // 5 圆按钮(下载已下移)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -653,16 +964,30 @@ private fun PreviewControls(
         ) {
             // 左:上一集 / 播放 / 下一集
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PreviewCtrlBtn(Icons.Prev, "上一集") { ToastBus.info("已是单视频") }
+                PreviewCtrlBtn(
+                    icon = Icons.Prev,
+                    contentDescription = "上一集",
+                    enabled = hasPrev,
+                    onClick = {
+                        if (hasPrev) onPrev() else ToastBus.info("已是第一集")
+                    },
+                )
                 PreviewCtrlBtn(
                     icon = if (snapshot.isPlaying) Icons.Pause else Icons.Play,
                     contentDescription = "播放",
                     onClick = onTogglePlay,
                     isPrimary = true,
                 )
-                PreviewCtrlBtn(Icons.Next, "下一集") { ToastBus.info("已是单视频") }
+                PreviewCtrlBtn(
+                    icon = Icons.Next,
+                    contentDescription = "下一集",
+                    enabled = hasNext,
+                    onClick = {
+                        if (hasNext) onNext() else ToastBus.info("已是最后一集")
+                    },
+                )
             }
-            // 右:倍速(label 可点循环) / 下载 / 全屏
+            // 右:倍速(label 可点循环) / 全屏
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
                     modifier = Modifier
@@ -677,7 +1002,6 @@ private fun PreviewControls(
                         style = t.micro,
                     )
                 }
-                PreviewCtrlBtn(Icons.DownloadInto, "下载", onClick = onDownload)
                 // 全屏 / 退出全屏 二态:portrait 显示 Fullscreen(放大),landscape 显示 FullscreenExit(收缩)
                 PreviewCtrlBtn(
                     icon = if (isFullscreen) Icons.FullscreenExit else Icons.Fullscreen,
@@ -690,101 +1014,8 @@ private fun PreviewControls(
 }
 
 /**
- * 可拖动 seek 进度条。
- *
- *  - 3dp 灰底 + accent 蓝填充 + 12dp 白 thumb
- *  - 拖动([detectDragGestures])→ onSeek(ms)→ ExoPlayer.seekTo
- *  - [BoxWithConstraints] 拿父宽推 thumb offset(Media3 PlayerView seekbar 标准写法)
- *
- *  为什么不用 Material3 Slider:Slider 的 track / thumb / 拖动手柄都不可定制到
- *  "3dp 灰底 + 12dp 白 thumb"细颗粒;改 SliderColors 只能换色,改不了尺寸/形状。
+ * 可拖动 seek 进度条 + 控制行圆按钮:已抽到 PreviewShared.kt(PreviewSeekBar / PreviewCtrlBtn)。
  */
-@Composable
-private fun PreviewSeekBar(
-    positionMs: Int,
-    durationMs: Int,
-    bufferedMs: Int,
-    onSeek: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val c = StarVaultTheme.colors
-    BoxWithConstraints(
-        modifier = modifier
-            .height(18.dp)
-            .pointerInput(durationMs) {
-                detectDragGestures(
-                    onDragStart = { off ->
-                        val frac = (off.x / size.width).coerceIn(0f, 1f)
-                        onSeek((frac * durationMs).toInt())
-                    },
-                    onDrag = { ch, _ ->
-                        val frac = (ch.position.x / size.width).coerceIn(0f, 1f)
-                        onSeek((frac * durationMs).toInt())
-                        ch.consume()
-                    },
-                )
-            },
-    ) {
-        val trackW = maxWidth
-        // buffered 灰条(占满;当前用 positionMs 蓝条叠加显示进度,buffered 信息
-        // 不再通过 Canvas 文本展示,这里保留 bufferedMs 字段作后续扩展)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color.White.copy(alpha = 0.18f))
-                .align(Alignment.Center),
-        )
-        // progress 蓝条(按 frac 填充)
-        val frac = (positionMs.toFloat() / durationMs.coerceAtLeast(1))
-            .coerceIn(0f, 1f)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(frac)
-                .height(3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(c.accent)
-                .align(Alignment.CenterStart),
-        )
-        // thumb(12dp 白圆)
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = (trackW - 12.dp) * frac)
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(Color.White),
-        )
-    }
-}
-
-/** 36dp 圆按钮(primary 44dp 白底 + 黑 icon)。 */
-@Composable
-private fun PreviewCtrlBtn(
-    icon: ImageVector,
-    contentDescription: String,
-    isPrimary: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val size = if (isPrimary) 44.dp else 36.dp
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(if (isPrimary) Color.White else Color.Transparent)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (isPrimary) Color(0xFF111111) else Color.White,
-            modifier = Modifier.size(if (isPrimary) 22.dp else 20.dp),
-        )
-    }
-}
-
 /* ─────────────────── Loading ─────────────────── */
 
 /** 全屏 spinner(c.bg 浅色,跟视频屏黑底过渡)。 */
@@ -799,12 +1030,4 @@ private fun LoadingBlock() {
 }
 
 /* ─────────────────── 工具 ─────────────────── */
-
-/** 毫秒 → "mm:ss" 或 "h:mm:ss"(超过 1 小时加 h)。 */
-private fun millisToClock(ms: Int): String {
-    val totalSec = (ms / 1000).coerceAtLeast(0)
-    val h = totalSec / 3600
-    val m = (totalSec % 3600) / 60
-    val s = totalSec % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
-}
+// millisToClock / formatFileSize / formatDate 已抽到 PreviewShared.kt。

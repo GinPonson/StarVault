@@ -48,6 +48,7 @@ fun SearchRoute(
                 e.isFolder -> { /* TODO: deep link 到 Files 屏对应 cid */ }
                 e.type == FileType.IMAGE -> nav.navigate(Route.PreviewImage(e.id))
                 e.type == FileType.VIDEO -> nav.navigate(Route.PreviewVideo(e.id))
+                e.type == FileType.AUDIO -> nav.navigate(Route.PreviewAudio(e.id))
                 else -> { /* TODO: 详情 / 下载 */ }
             }
         },

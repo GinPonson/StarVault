@@ -13,6 +13,7 @@ import com.starvault.ui.files.FilesRoute
 import com.starvault.ui.home.HomeRoute
 import com.starvault.ui.login.LoginRoute
 import com.starvault.ui.player.PlayerRoute
+import com.starvault.ui.preview.PreviewAudioRoute
 import com.starvault.ui.preview.PreviewImageRoute
 import com.starvault.ui.preview.PreviewVideoRoute
 import com.starvault.ui.profile.ProfileRoute
@@ -55,7 +56,8 @@ fun StarVaultNavHost(
         composable<Route.Files>     { entry -> FilesRoute(args = entry.toRoute(), nav = navController) }
         // Preview 屏：黑底全屏预览 IMAGE / VIDEO；不显示 bottom-nav
         composable<Route.PreviewImage> { entry -> PreviewImageRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
-        composable<Route.PreviewVideo> { entry -> PreviewVideoRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
+        composable<Route.PreviewVideo> { entry -> PreviewVideoRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }, nav = navController) }
+        composable<Route.PreviewAudio> { entry -> PreviewAudioRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }, nav = navController) }
         composable<Route.Album>     { AlbumRoute(nav = navController) }
         composable<Route.Player>    { entry -> PlayerRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
         composable<Route.Share>     { entry -> ShareRoute(args = entry.toRoute(), onBack = { navController.popBackStack() }) }
