@@ -65,7 +65,6 @@ fun FilesRoute(
     // M5 CRUD 弹层 state:
     //  - confirmDialog:删除确认(选 N 项 → 弹 N 项确认)
     //  - renameDialog:重命名(仅 N==1 时由 bulk 弹);用 FileEntry? 存要重命名的行
-    //  - moveExcludeIds:FolderPicker 排除规则(当前目录 cid + 已选 id 集合)
     //
     //  注意:这些 state 不存到 savedStateHandle(弹层是瞬时 UI,旋转屏关掉无所谓;用户能理解)
     var pendingDeleteIds by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -77,10 +76,11 @@ fun FilesRoute(
         savedStateHandle?.getStateFlow<String?>("pickedCid", null)?.collect { pickedCid ->
             if (pickedCid != null) {
                 val success = vm.state.value as? com.starvault.ui.files.FilesUiState.Success
-                if (success != null && success.selectedIds.isNotEmpty()) {
-                    vm.moveFiles(ids = success.selectedIds.toList(), toCid = pickedCid)
+                // 单文件 / 多选 统一走 selectedIds(单文件 MOVE 也走长按多选 + BulkBar.MOVE 通路)
+                val ids = success?.selectedIds?.toList().orEmpty()
+                if (success != null && ids.isNotEmpty()) {
+                    vm.moveFiles(ids = ids, toCid = pickedCid)
                 }
-                // 一次性 key,消费后清掉,避免重组重复触发
                 savedStateHandle["pickedCid"] = null
             }
         }
@@ -113,11 +113,11 @@ fun FilesRoute(
                     else -> { /* TODO: 详情页 / 下载 */ }
                 }
             },
-            // M3: row 右侧 "···" DropdownMenu 触发单文件下载
-            onDownload = { e -> vm.downloadEntry(e) },
             onCrumbClick = { index -> vm.popToFolder(index) },
             onCloseBulk = vm::clearSelection,
             // M5:bulk 5 路 when 在 VM 内;UI 层根据 result 弹弹层
+            // 单文件 / 多选 统一走 selectedIds:用户先长按选中(蓝点出现)→ BulkBar 操作
+            // — 行内不再有 `···` 单文件菜单入口
             onBulkAction = { action ->
                 when (action) {
                     com.starvault.ui.files.BulkAction.DELETE -> {

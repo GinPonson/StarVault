@@ -1,9 +1,11 @@
 package com.starvault.ui.files
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +30,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -126,12 +126,6 @@ fun FilesScreen(
     onSort: () -> Unit = {},
     onSelect: (FileEntry) -> Unit = {},
     onOpen: (FileEntry) -> Unit = {},
-    /**
-     * 单文件下载入口（M3）— FilesScreen 在 row 右侧 "···" DropdownMenu 里调它，
-     * 由 Route 接到 [com.starvault.ui.files.FilesViewModel.downloadEntry]。
-     * 视觉变更：仅当菜单展开时显示 DropdownMenu，collapsed 态与改前完全一致。
-     */
-    onDownload: (FileEntry) -> Unit = {},
     /** 点击面包屑中某一段（0-based index）；截断 stack 跳回该层。 */
     onCrumbClick: (Int) -> Unit = {},
     onCloseBulk: () -> Unit = {},
@@ -277,7 +271,6 @@ fun FilesScreen(
                                 selectedIds = state.selectedIds,
                                 onSelect = onSelect,
                                 onOpen = onOpen,
-                                onDownload = onDownload,
                                 isLoadingMore = state.isLoadingMore,
                                 hasMore = state.hasMore,
                                 onLoadMore = onLoadMore,
@@ -632,7 +625,6 @@ private fun FileList(
     selectedIds: Set<String>,
     onSelect: (FileEntry) -> Unit,
     onOpen: (FileEntry) -> Unit,
-    onDownload: (FileEntry) -> Unit,
     isLoadingMore: Boolean = false,
     hasMore: Boolean = false,
     onLoadMore: () -> Unit = {},
@@ -676,7 +668,6 @@ private fun FileList(
                 selected = f.id in selectedIds,
                 onSelect = { onSelect(f) },
                 onOpen = { onOpen(f) },
-                onDownload = { onDownload(f) },
             )
         }
         // 列表底部加载指示器：仅在还能加载下一页且正在加载时显示
@@ -700,28 +691,33 @@ private fun FileList(
 /** 距离底部 N 行时触发加载下一页；用户体验上"还没滚到底就已经在加载"。 */
 private const val LOAD_MORE_THRESHOLD = 4
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileListRow(
     file: FileEntry,
     selected: Boolean,
     onSelect: () -> Unit,
     onOpen: () -> Unit,
-    onDownload: () -> Unit,
 ) {
     val c = StarVaultTheme.colors
     val t = StarVaultTheme.typography
-    var moreExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) c.accentSoft else Color.Transparent)
-            .clickable(onClick = onOpen)
+            // 选中行背景:浅灰 #F0F0F0(对齐常规 Android Files / Material ListItem 选中态)
+            // 之前用 c.accentSoft(蓝调)在视觉上和右侧蓝色圆点 + 整页强调色叠加太"蓝",反而抢焦点
+            .background(if (selected) Color(0xFFF0F0F0) else Color.Transparent)
+            // 短按 = onOpen(打开文件/进目录);长按 = onSelect(同样进入多选 — 圆点常驻,长按是冗余
+            // 手势入口,方便盲操 / 习惯 iOS Files / 115 官方 app 长按选中的用户)
+            .combinedClickable(
+                onClick = onOpen,
+                onLongClick = onSelect,
+            )
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        CheckCircle(checked = selected, onClick = onSelect)
         FileThumb(type = file.type, size = 40, thumbnailUrl = file.thumbnailUrl)
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -740,47 +736,11 @@ private fun FileListRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Box {
-            Box(
-                modifier = Modifier
-                    .clickable { moreExpanded = true }
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.More,
-                    contentDescription = "更多",
-                    tint = c.muted,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            // "···" 展开菜单 — 单文件下载入口（M3）
-            DropdownMenu(
-                expanded = moreExpanded,
-                onDismissRequest = { moreExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Download,
-                                contentDescription = null,
-                                tint = c.fg,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Text("下载", style = t.body, color = c.fg)
-                        }
-                    },
-                    onClick = {
-                        moreExpanded = false
-                        onDownload()
-                    },
-                )
-            }
-        }
+        // 右侧圆点常驻:
+        //  - 默认(未选中):空心灰描边
+        //  - 选中:实心蓝底 + 白色对勾
+        // 圆点本身就是 onSelect 入口(tap 圆点 toggle 选中状态),用户既可点圆点也可长按行身
+        BlueDot(selected = selected, onClick = onSelect)
     }
 }
 
@@ -1109,29 +1069,38 @@ private fun ThumbError(fillMaxWidth: Boolean) {
     }
 }
 
-/* ───────────────────── CheckCircle ───────────────────── */
+/* ───────────────────── BlueDot ───────────────────── */
 
+/**
+ * 行右侧的多选圆点指示器 — 常驻显示,不被 `hasSelection` 门控:
+ *  - 未选中:空心灰描边圆(可点切换为选中)
+ *  - 已选中:实心蓝底 + 白色对勾 Icons.Check(对齐 GridCheckBadge 视觉)
+ *
+ * 与原 CheckCircle 的差别:之前用一个小白色矩形 border 充作"勾",勾形不明显;
+ * 现在直接用 Icons.Check,圆形蓝底 + 白勾的对比清晰,长按 / 点圆点后立刻给出强反馈。
+ */
 @Composable
-private fun CheckCircle(checked: Boolean, onClick: () -> Unit) {
+private fun BlueDot(selected: Boolean, onClick: () -> Unit) {
     val c = StarVaultTheme.colors
     Box(
         modifier = Modifier
             .size(22.dp)
             .clip(CircleShape)
-            .background(if (checked) c.accent else Color.Transparent)
+            .background(if (selected) c.accent else Color.Transparent)
             .border(
                 width = 1.6.dp,
-                color = if (checked) c.accent else Color(0xFFD0D0D0),
+                color = if (selected) c.accent else Color(0xFFD0D0D0),
                 shape = CircleShape,
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        if (checked) {
-            Box(
-                modifier = Modifier
-                    .size(width = 10.dp, height = 5.dp)
-                    .border(2.dp, Color.White, androidx.compose.foundation.shape.RoundedCornerShape(1.dp)),
+        if (selected) {
+            Icon(
+                imageVector = Icons.Check,
+                contentDescription = "已选",
+                tint = Color.White,
+                modifier = Modifier.size(12.dp),
             )
         }
     }
@@ -1149,10 +1118,11 @@ private fun BulkBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
+            // 52 → 60:每个 BulkActBtn 多了 9.5sp 文字标签,需要额外 8dp 高度
+            .height(60.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(StarVaultTheme.colors.fg)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -1169,7 +1139,7 @@ private fun BulkBar(
                 modifier = Modifier.size(14.dp),
             )
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "已选 ",
@@ -1187,28 +1157,49 @@ private fun BulkBar(
             )
         }
         Spacer(modifier = Modifier.weight(1f))
-        BulkActBtn(icon = Icons.Download, onClick = { onAction(BulkAction.DOWNLOAD) })
-        BulkActBtn(icon = Icons.Share,    onClick = { onAction(BulkAction.SHARE) })
-        BulkActBtn(icon = Icons.Move,     onClick = { onAction(BulkAction.MOVE) })
-        BulkActBtn(icon = Icons.Rename,   onClick = { onAction(BulkAction.RENAME) })
-        BulkActBtn(icon = Icons.Trash,    danger = true, onClick = { onAction(BulkAction.DELETE) })
+        BulkActBtn(icon = Icons.Download, label = "下载", onClick = { onAction(BulkAction.DOWNLOAD) })
+        BulkActBtn(icon = Icons.Share,    label = "分享", onClick = { onAction(BulkAction.SHARE) })
+        BulkActBtn(icon = Icons.Move,     label = "移动", onClick = { onAction(BulkAction.MOVE) })
+        BulkActBtn(icon = Icons.Rename,   label = "重命名", onClick = { onAction(BulkAction.RENAME) })
+        BulkActBtn(icon = Icons.Trash,    label = "删除",   danger = true, onClick = { onAction(BulkAction.DELETE) })
     }
 }
 
+/**
+ * 多选底栏单个 action 按钮 — icon + 9.5sp 文字标签,等宽 54dp 让 5 个按钮平分底栏。
+ *
+ * 暗底文字:icon tint 同原(白/浅粉红),文字用 white@0.85 保持视觉权重轻于 icon。
+ */
 @Composable
-private fun BulkActBtn(icon: ImageVector, danger: Boolean = false, onClick: () -> Unit) {
-    Box(
+private fun BulkActBtn(
+    icon: ImageVector,
+    label: String,
+    danger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Column(
         modifier = Modifier
-            .size(40.dp)
+            .width(54.dp)
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             tint = if (danger) Color(0xFFFF8A8A) else Color.White.copy(alpha = 0.85f),
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = androidx.compose.ui.text.TextStyle(
+                fontSize = 9.5.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium,
+            ),
         )
     }
 }

@@ -97,7 +97,6 @@ fun FolderPickerRoute(
         onCrumbClick = { index -> vm.popToFolder(index) },
         onCloseBulk = { /* picker 无 BulkBar */ },
         onBulkAction = { /* picker 无 BulkBar */ },
-        onDownload = { /* picker 不暴露下载 */ },
         onLoadMore = vm::loadMore,
     )
 }
