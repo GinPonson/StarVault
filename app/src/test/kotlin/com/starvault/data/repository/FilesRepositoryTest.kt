@@ -1,5 +1,6 @@
 package com.starvault.data.repository
 
+import com.starvault.core.ServiceRateLimiter
 import com.starvault.data.remote.cloud115.OpenFileApiService
 import com.starvault.data.remote.cloud115.OpenFileDeleteResponse
 import com.starvault.data.remote.cloud115.OpenFileMoveResponse
@@ -38,7 +39,11 @@ import retrofit2.Response
 class FilesRepositoryTest {
 
     private val api = mockk<OpenFileApiService>()
-    private val repo = FilesRepository(api)
+
+    // 高 permitsPerSecond 让限速器 intervalMs ≈ 1ms,测试不真限速(避免 runTest 内部时序问题)
+    private val noopLimiter = ServiceRateLimiter(permitsPerSecond = 1000.0)
+
+    private val repo = FilesRepository(api, noopLimiter)
 
     @Test
     fun `createFolder success returns data`() = runTest {

@@ -1,5 +1,6 @@
 package com.starvault.data.repository
 
+import com.starvault.core.ServiceRateLimiter
 import com.starvault.data.model.FileType
 import com.starvault.data.remote.cloud115.FileListResponse
 import com.starvault.data.remote.cloud115.OpenFileApiService
@@ -40,6 +41,7 @@ import kotlinx.serialization.json.jsonObject
  */
 class FilesRepository(
     private val api: OpenFileApiService,
+    private val rateLimiter: ServiceRateLimiter,
 ) {
     /**
      * 列出某目录的子项（单页）。
@@ -63,8 +65,8 @@ class FilesRepository(
         limit: Int = DEFAULT_PAGE_SIZE,
         order: String = DEFAULT_ORDER,
         asc: Int = DEFAULT_ASC,
-    ): Result<PagedFiles> {
-        return runCatching {
+    ): Result<PagedFiles> = rateLimiter.acquire {
+        runCatching {
             val body = api.listFiles(
                 cid = cid, offset = offset, limit = limit,
                 showDir = 1, fcMix = 1,
@@ -105,8 +107,8 @@ class FilesRepository(
         limit: Int = DEFAULT_PAGE_SIZE,
         order: String = DEFAULT_ORDER,
         asc: Int = DEFAULT_ASC,
-    ): Result<PagedFiles> {
-        return runCatching {
+    ): Result<PagedFiles> = rateLimiter.acquire {
+        runCatching {
             val body = api.searchFiles(
                 searchValue = searchValue,
                 offset = offset,
@@ -147,8 +149,8 @@ class FilesRepository(
      *  - HTTP / 业务失败 → Result.failure,message 来自 115 error/message 字段
      *  - 重名 / 路径非法 → 115 端 state=false + message 非空,直接抛 IllegalStateException
      */
-    suspend fun createFolder(name: String, pid: String): Result<OpenFolderAddData> {
-        return runCatching {
+    suspend fun createFolder(name: String, pid: String): Result<OpenFolderAddData> = rateLimiter.acquire {
+        runCatching {
             val body = api.addFolder(pid = pid, fileName = name).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "新建文件夹失败")
@@ -171,10 +173,12 @@ class FilesRepository(
      */
     suspend fun deleteFiles(ids: List<String>): Result<Unit> {
         if (ids.isEmpty()) return Result.success(Unit)
-        return runCatching {
-            val body = api.deleteFiles(fileIds = ids.joinToString(",")).requireSuccessful()
-            if (body.state != true) {
-                throw IllegalStateException(body.message ?: "删除失败")
+        return rateLimiter.acquire {
+            runCatching {
+                val body = api.deleteFiles(fileIds = ids.joinToString(",")).requireSuccessful()
+                if (body.state != true) {
+                    throw IllegalStateException(body.message ?: "删除失败")
+                }
             }
         }
     }
@@ -195,10 +199,12 @@ class FilesRepository(
      */
     suspend fun moveFiles(ids: List<String>, toCid: String): Result<Unit> {
         if (ids.isEmpty()) return Result.success(Unit)
-        return runCatching {
-            val body = api.moveFiles(fileIds = ids.joinToString(","), toCid = toCid).requireSuccessful()
-            if (body.state != true) {
-                throw IllegalStateException(body.message ?: "移动失败")
+        return rateLimiter.acquire {
+            runCatching {
+                val body = api.moveFiles(fileIds = ids.joinToString(","), toCid = toCid).requireSuccessful()
+                if (body.state != true) {
+                    throw IllegalStateException(body.message ?: "移动失败")
+                }
             }
         }
     }
@@ -221,8 +227,8 @@ class FilesRepository(
      *
      *  错误处理:对齐 [createFolder] 模式
      */
-    suspend fun renameFile(id: String, newName: String): Result<Unit> {
-        return runCatching {
+    suspend fun renameFile(id: String, newName: String): Result<Unit> = rateLimiter.acquire {
+        runCatching {
             val body = api.updateFile(fileId = id, fileName = newName).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "重命名失败")
@@ -281,23 +287,17 @@ class FilesRepository(
             val playLong = obj.intOrZero("play_long")
             val sha1 = obj.stringOrNull("sha1") ?: obj.stringOrNull("sha") ?: ""
             val mtime = obj.longOrZero("upt") ?: obj.longOrZero("tp") ?: 0L
-            // 缩略图 URL:proapi `thumb`,webapi `u`;都带 115 签名
+            // 缩略图 URL:proapi `thumb`,webapi `u`(字段名跟 OpenList `drivers/115_open/meta.go:Thumb()`
+            // 完全一致,1:1 复制 `o.Thumbnail` — 直拿 115 默认 `_100`(100px / 17KB),不做 size 重写)。
             //
-            // 已知 115 thumb.115.com → imgjump.115.com CDN 限制:
-            //  1. 只支持两种 size 档位:`_0`(原图档,实测 370×320 / 40KB PNG,**8-bit 调色板 256 色**)
-            //     和 `_100`(100px 缩略图,17KB)。`_200/_300/_500` 全部 404,不要尝试拼接。
-            //  2. 强制 8-bit palette 256 色量化 — 用户上传的彩色 / 渐变图在缩略图里会变成
-            //     色带 banding,看起来"糊"。这是 CDN 端硬限制,客户端无法绕过。
-            //  3. `uo` 字段(p115client 标 "source_url")实测跟 `thumb` 同 MD5,不是用户上传的
-            //     原图,不要加进 fallback 链当"高色深档"用。
+            // 已知 115 CDN 端硬限制:`8-bit palette 256 色量化` 任何 size 档位都强制 banding,
+            // 跟 `_0`(370px / 40KB)还是 `_100` 一样糊,所以不浪费一次正则替换。
             //
-            // 当前策略:统一走 `_0` 拿最大尺寸档,Coil 用 size hint downsample 到目标像素。
-            // 渐变 banding 是已知 UX 妥协,等 115 改 CDN。
+            // `uo` 字段(p115client 标 "source_url")实测跟 `thumb` 同 MD5,不进 fallback 链。
             //
-            // 正则说明:URL 形如 `xxx_100?sig=xxx`(无扩展名) 或 `xxx_100.jpg?`(带扩展名),
-            // 用 `_\d+(?=\.|$|\?)` 兼容两种形态和行尾形态,防止 115 未来改格式导致漏匹配。
-            val rawThumb = obj.stringOrNull("thumb") ?: obj.stringOrNull("u") ?: ""
-            val thumbnailUrl = rawThumb.replace(Regex("_\\d+(?=\\.|$|\\?)"), "_0")
+            // Coil 下游用 size hint downsample 到目标像素(`FilesScreen` 列表行 100dp @ 3x ≈ 300px
+            // 物理像素,`_100` downscale 后可能略糊但跟 OpenList 行为 1:1)。
+            val thumbnailUrl = obj.stringOrNull("thumb") ?: obj.stringOrNull("u") ?: ""
             ParsedFileItem(
                 id = fid,
                 parentId = parentId,

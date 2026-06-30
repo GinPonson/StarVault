@@ -1,5 +1,7 @@
 package com.starvault.data.repository
 
+import com.starvault.core.ServiceRateLimiter
+import com.starvault.data.preview.DownUrlCache
 import com.starvault.data.remote.cloud115.OpenFileApiService
 import com.starvault.data.remote.cloud115.requireSuccessful
 
@@ -37,6 +39,8 @@ import com.starvault.data.remote.cloud115.requireSuccessful
  */
 class MediaPreviewRepository(
     private val api: OpenFileApiService,
+    private val downUrlCache: DownUrlCache,
+    private val rateLimiter: ServiceRateLimiter,
 ) {
     /**
      * 拉单个文件的 metadata。
@@ -44,8 +48,8 @@ class MediaPreviewRepository(
      * @param fid 115 文件 id(从 FilesScreen FileEntry.id 拿到)
      * @return Result.success([MediaMetadata]) / Result.failure
      */
-    suspend fun fetchMetadata(fid: String): Result<MediaMetadata> {
-        return runCatching {
+    suspend fun fetchMetadata(fid: String): Result<MediaMetadata> = rateLimiter.acquire {
+        runCatching {
             val body = api.getInfo(fileId = fid).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "code=${body.code} fid=$fid")
@@ -93,21 +97,23 @@ class MediaPreviewRepository(
      * @param pickCode 调 getInfo 拿到的 pick_code 字段
      * @return Result.success(url) / Result.failure
      */
-    suspend fun fetchImageOriginalUrl(fileId: String, pickCode: String): Result<String> {
-        return runCatching {
-            val body = api.downloadUrl(pickCode = pickCode).requireSuccessful()
-            if (body.state != true) {
-                throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
+    suspend fun fetchImageOriginalUrl(fileId: String, pickCode: String): Result<String> = rateLimiter.acquire {
+        downUrlCache.getOrFetch(fileId) {
+            runCatching {
+                val body = api.downloadUrl(pickCode = pickCode).requireSuccessful()
+                if (body.state != true) {
+                    throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
+                }
+                body
+            }.mapCatching { body ->
+                // 优先按 fileId 精确取(跟 OpenList 一致);取不到就 fallback 第一个 entry
+                val item = body.data[fileId]
+                    ?: body.data.values.firstOrNull()
+                    ?: throw IllegalStateException("无法获取原图 URL:downurl 返回空")
+                val url = item.url.url.takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("无法获取原图 URL")
+                url
             }
-            body
-        }.mapCatching { body ->
-            // 优先按 fileId 精确取(跟 OpenList 一致);取不到就 fallback 第一个 entry
-            val item = body.data[fileId]
-                ?: body.data.values.firstOrNull()
-                ?: throw IllegalStateException("无法获取原图 URL:downurl 返回空")
-            val url = item.url.url.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("无法获取原图 URL")
-            url
         }
     }
 
@@ -126,21 +132,23 @@ class MediaPreviewRepository(
      * @param pickCode 调 getInfo 拿到的 pick_code 字段
      * @return Result.success(url) / Result.failure
      */
-    suspend fun fetchAudioStreamUrl(fileId: String, pickCode: String): Result<String> {
-        return runCatching {
-            val body = api.downloadUrl(pickCode = pickCode).requireSuccessful()
-            if (body.state != true) {
-                throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
+    suspend fun fetchAudioStreamUrl(fileId: String, pickCode: String): Result<String> = rateLimiter.acquire {
+        downUrlCache.getOrFetch(fileId) {
+            runCatching {
+                val body = api.downloadUrl(pickCode = pickCode).requireSuccessful()
+                if (body.state != true) {
+                    throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
+                }
+                body
+            }.mapCatching { body ->
+                // 优先按 fileId 精确取(跟 OpenList 一致);取不到就 fallback 第一个 entry
+                val item = body.data[fileId]
+                    ?: body.data.values.firstOrNull()
+                    ?: throw IllegalStateException("无法获取音频 URL:downurl 返回空")
+                val url = item.url.url.takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("无法获取音频 URL")
+                url
             }
-            body
-        }.mapCatching { body ->
-            // 优先按 fileId 精确取(跟 OpenList 一致);取不到就 fallback 第一个 entry
-            val item = body.data[fileId]
-                ?: body.data.values.firstOrNull()
-                ?: throw IllegalStateException("无法获取音频 URL:downurl 返回空")
-            val url = item.url.url.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("无法获取音频 URL")
-            url
         }
     }
 
@@ -155,8 +163,8 @@ class MediaPreviewRepository(
      * @param pickCode 调 getInfo 拿到的 pick_code 字段
      * @return Result.success([VideoM3u8] 列表) / Result.failure
      */
-    suspend fun fetchVideoM3u8Options(pickCode: String): Result<List<VideoM3u8>> {
-        return runCatching {
+    suspend fun fetchVideoM3u8Options(pickCode: String): Result<List<VideoM3u8>> = rateLimiter.acquire {
+        runCatching {
             val body = api.videoPlay(pickCode = pickCode).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "code=${body.code} pickCode=$pickCode")
@@ -185,8 +193,8 @@ class MediaPreviewRepository(
      * @param fileId  115 file id(从 [fetchMetadata] 拿)
      * @param star    `true`=设置星标(实心 ❤️),`false`=取消星标(空心 ♡)
      */
-    suspend fun setStar(fileId: String, star: Boolean): Result<Unit> {
-        return runCatching {
+    suspend fun setStar(fileId: String, star: Boolean): Result<Unit> = rateLimiter.acquire {
+        runCatching {
             val body = api.updateFile(fileId = fileId, star = if (star) 1 else 0).requireSuccessful()
             if (body.state != true) {
                 throw IllegalStateException(body.message ?: "code=${body.code} fileId=$fileId")

@@ -18,6 +18,7 @@ import com.starvault.data.download.DownloadSaveUri
 import com.starvault.data.download.OssDownloader
 import com.starvault.data.downloadworker.DownloadExecutor
 import com.starvault.data.downloadworker.DownloadWork
+import com.starvault.data.preview.DownUrlCache
 import com.starvault.data.repository.AuthRepository
 import com.starvault.data.repository.DownloadRepository
 import com.starvault.data.repository.FilesRepository
@@ -286,6 +287,22 @@ object ServiceLocator {
         private set
 
     /**
+     * 5min downurl 内存缓存(M6)— [MediaPreviewRepository.fetchImageOriginalUrl] /
+     * [MediaPreviewRepository.fetchAudioStreamUrl] 5min 内同 fid 命中缓存,免一次 proapi 往返。
+     * 进程内单例,token 刷新后调 [DownUrlCache.clear] 全清。
+     */
+    lateinit var downUrlCache: DownUrlCache
+        private set
+
+    /**
+     * 1r/s 简易限速器(M6)— 对齐 OpenList `Addition.LimitRate=1r/s` 默认值,防恶意循环 /
+     * 异常路径高频调用触发 115 开放平台风控。
+     * Repository 层 acquire wrap,不挂 OkHttp Interceptor(runBlocking 阻塞线程池反模式)。
+     */
+    lateinit var serviceRateLimiter: ServiceRateLimiter
+        private set
+
+    /**
      * 测试用 — 重置 filesRefreshTrigger 和 filesRefreshFlow,关旧 channel 重建。
      * Channel 是 single-consumer,前面 test 创建的 VM collector 还活着,新 emit 的 Unit
      * 会被旧 collector 抢走。`@Before` 调一次清状态。
@@ -343,8 +360,17 @@ object ServiceLocator {
             openUserApi = openUserApi,
             appScope    = appScope,
         )
-        filesRepository = FilesRepository(api = openFileApi)
-        mediaPreviewRepository = MediaPreviewRepository(api = openFileApi)
+
+        // M6:5min downurl 缓存 + 1r/s 限速器先注入,Repository 构造时引用。
+        downUrlCache = DownUrlCache()
+        serviceRateLimiter = ServiceRateLimiter()
+
+        filesRepository = FilesRepository(api = openFileApi, rateLimiter = serviceRateLimiter)
+        mediaPreviewRepository = MediaPreviewRepository(
+            api = openFileApi,
+            downUrlCache = downUrlCache,
+            rateLimiter = serviceRateLimiter,
+        )
 
         // M2 upload 依赖(Phase 3 引入)
         uploadInitClient = UploadInitClient(api = openUploadApi)
