@@ -34,6 +34,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -46,11 +48,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import coil3.compose.SubcomposeAsyncImageContent
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -58,6 +63,39 @@ import coil3.size.Size as CoilSize
 import com.starvault.component.Icons
 import com.starvault.data.model.FileType
 import com.starvault.theme.StarVaultTheme
+
+/* ───────────────────── FAB scroll-aware ───────────────────── */
+
+/**
+ * 滚动方向阈值(像素) — `delta > threshold` 视为"在向下滚",`delta < -threshold` 视为"在向上滚",
+ * `|delta| ≤ threshold` 视为"静止 / 微调"。对齐竞品手感:小幅抖动不触发 FAB 切换。
+ */
+internal const val FAB_SCROLL_THRESHOLD_PX = 4
+
+/**
+ * FAB 隐藏后多久自动重新显示(毫秒) — 对齐竞品"静止 5s 也显"。
+ * 即使之前是向下滚触发隐藏,静止 5s 后也把 FAB 显示回来。
+ */
+internal const val FAB_IDLE_RESHOW_MS = 5_000L
+
+/**
+ * 滚动方向枚举(纯函数返回值)— 用于 FAB scroll-aware 显隐决策。
+ */
+internal enum class FabScrollDir { DOWN, UP, IDLE }
+
+/**
+ * FAB scroll-aware 方向判定纯函数 — 易测试,无副作用。
+ *
+ * @param delta 当前滚动位置 - 上次滚动位置(正=向下滚,负=向上滚)
+ * @param threshold 判定阈值,默认 [FAB_SCROLL_THRESHOLD_PX]
+ * @return 方向枚举
+ */
+internal fun resolveFabScrollDir(delta: Int, threshold: Int = FAB_SCROLL_THRESHOLD_PX): FabScrollDir =
+    when {
+        delta > threshold -> FabScrollDir.DOWN
+        delta < -threshold -> FabScrollDir.UP
+        else -> FabScrollDir.IDLE
+    }
 
 /**
  * Files 屏（对应 design/06-files.html 的"我的文件" 1:1 复刻）。
@@ -111,6 +149,81 @@ fun FilesScreen(
     val t = StarVaultTheme.typography
     // 拦截系统 back：Files 在 bottom-nav tab，无父栈；让 onBack 决定回上一级目录或退出屏
     BackHandler(enabled = true) { onBack() }
+
+    // ─── FAB scroll-aware:hoist listState/gridState 到 FilesScreen 顶层,让 FAB 能监听滚动 ───
+    // hoist 原因:FileList/FileGrid 在 Box 内渲染,FAB LaunchedEffect 也在 FilesScreen 作用域,
+    // 不 hoist 的话 FAB 拿不到 listState。
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    /**
+     * FAB 显隐状态(默认 true)。三态转移规则:
+     *  - 向下滚 ≥ threshold → false
+     *  - 向上滚 ≥ threshold → true
+     *  - 静止 ≥ 5s          → true(无论之前是 true/false)
+     * LaunchedEffect 内 50ms polling 驱动此 state(详见 LaunchedEffect 注释)。
+     */
+    val fabVisible = remember { mutableStateOf(true) }
+    /**
+     * 综合决策:FAB scroll-aware + 多选互斥。多选时 BulkBar 占据底栏,FAB 隐藏避免叠层挡视线
+     * (对齐竞品截图第一张)。
+     */
+    val showFab by remember(state) {
+        derivedStateOf {
+            val noBulk = (state as? FilesUiState.Success)?.selectedIds?.isEmpty() ?: true
+            fabVisible.value && noBulk
+        }
+    }
+    LaunchedEffect(listState, gridState, state) {
+        // 把"当前激活的滚动位置"打成单一 Int — index * 100000 + offset,
+        // 防止 list/grid 切换时 index/offset 错位(各 listState 内部坐标独立)。
+        // viewMode 切到 GRID 时读 gridState,否则读 listState。
+        val currentOffset: () -> Int = {
+            val viewMode = (state as? FilesUiState.Success)?.viewMode
+            if (viewMode == ViewMode.GRID) {
+                gridState.firstVisibleItemIndex * 100_000 + gridState.firstVisibleItemScrollOffset
+            } else {
+                listState.firstVisibleItemIndex * 100_000 + listState.firstVisibleItemScrollOffset
+            }
+        }
+        var last = currentOffset()
+        // 上一次滚动"变化"时刻:用于 idle 计时 — 只在 DOWN/UP 或 offset 微变时刷新,
+        // offset 完全静止 delta==0 时不刷新,5s 后触发 fabVisible=true 重新显示。
+        // polling 50ms 是为了兜住"scroll 完全静止时 snapshotFlow 不 emit"的场景
+        // (input swipe 不是 fling,LazyColumn 直接停,没有 fling 减速阶段触发 IDLE 的 emit)。
+        var lastChangeMs = System.currentTimeMillis()
+        while (isActive) {
+            val current = currentOffset()
+            val delta = current - last
+            when (resolveFabScrollDir(delta)) {
+                FabScrollDir.DOWN -> {
+                    fabVisible.value = false
+                    lastChangeMs = System.currentTimeMillis()
+                }
+                FabScrollDir.UP -> {
+                    fabVisible.value = true
+                    lastChangeMs = System.currentTimeMillis()
+                }
+                FabScrollDir.IDLE -> {
+                    // |delta| < threshold 时,只在 delta != 0 时刷新(微变算"在动");
+                    // delta == 0 表示完全静止,lastChangeMs 保持,5s 后触发自动 re-show。
+                    if (delta != 0) lastChangeMs = System.currentTimeMillis()
+                }
+            }
+            last = current
+            // idle 持续 ≥ 5s + 当前 fabVisible=false → 自动重新显示
+            if (!fabVisible.value &&
+                System.currentTimeMillis() - lastChangeMs >= FAB_IDLE_RESHOW_MS
+            ) {
+                fabVisible.value = true
+            }
+            delay(50)
+        }
+    }
+    // 平滑过渡(180ms easeOut) — showFab 切 false 时 alpha 1→0 + 向下移 80dp,
+    // 对齐 Material FAB hideOnScroll 标准动画时长。
+    val fabAlpha by animateFloatAsState(if (showFab) 1f else 0f, animationSpec = tween(180), label = "fabAlpha")
+    val fabTranslateY by animateFloatAsState(if (showFab) 0f else 80f, animationSpec = tween(180), label = "fabTranslateY")
+
     Box(modifier = modifier.fillMaxSize().background(c.bg)) {
         when (state) {
             is FilesUiState.Loading -> {
@@ -159,6 +272,7 @@ fun FilesScreen(
                     Box(modifier = Modifier.fillMaxSize()) {
                         when (state.viewMode) {
                             ViewMode.LIST -> FileList(
+                                listState = listState,
                                 files = visible(state),
                                 selectedIds = state.selectedIds,
                                 onSelect = onSelect,
@@ -169,6 +283,7 @@ fun FilesScreen(
                                 onLoadMore = onLoadMore,
                             )
                             ViewMode.GRID -> FileGrid(
+                                gridState = gridState,
                                 files = visible(state),
                                 selectedIds = state.selectedIds,
                                 onSelect = onSelect,
@@ -197,7 +312,13 @@ fun FilesScreen(
                     onAddNewFolder = onAddNewFolder,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 20.dp, bottom = if (state.selectedIds.isNotEmpty()) 80.dp else 90.dp),
+                        .padding(end = 20.dp, bottom = if (state.selectedIds.isNotEmpty()) 80.dp else 90.dp)
+                        // graphicsLayer 而非 AnimatedVisibility — 不参与 layout 重排,纯 GPU 合成层动画,
+                        // 切换 viewMode / rotate screen 也不闪。showFab=综合 fabVisible + selectedIds 互斥。
+                        .graphicsLayer {
+                            alpha = fabAlpha
+                            translationY = fabTranslateY
+                        },
                 )
             }
         }
@@ -506,6 +627,7 @@ private fun SectionHead(visibleCount: Int, sortLabel: String, onSort: () -> Unit
  */
 @Composable
 private fun FileList(
+    listState: androidx.compose.foundation.lazy.LazyListState,
     files: List<FileEntry>,
     selectedIds: Set<String>,
     onSelect: (FileEntry) -> Unit,
@@ -515,14 +637,14 @@ private fun FileList(
     hasMore: Boolean = false,
     onLoadMore: () -> Unit = {},
 ) {
-    val listState = rememberLazyListState()
+    // listState hoist 到 FilesScreen 顶层,这样 FAB LaunchedEffect 也能读到滚动位置。
     // 滚动到接近底部时触发 loadMore。
     // 关键：用 hasMore/isLoadingMore 作 derivedStateOf 的 calculation key——这样当 hasMore
     // 或 isLoadingMore 变化（切目录 / loadMore 完成）时 State 会被重新生成，捕获到**当前**的
     // 值；否则老的 `remember { derivedStateOf { ... } }` 会固定捕获首次组合时的值，导致切目录后
     // hasMore=false 时停止加载；true 时继续（用户报的"只加载 50 条"即此分支）。
-    // 同时把 listState 也作为 key：listState 本身在切目录时是同一个实例（rememberLazyListState
-    // 只创建一次），但其内部 layoutInfo 仍是 State<T>，scroll 时自动触发 derivedStateOf 重算。
+    // 同时把 listState 也作为 key：listState 本身在切目录时是同一个实例（hoist 后不变），
+    // 但其内部 layoutInfo 仍是 State<T>，scroll 时自动触发 derivedStateOf 重算。
     val shouldLoadMore by remember(hasMore, isLoadingMore, listState) {
         derivedStateOf {
             if (!hasMore || isLoadingMore) return@derivedStateOf false
@@ -672,6 +794,7 @@ private fun FileListRow(
  */
 @Composable
 private fun FileGrid(
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     files: List<FileEntry>,
     selectedIds: Set<String>,
     onSelect: (FileEntry) -> Unit,
@@ -681,7 +804,7 @@ private fun FileGrid(
     onLoadMore: () -> Unit = {},
 ) {
     val c = StarVaultTheme.colors
-    val gridState = rememberLazyGridState()
+    // gridState hoist 到 FilesScreen 顶层,这样 FAB LaunchedEffect 也能读到滚动位置。
     // 关键：同 FileList 一样把 hasMore/isLoadingMore/gridState 放进 remember 的 key，
     // 否则切目录后 closure 捕获 stale hasMore=false，导致无法继续加载。
     val shouldLoadMore by remember(hasMore, isLoadingMore, gridState) {
