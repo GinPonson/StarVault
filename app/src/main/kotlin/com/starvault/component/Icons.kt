@@ -18,17 +18,13 @@ import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.QueueMusic
@@ -59,27 +55,34 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.starvault.component.icons.*
 
 /**
- * StarVault icon library — 全部使用 Material Icons Extended + 本地生成的 Solar Bold。
+ * StarVault icon library — 两套图标源,按视觉权重分工:
  *
- * 没有任何手写 SVG 路径：所有 52 个 Material icon 都映射到 Material 的 7000+ icon 之一，
- * 另外 7 个文件类型缩略图 icon 来自 Solar Bold (480 Design, CC BY 4.0),从官方 SVG 用
- * s2c 生成到 `com.starvault.component.icons.Solar*`。
+ *  • **Solar Bold (12 个)**:BottomNav 4 + File thumbs 8 — App 内视觉权重最高 /
+ *    最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列 (480 Design, CC BY 4.0),
+ *    通过 s2c 从官方 SVG 生成到 `com.starvault.component.icons.Solar*`。
+ *    跨屏视觉一致。
  *
- * Material 变体约定：
- *  - `Outlined`              — 描边 icon（绝大多数导航/操作类）
- *  - `Filled`                — 实心 icon（Play / Pause / Star / Favorite / CheckCircle）
- *  - `AutoMirrored.Outlined` — 方向敏感 icon（Back / Help，RTL 自动镜像）
+ *  • **Material Icons Extended (46 个)**:AppBar / 工具栏 / 玩家 / Profile 行 /
+ *    列表操作 — 次要 icon 维持 Material Outlined (Apache 2.0),减少 s2c 生成工作量。
  *
- * 文件类型缩略图（**浅底背景 + 深彩色 icon**）：用 Solar Bold 变体,见底部 [File thumbs] 分组。
- * 工具栏 / 透明背景 icon：用 Material Outlined 变体，视觉重量匹配透明背景。
+ * Material 变体约定(只对 46 个 Material icon 适用):
+ *  - `Outlined`              — 描边 icon(绝大多数导航/操作类)
+ *  - `Filled`                — 实心 icon(Play / Pause / Star / Favorite / CheckCircle)
+ *  - `AutoMirrored.Outlined` — 方向敏感 icon(Back / Help,RTL 自动镜像)
+ *
+ * 文件类型缩略图(**浅底背景 + 深彩色 icon**):Solar Bold 变体,见底部 [File thumbs] 分组。
+ * 工具栏 / 透明背景 icon:Material Outlined 变体,视觉重量匹配透明背景。
  */
 object Icons {
 
-    /* ─────────────────── BottomNav (4) ─────────────────── */
-    val Home: ImageVector    get() = MaterialIcons.Outlined.Home
-    val Files: ImageVector   get() = MaterialIcons.Outlined.Folder
-    val Album: ImageVector   get() = MaterialIcons.Outlined.PhotoLibrary
-    val Profile: ImageVector get() = MaterialIcons.Outlined.Person
+    /* ─────────────────── BottomNav (4, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0): Home / Folder / Gallery / User.
+    // 与 File thumbs 8 个 icon 统一视觉语言 (Solid fill, 圆润几何). Files / Album
+    // 复用现有 SolarFolder / SolarGallery (与 file thumb 同 shape, 靠尺寸/底色区分).
+    val Home: ImageVector    get() = SolarHome
+    val Files: ImageVector   get() = SolarFolder
+    val Album: ImageVector   get() = SolarGallery
+    val Profile: ImageVector get() = SolarUser
 
     /* ─────────────────── Common AppBar (8) ─────────────────── */
     val Scan: ImageVector     get() = MaterialIcons.Outlined.QrCodeScanner
