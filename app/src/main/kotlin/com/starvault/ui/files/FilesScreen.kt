@@ -59,7 +59,9 @@ import coil3.compose.SubcomposeAsyncImageContent
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size as CoilSize
+import com.starvault.component.IconBtn
 import com.starvault.component.Icons
+import com.starvault.component.ScreenAppBar
 import com.starvault.component.ThumbStyle
 import com.starvault.component.thumbStyle
 import com.starvault.data.model.FileType
@@ -231,12 +233,11 @@ fun FilesScreen(
             }
             is FilesUiState.Success -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    FilesAppBar(
-                        onBack = onBack,
-                        onSearch = onSearch,
-                        onTransfers = onTransfers,
-                        onMore = onMore,
-                    )
+                    ScreenAppBar(title = "我的文件") {
+                        IconBtn(icon = Icons.Search,    onClick = onSearch,    contentDescription = "搜索")
+                        IconBtn(icon = Icons.Transfers, onClick = onTransfers, contentDescription = "传输中心")
+                        IconBtn(icon = Icons.More,      onClick = onMore,      contentDescription = "更多")
+                    }
                     Crumb(
                         folderPath = state.folderPath,
                         totalCount = state.all.size,
@@ -323,54 +324,8 @@ private fun visible(s: FilesUiState.Success): List<FileEntry> =
     if (s.activeType == null) s.all else s.all.filter { it.type == s.activeType }
 
 /* ───────────────────── AppBar ───────────────────── */
-
-@Composable
-private fun FilesAppBar(
-    onBack: () -> Unit,
-    onSearch: () -> Unit,
-    onTransfers: () -> Unit,
-    onMore: () -> Unit,
-) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp)
-            .padding(top = 4.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "我的文件",
-            style = t.large,
-            color = c.fg,
-            modifier = Modifier.weight(1f),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(icon = Icons.Search,     onClick = onSearch,    contentDescription = "搜索")
-            IconBtn(icon = Icons.Transfers,  onClick = onTransfers, contentDescription = "传输中心")
-            IconBtn(icon = Icons.More,       onClick = onMore,      contentDescription = "更多")
-        }
-    }
-}
-
-@Composable
-private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = StarVaultTheme.colors.fg,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+// AppBar 走 [ScreenAppBar] 共享组件 — 见 com.starvault.component.ScreenAppBar
+// (padding 20/20/8/12, t.large 22sp 标题, 右侧 icon 间距 4dp)。
 
 /* ───────────────────── Crumb ───────────────────── */
 
