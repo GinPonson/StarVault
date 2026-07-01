@@ -2,7 +2,6 @@ package com.starvault.component
 
 import androidx.compose.material.icons.Icons as MaterialIcons
 // Outlined icons (绝大多数)
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Cast
@@ -22,18 +21,13 @@ import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PrivacyTip
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
@@ -43,7 +37,6 @@ import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.ViewModule
 import androidx.compose.material.icons.outlined.Wallpaper
 // AutoMirrored
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 // Filled（实心 icon + 文件类型缩略图）
 import androidx.compose.material.icons.filled.CheckCircle
@@ -57,12 +50,12 @@ import com.starvault.component.icons.*
 /**
  * StarVault icon library — 两套图标源,按视觉权重分工:
  *
- *  • **Solar Bold (12 个)**:BottomNav 4 + File thumbs 8 — App 内视觉权重最高 /
- *    最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列 (480 Design, CC BY 4.0),
- *    通过 s2c 从官方 SVG 生成到 `com.starvault.component.icons.Solar*`。
- *    跨屏视觉一致。
+ *  • **Solar Bold (20 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 — App 内视觉
+ *    权重最高 / 最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列
+ *    (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
+ *    `com.starvault.component.icons.Solar*`。跨屏视觉一致。
  *
- *  • **Material Icons Extended (46 个)**:AppBar / 工具栏 / 玩家 / Profile 行 /
+ *  • **Material Icons Extended (38 个)**:工具栏 / 玩家 / Profile 行 /
  *    列表操作 — 次要 icon 维持 Material Outlined (Apache 2.0),减少 s2c 生成工作量。
  *
  * Material 变体约定(只对 46 个 Material icon 适用):
@@ -84,15 +77,20 @@ object Icons {
     val Album: ImageVector   get() = SolarGallery
     val Profile: ImageVector get() = SolarUser
 
-    /* ─────────────────── Common AppBar (8) ─────────────────── */
-    val Scan: ImageVector     get() = MaterialIcons.Outlined.QrCodeScanner
-    val Bell: ImageVector     get() = MaterialIcons.Outlined.Notifications
-    val More: ImageVector     get() = MaterialIcons.Outlined.MoreHoriz
-    val Search: ImageVector   get() = MaterialIcons.Outlined.Search
-    val Settings: ImageVector get() = MaterialIcons.Outlined.Settings
-    val Wallet: ImageVector   get() = MaterialIcons.Outlined.AccountBalanceWallet
-    val Close: ImageVector    get() = MaterialIcons.Outlined.Close
-    val Back: ImageVector     get() = MaterialIcons.AutoMirrored.Outlined.ArrowBack
+    /* ─────────────────── Common AppBar (8, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0) — 跨屏可见度最高的工具栏 icon.
+    // 与 BottomNav + File thumbs 共 20 个 Solar Bold 统一视觉语言 (Solid fill, 圆润几何).
+    //
+    // Back 特殊性:Solar Bold 无 AutoMirrored 概念 (Alt Arrow Left 是固定朝向左),
+    // call site 需在 RTL locale 下用 `Modifier.graphicsLayer(scaleX = -1f)` 镜像。
+    val Scan: ImageVector     get() = SolarScan
+    val Bell: ImageVector     get() = SolarBell
+    val More: ImageVector     get() = SolarMore
+    val Search: ImageVector   get() = SolarSearch
+    val Settings: ImageVector get() = SolarSettings
+    val Wallet: ImageVector   get() = SolarWallet
+    val Close: ImageVector    get() = SolarClose
+    val Back: ImageVector     get() = SolarBack
 
     /* ─────────────────── Player (10) ─────────────────── */
     val Subtitle: ImageVector     get() = MaterialIcons.Outlined.ClosedCaption
