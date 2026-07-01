@@ -276,7 +276,7 @@ private fun thumbBrushAndIcon(type: FileType): Pair<Brush, ImageVector> {
     }
     val icon = when (type) {
         FileType.FOLDER -> Icons.Folder
-        FileType.VIDEO  -> Icons.Play
+        FileType.VIDEO  -> Icons.Video
         FileType.IMAGE  -> Icons.Image
         FileType.AUDIO  -> Icons.Music
         FileType.DOC    -> Icons.Doc

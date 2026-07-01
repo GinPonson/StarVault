@@ -51,17 +51,12 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 // Filled（实心 icon + 文件类型缩略图）
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Folder as FolderFilled
-import androidx.compose.material.icons.filled.FolderZip
-import androidx.compose.material.icons.filled.Image as ImageFilled
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.starvault.component.icons.*
 
 /**
  * StarVault icon library — 全部使用 Material Icons Extended。
@@ -71,11 +66,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
  *
  * Material 变体约定：
  *  - `Outlined`              — 描边 icon（绝大多数导航/操作类）
- *  - `Filled`                — 实心 icon（Play / Pause / Star / Favorite / CheckCircle +
- *                              文件类型缩略图 Folder / Image / MusicNote / Description / FolderZip / PlayCircle）
+ *  - `Filled`                — 实心 icon（Play / Pause / Star / Favorite / CheckCircle）
  *  - `AutoMirrored.Outlined` — 方向敏感 icon（Back / Help，RTL 自动镜像）
  *
- * 文件类型缩略图（带色块背景 + 白色实心 icon）：用 Filled 变体，视觉重量跟带色背景匹配。
+ * 文件类型缩略图（带色块背景 + 白色 icon）：用 Phosphor Filled 变体，
+ * 见底部 [File thumbs] 分组。
  * 工具栏 / 透明背景 icon：用 Outlined 变体，视觉重量匹配透明背景。
  */
 object Icons {
@@ -162,13 +157,13 @@ object Icons {
     /* ─────────────────── WallpaperCard (1) ─────────────────── */
     val Storage: ImageVector get() = MaterialIcons.Outlined.Wallpaper
 
-    /* ─────────────────── File thumbs (7, Material Filled) ─────────────────── */
-    // 全部用 Filled 变体以匹配 FileRow 32dp 色块背景 + 居中白色 icon 的视觉重量
-    val Folder: ImageVector    get() = MaterialIcons.Filled.FolderFilled
-    val NewFolder: ImageVector get() = MaterialIcons.Outlined.CreateNewFolder
-    val Image: ImageVector     get() = MaterialIcons.Filled.ImageFilled
-    val Music: ImageVector     get() = MaterialIcons.Filled.MusicNote
-    val Doc: ImageVector       get() = MaterialIcons.Filled.Description
-    val Archive: ImageVector   get() = MaterialIcons.Filled.FolderZip
-    val Video: ImageVector     get() = MaterialIcons.Filled.PlayCircle
+    /* ─────────────────── File thumbs (7, Phosphor Filled) ─────────────────── */
+    // 本地生成的 Phosphor Fill 图标:视觉重量统一,适配 40dp 色块背景 + 居中白色 icon
+    val Folder: ImageVector    get() = FolderFill
+    val NewFolder: ImageVector get() = FolderPlusFill
+    val Image: ImageVector     get() = FileImageFill
+    val Music: ImageVector     get() = FileAudioFill
+    val Doc: ImageVector       get() = FileTextFill
+    val Archive: ImageVector   get() = FileZipFill
+    val Video: ImageVector     get() = FileVideoFill
 }
