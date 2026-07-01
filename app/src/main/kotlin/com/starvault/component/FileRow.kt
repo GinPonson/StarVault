@@ -240,7 +240,7 @@ private val BrokenImageTint = Color(0xFF52525B)
  * - AUDIO : purple-50 + purple-600
  * - DOC   : green-50 + green-600
  * - ZIP   : rose-50 + rose-600
- * - OTHER : zinc-50 + zinc-500
+ * - OTHER : zinc-50 + zinc-500 + SolarFile 通用纸 icon(无 URL / 未识别扩展名兜底,如 .bin / .img)
  *
  * FilesScreen.kt 复用同一份 thumbStyle()(FilesScreen 内部同样改写),
  * 保证 Home / Files / Album 文件缩略图视觉一致。
@@ -256,7 +256,7 @@ internal fun thumbStyle(type: FileType): ThumbStyle = when (type) {
     FileType.AUDIO  -> ThumbStyle(Color(0xFFFAF5FF), Color(0xFF9333EA), Icons.Music)
     FileType.DOC    -> ThumbStyle(Color(0xFFF0FDF4), Color(0xFF16A34A), Icons.Doc)
     FileType.ZIP    -> ThumbStyle(Color(0xFFFFF1F2), Color(0xFFDB2777), Icons.Archive)
-    FileType.OTHER  -> ThumbStyle(Color(0xFFF4F4F5), Color(0xFF71717A), Icons.Folder)
+    FileType.OTHER  -> ThumbStyle(Color(0xFFF4F4F5), Color(0xFF71717A), Icons.GenericFile)
 }
 
 /**

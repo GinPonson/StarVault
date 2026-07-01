@@ -35,6 +35,8 @@ class FilesScreenshotTest {
         FileEntry("f-04", "2026 年度产品规划 v3.2.pdf", FileType.DOC, listOf("8.7 MB", "8 页", "今天 09:12"), isFolder = false),
         FileEntry("f-05", "京都樱花 / 4 月 / DSC_4821.jpg", FileType.IMAGE, listOf("14.2 MB", "4032 × 3024", "昨天 23:14"), isFolder = false),
         FileEntry("f-06", "毕业设计源码 v2.zip", FileType.ZIP, listOf("62.1 MB", "23 个文件", "昨天 19:30"), isFolder = false),
+        FileEntry("f-07", "backup_2026q2.bin", FileType.OTHER, listOf("128.0 MB", "今天 03:11"), isFolder = false),
+        FileEntry("f-08", "firmware.img", FileType.OTHER, listOf("42.5 MB", "昨天 21:47"), isFolder = false),
     )
 
     private fun success(

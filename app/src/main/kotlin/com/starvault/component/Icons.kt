@@ -157,7 +157,7 @@ object Icons {
     /* ─────────────────── WallpaperCard (1) ─────────────────── */
     val Storage: ImageVector get() = MaterialIcons.Outlined.Wallpaper
 
-    /* ─────────────────── File thumbs (7, Solar Bold) ─────────────────── */
+    /* ─────────────────── File thumbs (8, Solar Bold) ─────────────────── */
     // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0) — 24x24 flat-fill 单色 icon.
     // 视觉用法:浅色背景(#F4F4F5 / #EFF6FF / … Tailwind 50 系)+ 深彩色 icon(Tailwind 600 系)
     // + 24dp 居中,见 FileRow.FileThumb / FilesScreen.FileThumb。
@@ -170,4 +170,6 @@ object Icons {
     val Doc: ImageVector       get() = SolarDocumentText
     val Archive: ImageVector   get() = SolarZipFile
     val Video: ImageVector     get() = SolarClapperboardPlay
+    /** 通用文件 icon(无 URL / FileType.OTHER 兜底),Solar Bold "File" — 带折角的纸。 */
+    val GenericFile: ImageVector get() = SolarFile
 }
