@@ -33,7 +33,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starvault.component.IconBtn
 import com.starvault.component.Icons
+import com.starvault.component.ScreenAppBar
 import com.starvault.theme.StarVaultTheme
 
 /**
@@ -84,12 +86,14 @@ fun AlbumScreen(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    AppBar(
+                    ScreenAppBar(
+                        title = "相册",
                         onBack = onBack,
-                        onSearch = onSearch,
-                        onCamera = onCamera,
-                        onMore = onMore,
-                    )
+                    ) {
+                        IconBtn(icon = Icons.Search, onClick = onSearch, contentDescription = "搜索")
+                        IconBtn(icon = Icons.Camera, onClick = onCamera, contentDescription = "相机")
+                        IconBtn(icon = Icons.More,   onClick = onMore,   contentDescription = "更多")
+                    }
                     FolderPicker(
                         album = state.currentAlbum,
                         onClick = onOpenSheet,
@@ -133,57 +137,8 @@ fun AlbumScreen(
 }
 
 /* ───────────────────── AppBar ───────────────────── */
-
-@Composable
-private fun AppBar(
-    onBack: () -> Unit,
-    onSearch: () -> Unit,
-    onCamera: () -> Unit,
-    onMore: () -> Unit,
-) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .padding(top = 2.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconBtn(icon = Icons.Back, onClick = onBack, contentDescription = "返回")
-        Text(
-            text = "相册",
-            style = t.large,
-            color = c.fg,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 4.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            IconBtn(icon = Icons.Search, onClick = onSearch, contentDescription = "搜索")
-            IconBtn(icon = Icons.Camera, onClick = onCamera, contentDescription = "相机")
-            IconBtn(icon = Icons.More,   onClick = onMore,   contentDescription = "更多")
-        }
-    }
-}
-
-@Composable
-private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = StarVaultTheme.colors.fg,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+// AppBar 走 [ScreenAppBar] 共享组件 — 见 com.starvault.component.ScreenAppBar
+// (padding 20/20/8/12, t.large 22sp 标题, 右侧 icon 间距 4dp, onBack 时 title 前 4dp)。
 
 /* ───────────────────── FolderPicker ───────────────────── */
 
