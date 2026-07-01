@@ -348,9 +348,11 @@ private fun ResultThumb(type: FileType, thumbnailUrl: String?) {
         FileType.IMAGE -> Icons.Album to Color.White
         FileType.VIDEO -> Icons.Cast to Color.White
         FileType.AUDIO -> Icons.Cast to Color.White
-        FileType.DOC -> Icons.Files to Color.White
-        FileType.ZIP -> Icons.Files to Color.White
-        FileType.OTHER -> Icons.Files to Color.White
+        // DOC / ZIP / OTHER 跟 Home / Files 屏 thumbStyle 对齐 Solar Bold 系列
+        // (后者已用 Solar DocumentText / ZipFile / File;placeholder 统一 zinc 灰底)
+        FileType.DOC -> Icons.Doc to Color.White
+        FileType.ZIP -> Icons.Archive to Color.White
+        FileType.OTHER -> Icons.GenericFile to Color.White
     }
     Box(
         modifier = Modifier
