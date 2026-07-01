@@ -234,7 +234,7 @@ private val BrokenImageTint = Color(0xFF52525B)
  * 文件类型缩略图的视觉样式：背景色 + icon tint + icon。
  *
  * 色对取自 Tailwind 50/600 配色板（与 iOS Files / OneDrive 文件类型色一致）：
- * - FOLDER: zinc-50 + zinc-600
+ * - FOLDER: amber-50 + amber-500  (文件系统图标黄色调，对齐 macOS Finder / iOS Files 视觉惯例)
  * - VIDEO : blue-50 + blue-600
  * - IMAGE : orange-50 + orange-600
  * - AUDIO : purple-50 + purple-600
@@ -250,7 +250,7 @@ private val BrokenImageTint = Color(0xFF52525B)
 internal data class ThumbStyle(val bg: Color, val iconTint: Color, val icon: ImageVector)
 
 internal fun thumbStyle(type: FileType): ThumbStyle = when (type) {
-    FileType.FOLDER -> ThumbStyle(Color(0xFFF4F4F5), Color(0xFF52525B), Icons.Folder)
+    FileType.FOLDER -> ThumbStyle(Color(0xFFFFFBEB), Color(0xFFF59E0B), Icons.Folder)
     FileType.VIDEO  -> ThumbStyle(Color(0xFFEFF6FF), Color(0xFF2F6FEB), Icons.Video)
     FileType.IMAGE  -> ThumbStyle(Color(0xFFFFF7ED), Color(0xFFEA580C), Icons.Image)
     FileType.AUDIO  -> ThumbStyle(Color(0xFFFAF5FF), Color(0xFF9333EA), Icons.Music)
