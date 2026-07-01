@@ -31,7 +31,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.starvault.component.FileRow
+import com.starvault.component.IconBtn
 import com.starvault.component.Icons
+import com.starvault.component.ScreenAppBar
 import com.starvault.data.model.FileItem
 import com.starvault.data.model.FileTag
 import com.starvault.data.model.TagColor
@@ -77,7 +79,11 @@ fun HomeScreen(
     val c = StarVaultTheme.colors
     Box(modifier = modifier.fillMaxSize().background(c.bg)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            HomeAppBar()
+            ScreenAppBar(title = "首页") {
+                IconBtn(icon = Icons.Scan, onClick = {}, contentDescription = "扫描")
+                IconBtn(icon = Icons.Bell, onClick = {}, contentDescription = "通知")
+                IconBtn(icon = Icons.More, onClick = {}, contentDescription = "更多")
+            }
             QuickGrid(onClick = onQuickClick)
             TagStrip(
                 active = state.activeTag,
@@ -97,58 +103,8 @@ fun HomeScreen(
 }
 
 /* ───────────────────────────── AppBar ───────────────────────────── */
-
-/**
- * 顶部 AppBar：左侧 22sp bold "首页"，右侧 3 个 40dp 圆形 icon-btn。
- *
- *  icon 来源（与 design HTML .icon-btn 一一对应，全部来自 [Icons]）：
- *   - 扫描  [Icons.Scan]  — 4 角括号 + 中心横线
- *   - 通知  [Icons.Bell]  — 钟形
- *   - 更多  [Icons.More]  — 3 实心点
- */
-@Composable
-private fun HomeAppBar() {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = "首页",
-            style = t.large,           // 22sp SemiBold，与 HTML .app-title 一致
-            color = c.fg,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(icon = Icons.Scan, contentDescription = "扫描")
-            IconBtn(icon = Icons.Bell, contentDescription = "通知")
-            IconBtn(icon = Icons.More, contentDescription = "更多")
-        }
-    }
-}
-
-/** 40dp 圆形可点 icon 按钮（统一封装，AppBar / 顶部图标通用）。*/
-@Composable
-private fun IconBtn(icon: ImageVector, contentDescription: String) {
-    val c = StarVaultTheme.colors
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable { /* stub */ },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = c.fg,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+// 顶部 AppBar 走 [ScreenAppBar] 共享组件 — 见 com.starvault.component.ScreenAppBar
+// (padding 20/20/8/12, t.large 22sp 标题, 右侧 icon 间距 4dp)。
 
 /* ───────────────────────────── Quick Grid ───────────────────────────── */
 
