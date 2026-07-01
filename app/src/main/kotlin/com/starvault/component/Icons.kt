@@ -4,10 +4,8 @@ import androidx.compose.material.icons.Icons as MaterialIcons
 // Outlined icons (绝大多数)
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
@@ -17,20 +15,14 @@ import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.Fullscreen
-import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PrivacyTip
-import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.RestoreFromTrash
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.SkipNext
-import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.ImageNotSupported
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.ViewList
@@ -41,7 +33,6 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 // Filled（实心 icon + 文件类型缩略图）
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -50,12 +41,12 @@ import com.starvault.component.icons.*
 /**
  * StarVault icon library — 两套图标源,按视觉权重分工:
  *
- *  • **Solar Bold (20 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 — App 内视觉
- *    权重最高 / 最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列
+ *  • **Solar Bold (31 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 —
+ *    App 内视觉权重最高 / 最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列
  *    (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
  *    `com.starvault.component.icons.Solar*`。跨屏视觉一致。
  *
- *  • **Material Icons Extended (38 个)**:工具栏 / 玩家 / Profile 行 /
+ *  • **Material Icons Extended (27 个)**:工具栏 / Profile 行 /
  *    列表操作 — 次要 icon 维持 Material Outlined (Apache 2.0),减少 s2c 生成工作量。
  *
  * Material 变体约定(只对 46 个 Material icon 适用):
@@ -92,19 +83,23 @@ object Icons {
     val Close: ImageVector    get() = SolarClose
     val Back: ImageVector     get() = SolarBack
 
-    /* ─────────────────── Player (10) ─────────────────── */
-    val Subtitle: ImageVector     get() = MaterialIcons.Outlined.ClosedCaption
-    val Cast: ImageVector         get() = MaterialIcons.Outlined.Cast
-    val Clock: ImageVector        get() = MaterialIcons.Outlined.Schedule
-    val DownloadInto: ImageVector get() = MaterialIcons.Outlined.Download
-    val Fullscreen: ImageVector   get() = MaterialIcons.Outlined.Fullscreen
-    val FullscreenExit: ImageVector get() = MaterialIcons.Outlined.FullscreenExit
-    val Prev: ImageVector         get() = MaterialIcons.Outlined.SkipPrevious
-    val Next: ImageVector         get() = MaterialIcons.Outlined.SkipNext
-    val Play: ImageVector         get() = MaterialIcons.Filled.PlayArrow
-    val Pause: ImageVector        get() = MaterialIcons.Filled.Pause
+    /* ─────────────────── Player (11, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). Filled→Bold weight
+    // upgrade (Play / Pause / Star / Favorites):视觉重量比 Material Filled 重
+    // ~5–10%,应用 site 可通过 `Icons.Play` 24dp + tint 控制视觉比例;若觉过重
+    // 可改为 Linear 变体(同一 SVG 在 Linear/ 仓库)。
+    val Subtitle: ImageVector     get() = SolarSubtitle
+    val Cast: ImageVector         get() = SolarCast
+    val Clock: ImageVector        get() = SolarClock
+    val DownloadInto: ImageVector get() = SolarDownloadInto
+    val Fullscreen: ImageVector   get() = SolarFullscreen
+    val FullscreenExit: ImageVector get() = SolarFullscreenExit
+    val Prev: ImageVector         get() = SolarPrev
+    val Next: ImageVector         get() = SolarNext
+    val Play: ImageVector         get() = SolarPlay
+    val Pause: ImageVector        get() = SolarPause
     /** 播放列表(≡+♪);Audio 屏"文件列表"按钮。 */
-    val Playlist: ImageVector     get() = MaterialIcons.Outlined.QueueMusic
+    val Playlist: ImageVector     get() = SolarPlaylist
 
     /* ─────────────────── Transfers / common (5) ─────────────────── */
     val Minimize: ImageVector get() = MaterialIcons.Outlined.Remove
