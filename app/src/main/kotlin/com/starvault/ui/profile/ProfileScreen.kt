@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -32,12 +31,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.starvault.component.IconBtn
 import com.starvault.component.Icons
+import com.starvault.component.ScreenAppBar
 import com.starvault.theme.StarVaultTheme
 
 /**
@@ -79,7 +79,9 @@ fun ProfileScreen(
                     .background(c.bg)
                     .verticalScroll(rememberScrollState()),
             ) {
-                ProfileHeader(onSettings = onSettings)
+                ScreenAppBar(title = "我的") {
+                    IconBtn(icon = Icons.Settings, onClick = onSettings, contentDescription = "设置")
+                }
                 StorageCard(storage = state.storage)
                 WallpaperCard(wallpaper = state.wallpaper, onClick = onWallpaper)
                 SectionBox(rows = state.commonRows, onRow = onRow)
@@ -92,42 +94,8 @@ fun ProfileScreen(
 }
 
 /* ───────────────────── Header ───────────────────── */
-
-@Composable
-private fun ProfileHeader(onSettings: () -> Unit) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 12.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(text = "我的", style = t.large, color = c.fg)
-        IconBtn(icon = Icons.Settings, onClick = onSettings, contentDescription = "设置")
-    }
-}
-
-@Composable
-private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
-    val c = StarVaultTheme.colors
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = c.fg,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+// AppBar 走 [ScreenAppBar] 共享组件 — 见 com.starvault.component.ScreenAppBar
+// (padding 20/20/8/12, t.large 22sp 标题, 右侧 icon 间距 4dp)。
 
 /* ───────────────────── (历史 UserCard 已删除，design body 里不存在) ───────────────────── */
 
