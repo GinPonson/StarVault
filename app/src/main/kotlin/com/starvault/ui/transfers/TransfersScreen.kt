@@ -27,10 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.starvault.component.IconBtn
 import com.starvault.component.Icons
+import com.starvault.component.ScreenAppBar
 import com.starvault.data.model.Direction
 import com.starvault.data.model.Transfer
 import com.starvault.data.model.TransferStatus
@@ -80,7 +81,13 @@ fun TransfersScreen(
             .background(c.bg),
     ) {
         // 1) AppBar
-        AppBar(activeCount = state.totalActive, onSearch = onSearch, onClear = onClear)
+        ScreenAppBar(
+            title = "传输",
+            subtitle = "${state.totalActive} 进行中",
+        ) {
+            IconBtn(icon = Icons.Search, onClick = onSearch, contentDescription = "搜索")
+            IconBtn(icon = Icons.Trash,  onClick = onClear,  contentDescription = "清空已完成")
+        }
         // 2) Overview
         Overview(
             totalActive = state.totalActive,
@@ -132,51 +139,9 @@ fun TransfersScreen(
 }
 
 /* ───────────────────────────── AppBar ───────────────────────────── */
-
-@Composable
-private fun AppBar(activeCount: Int, onSearch: () -> Unit, onClear: () -> Unit) {
-    val c = StarVaultTheme.colors
-    val t = StarVaultTheme.typography
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "传输", style = t.large, color = c.fg)   // 22sp
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "$activeCount 进行中",
-                style = t.micro,
-                color = c.muted,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconBtn(icon = Icons.Search, onClick = onSearch, contentDescription = "搜索")
-            IconBtn(icon = Icons.Trash,  onClick = onClear,  contentDescription = "清空已完成")
-        }
-    }
-}
-
-@Composable
-private fun IconBtn(icon: ImageVector, onClick: () -> Unit, contentDescription: String) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = StarVaultTheme.colors.fg,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+// AppBar 走 [ScreenAppBar] 共享组件 — 见 com.starvault.component.ScreenAppBar
+// (padding 20/20/8/12, t.large 22sp 标题, 右侧 icon 间距 4dp)。
+// subtitle slot 复用为 "N 进行中" 副标题(t.micro muted + 8dp 间距)。
 
 /* ───────────────────────────── Overview ───────────────────────────── */
 
