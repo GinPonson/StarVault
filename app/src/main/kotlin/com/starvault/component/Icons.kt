@@ -59,19 +59,19 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.starvault.component.icons.*
 
 /**
- * StarVault icon library — 全部使用 Material Icons Extended。
+ * StarVault icon library — 全部使用 Material Icons Extended + 本地生成的 Solar Bold。
  *
- * 没有任何手写 SVG 路径：所有 52 个 icon 都映射到 Material 的 7000+ icon 之一。
- * 增删 icon 只需在对应 `MaterialIcons.<变体>.<name>` 位置加一行即可。
+ * 没有任何手写 SVG 路径：所有 52 个 Material icon 都映射到 Material 的 7000+ icon 之一，
+ * 另外 7 个文件类型缩略图 icon 来自 Solar Bold (480 Design, CC BY 4.0),从官方 SVG 用
+ * s2c 生成到 `com.starvault.component.icons.Solar*`。
  *
  * Material 变体约定：
  *  - `Outlined`              — 描边 icon（绝大多数导航/操作类）
  *  - `Filled`                — 实心 icon（Play / Pause / Star / Favorite / CheckCircle）
  *  - `AutoMirrored.Outlined` — 方向敏感 icon（Back / Help，RTL 自动镜像）
  *
- * 文件类型缩略图（带色块背景 + 白色 icon）：用 Phosphor Filled 变体，
- * 见底部 [File thumbs] 分组。
- * 工具栏 / 透明背景 icon：用 Outlined 变体，视觉重量匹配透明背景。
+ * 文件类型缩略图（**浅底背景 + 深彩色 icon**）：用 Solar Bold 变体,见底部 [File thumbs] 分组。
+ * 工具栏 / 透明背景 icon：用 Material Outlined 变体，视觉重量匹配透明背景。
  */
 object Icons {
 
@@ -157,13 +157,17 @@ object Icons {
     /* ─────────────────── WallpaperCard (1) ─────────────────── */
     val Storage: ImageVector get() = MaterialIcons.Outlined.Wallpaper
 
-    /* ─────────────────── File thumbs (7, Phosphor Filled) ─────────────────── */
-    // 本地生成的 Phosphor Fill 图标:视觉重量统一,适配 40dp 色块背景 + 居中白色 icon
-    val Folder: ImageVector    get() = FolderFill
-    val NewFolder: ImageVector get() = FolderPlusFill
-    val Image: ImageVector     get() = FileImageFill
-    val Music: ImageVector     get() = FileAudioFill
-    val Doc: ImageVector       get() = FileTextFill
-    val Archive: ImageVector   get() = FileZipFill
-    val Video: ImageVector     get() = FileVideoFill
+    /* ─────────────────── File thumbs (7, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0) — 24x24 flat-fill 单色 icon.
+    // 视觉用法:浅色背景(#F4F4F5 / #EFF6FF / … Tailwind 50 系)+ 深彩色 icon(Tailwind 600 系)
+    // + 24dp 居中,见 FileRow.FileThumb / FilesScreen.FileThumb。
+    // 选 Solar Bold 而非 Phosphor Fill:FOLDER/AUDIO/VIDEO 在 24dp 下 Solar 几何比例更饱满、
+    // 拐角更圆润,与 iOS Files / OneDrive / Dropbox 的浅底风格契合。
+    val Folder: ImageVector    get() = SolarFolder
+    val NewFolder: ImageVector get() = SolarFolderAdd
+    val Image: ImageVector     get() = SolarGallery
+    val Music: ImageVector     get() = SolarMusicNotes
+    val Doc: ImageVector       get() = SolarDocumentText
+    val Archive: ImageVector   get() = SolarZipFile
+    val Video: ImageVector     get() = SolarClapperboardPlay
 }

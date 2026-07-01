@@ -18,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -34,9 +33,9 @@ import com.starvault.theme.StarVaultTheme
 /**
  * Home / Files / Album 屏的共享文件行（对应 design HTML `.file-row`）。
  *
- *  ┌─[40dp gradient thumb]─[12dp]─[name + meta]─[8dp]─[more icon]
+ *  ┌─[40dp light thumb]─[12dp]─[name + meta]─[8dp]─[more icon]
  *
- *  - thumb        40dp 圆角 9dp + per-type 渐变背景 + 内置类型 icon
+ *  - thumb        40dp 圆角 9dp + per-type 浅色背景（Tailwind 50 系）+ 24dp 深色 Solar Bold icon
  *  - meta         "<size> · <duration|resolution|count> · [tag chip]"
  *  - tag chip     16dp 高 / 4dp 圆角 / accent-soft 风格底 + 5 色前景
  *  - more         18dp 三点 icon (悬浮态，可点)，回调走 onMore
@@ -47,7 +46,7 @@ import com.starvault.theme.StarVaultTheme
  * @param metaSecondaryOverride  强制覆写 meta 第二段（size 之后的 · 段）。
  *                                Home 屏传相对时间（"2 小时前"），其它屏不传时
  *                                自动用 [file].durationOrCount 或 formatDate(mtime)。
- * @param useDesignFallback  无 thumbnailUrl 时是否走 design 渐变色块。
+ * @param useDesignFallback  无 thumbnailUrl 时是否走浅色背景。
  *                              **Home 屏 mock 数据走 true**（保留设计稿预览视觉）；
  *                              **真实数据屏（Files）走 false**（统一 loading 灰底）。
  *                              缺省 `true`（保持原有 Home 屏行为）。
@@ -111,10 +110,10 @@ fun FileRow(
  * 渲染策略（两种无 URL 路径，由 [useDesignFallback] 控制）：
  *
  *  - `useDesignFallback = true`（**Home 屏 mock 数据专用**）
- *      无 URL → design 渐变色块 + 白色类型 icon（design HTML mock 预览风格）
+ *      无 URL → 浅色背景（Tailwind 50 系） + 24dp 深色 Solar Bold icon
  *
  *  - `useDesignFallback = false`（**真实数据屏专用**）
- *      无 URL → `#FAFAFA` 灰底 + `#A1A1AA` 灰色类型 icon（统一 loading 视觉）
+ *      无 URL → `#FAFAFA` 中性灰底 + 24dp 深色 Solar Bold icon（与 loading 一致）
  *
  * 共同路径（无论 useDesignFallback）：
  *  - 有 URL + 加载中 → `#FAFAFA` 灰底（loading slot 空，透出外层 Box）
@@ -125,8 +124,8 @@ fun FileRow(
  *   loading:  `#FAFAFA` 灰底（zinc-50）
  *   error:    `#E4E4E7` 深灰底 + `#52525B` icon（zinc-200 / zinc-600）
  *
- * @param useDesignFallback  无 URL 时是否走 design 渐变色块。默认 `true`（保留
- *                          Home 屏 mock 预览视觉）。真实数据屏传 `false`。
+ * @param useDesignFallback  无 URL 时是否走浅色背景。默认 `true`（保留 Home 屏 mock
+ *                          视觉风格）。真实数据屏传 `false`。
  */
 @Composable
 private fun FileThumb(
@@ -135,26 +134,26 @@ private fun FileThumb(
     thumbnailUrl: String? = null,
     useDesignFallback: Boolean = true,
 ) {
-    val (placeholderBrush, icon) = thumbBrushAndIcon(type)
+    val style = thumbStyle(type)
     if (thumbnailUrl.isNullOrBlank()) {
         if (useDesignFallback) {
-            // ──── Home 屏 mock 预览：design 渐变 + 白色 icon ────
+            // ──── Home 屏 mock 预览：浅色背景 + 深色 Solar icon（24dp） ────
             Box(
                 modifier = modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(9.dp))
-                    .background(placeholderBrush),
+                    .background(style.bg),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = style.icon,
                     contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
+                    tint = style.iconTint,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         } else {
-            // ──── 真实数据屏：灰底 + 灰 icon（统一 loading 视觉） ────
+            // ──── 真实数据屏：灰底 + 深色 Solar icon（与 loading 一致） ────
             Box(
                 modifier = modifier
                     .size(40.dp)
@@ -163,10 +162,10 @@ private fun FileThumb(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = style.icon,
                     contentDescription = null,
-                    tint = PlaceholderIconTint,
-                    modifier = Modifier.size(20.dp),
+                    tint = style.iconTint,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
@@ -222,11 +221,8 @@ private fun FileThumb(
     }
 }
 
-/** 加载中 / 无 URL 灰底（中性 stone-50，极浅，几乎不抢戏） */
+/** 加载中 / 无 URL 灰底（中性 zinc-50，极浅，几乎不抢戏） */
 private val PlaceholderGray = Color(0xFFFAFAFA)
-
-/** 加载中 / 无 URL 的类型 icon 颜色（中性 zinc-400，与底色 #FAFAFA 接近但不消失） */
-private val PlaceholderIconTint = Color(0xFFA1A1AA)
 
 /** 加载失败灰底（中性 zinc-200，比 loading 深一档，视觉上明显区分） */
 private val ErrorBgGray = Color(0xFFE4E4E7)
@@ -234,56 +230,33 @@ private val ErrorBgGray = Color(0xFFE4E4E7)
 /** 裂图 icon 颜色（中性 zinc-600，确保在 zinc-200 底上有足够对比度） */
 private val BrokenImageTint = Color(0xFF52525B)
 
-/** 根据文件类型映射 design HTML 中对应的 135° 渐变与 SVG 图标。
- *  渐变方向 135° = 左上 → 右下，与 HTML `linear-gradient(135deg, …)` 一致。*/
-private fun thumbBrushAndIcon(type: FileType): Pair<Brush, ImageVector> {
-    val brush = when (type) {
-        FileType.FOLDER -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFF6B7280), 1f to Color(0xFF4B5563)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.VIDEO -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFF2F6FEB), 1f to Color(0xFF1D4ED8)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.IMAGE -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFFEA580C), 1f to Color(0xFFC2410C)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.AUDIO -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFF9333EA), 1f to Color(0xFF7E22CE)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.DOC -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFF16A34A), 1f to Color(0xFF15803D)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.ZIP -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFFDB2777), 1f to Color(0xFFBE185D)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.OTHER -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFF9CA3AF), 1f to Color(0xFF6B7280)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-    }
-    val icon = when (type) {
-        FileType.FOLDER -> Icons.Folder
-        FileType.VIDEO  -> Icons.Video
-        FileType.IMAGE  -> Icons.Image
-        FileType.AUDIO  -> Icons.Music
-        FileType.DOC    -> Icons.Doc
-        FileType.ZIP    -> Icons.Archive
-        FileType.OTHER  -> Icons.Folder
-    }
-    return brush to icon
+/**
+ * 文件类型缩略图的视觉样式：背景色 + icon tint + icon。
+ *
+ * 色对取自 Tailwind 50/600 配色板（与 iOS Files / OneDrive 文件类型色一致）：
+ * - FOLDER: zinc-50 + zinc-600
+ * - VIDEO : blue-50 + blue-600
+ * - IMAGE : orange-50 + orange-600
+ * - AUDIO : purple-50 + purple-600
+ * - DOC   : green-50 + green-600
+ * - ZIP   : rose-50 + rose-600
+ * - OTHER : zinc-50 + zinc-500
+ *
+ * FilesScreen.kt 复用同一份 thumbStyle()(FilesScreen 内部同样改写),
+ * 保证 Home / Files / Album 文件缩略图视觉一致。
+ *
+ * `internal` 暴露给同模块的 FilesScreen.kt 复用，外部屏不直接使用。
+ */
+internal data class ThumbStyle(val bg: Color, val iconTint: Color, val icon: ImageVector)
+
+internal fun thumbStyle(type: FileType): ThumbStyle = when (type) {
+    FileType.FOLDER -> ThumbStyle(Color(0xFFF4F4F5), Color(0xFF52525B), Icons.Folder)
+    FileType.VIDEO  -> ThumbStyle(Color(0xFFEFF6FF), Color(0xFF2F6FEB), Icons.Video)
+    FileType.IMAGE  -> ThumbStyle(Color(0xFFFFF7ED), Color(0xFFEA580C), Icons.Image)
+    FileType.AUDIO  -> ThumbStyle(Color(0xFFFAF5FF), Color(0xFF9333EA), Icons.Music)
+    FileType.DOC    -> ThumbStyle(Color(0xFFF0FDF4), Color(0xFF16A34A), Icons.Doc)
+    FileType.ZIP    -> ThumbStyle(Color(0xFFFFF1F2), Color(0xFFDB2777), Icons.Archive)
+    FileType.OTHER  -> ThumbStyle(Color(0xFFF4F4F5), Color(0xFF71717A), Icons.Folder)
 }
 
 /**

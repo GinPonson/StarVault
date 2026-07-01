@@ -46,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -61,6 +60,8 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size as CoilSize
 import com.starvault.component.Icons
+import com.starvault.component.ThumbStyle
+import com.starvault.component.thumbStyle
 import com.starvault.data.model.FileType
 import com.starvault.theme.StarVaultTheme
 
@@ -900,9 +901,9 @@ private fun t5() = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
  * 文件缩略图（三态渲染，与 Home 屏 [com.starvault.component.FileRow] 内的 FileThumb 一致）。
  *
  * 无 URL 时的分支（按 [type] 区分）：
- *  - `FOLDER` → 灰色 FOLDER 渐变 + 白 Folder icon（folder 本来就没缩略图，渐变是设计意图）
- *  - 其他（IMAGE / VIDEO / AUDIO / DOC / ZIP / OTHER）→ `#FAFAFA` 灰底 + 灰色类型 icon
- *      （图片/视频"应该有缩略图但 115 没给 u" 跟"加载中"视觉一致）
+ *  - 全部类型 → 浅色背景 + 24/28dp 深色 Solar Bold icon（与 Home 屏 [com.starvault.component.thumbStyle] 共用）
+ *      图片/视频"应该有缩略图但 115 没给 u" 跟"加载中"视觉一致；folder 也用浅 zinc-50+icon，
+ *      比之前的灰色渐变更克制。
  *
  * 有 URL 时（仅 IMAGE / VIDEO 实际会传 URL）：
  *  - 加载中 → `#FAFAFA` 灰底（loading slot 空，透出外层 Box）
@@ -910,8 +911,8 @@ private fun t5() = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
  *  - 加载失败 → `#E4E4E7` 深灰底 + `#52525B` 裂图 icon
  *
  * 三态色阶：
- *   folder 无 URL:        `#6B7280 → #4B5563` 灰渐变 + 白 Folder icon
- *   其他无 URL / loading: `#FAFAFA` 灰底 + `#A1A1AA` icon（zinc-400）
+ *   无 URL（所有类型）:    `<浅色背景>` + `<深彩色 Solar icon>`  24dp（list）/ 28dp（grid）
+ *   loading:              `#FAFAFA` 灰底
  *   error:                `#E4E4E7` 深灰底 + `#52525B` icon（zinc-200 / zinc-600）
  *
  * @param size         列表模式下的边长（dp），默认 40
@@ -924,28 +925,7 @@ private fun FileThumb(
     fillMaxWidth: Boolean = false,
     thumbnailUrl: String? = null,
 ) {
-    val brush = when (type) {
-        FileType.FOLDER -> Brush.linearGradient(
-            colorStops = arrayOf(0f to Color(0xFF6B7280), 1f to Color(0xFF4B5563)),
-            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-            end   = androidx.compose.ui.geometry.Offset(40f, 40f),
-        )
-        FileType.VIDEO  -> Brush.linearGradient(listOf(Color(0xFF2F6FEB), Color(0xFF1D4ED8)))
-        FileType.IMAGE  -> Brush.linearGradient(listOf(Color(0xFFEA580C), Color(0xFFC2410C)))
-        FileType.AUDIO  -> Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFF7E22CE)))
-        FileType.DOC    -> Brush.linearGradient(listOf(Color(0xFF16A34A), Color(0xFF15803D)))
-        FileType.ZIP    -> Brush.linearGradient(listOf(Color(0xFFDB2777), Color(0xFFBE185D)))
-        FileType.OTHER  -> Brush.linearGradient(listOf(Color(0xFF9CA3AF), Color(0xFF6B7280)))
-    }
-    val icon = when (type) {
-        FileType.FOLDER -> Icons.Folder
-        FileType.VIDEO  -> Icons.Play
-        FileType.IMAGE  -> Icons.Image
-        FileType.AUDIO  -> Icons.Music
-        FileType.DOC    -> Icons.Doc
-        FileType.ZIP    -> Icons.Archive
-        FileType.OTHER  -> Icons.Folder
-    }
+    val style: ThumbStyle = thumbStyle(type)
     val shape = if (fillMaxWidth) RoundedCornerShape(8.dp) else RoundedCornerShape(9.dp)
     val baseMod = if (fillMaxWidth) {
         Modifier
@@ -959,13 +939,8 @@ private fun FileThumb(
     }
 
     if (thumbnailUrl.isNullOrBlank()) {
-        if (type == FileType.FOLDER) {
-            // ──── folder 无 URL：保留灰色 FOLDER 渐变 + 白 icon（设计意图）────
-            ThumbBox(baseMod, brush, icon, fillMaxWidth, isFolder = true)
-        } else {
-            // ──── 其他类型无 URL：灰底 + 灰 icon（统一 loading 视觉）────
-            ThumbBox(baseMod, brush = null, icon, fillMaxWidth, isFolder = false)
-        }
+        // ──── 所有类型无 URL：浅底 + 深色 Solar icon（统一 [thumbStyle]） ────
+        ThumbBox(baseMod, style, fillMaxWidth)
         return
     }
 
@@ -997,27 +972,26 @@ private fun FileThumb(
 }
 
 /**
- * 无 URL 时的缩略图 Box：folder 走渐变 + 白 icon；其他类型走灰底 + 灰 icon。
+ * 无 URL 时的缩略图 Box：浅色背景 + 深色 Solar Bold icon。
+ *
+ * 色对来自 [thumbStyle]（Tailwind 50/600 配色）。grid 模式 icon 28dp 居中,
+ * list 模式 24dp。
  */
 @Composable
 private fun ThumbBox(
     baseMod: Modifier,
-    brush: Brush?,
-    icon: ImageVector,
+    style: ThumbStyle,
     fillMaxWidth: Boolean,
-    isFolder: Boolean,
 ) {
-    val mod = if (brush != null) baseMod.background(brush) else baseMod.background(Color(0xFFFAFAFA))
-    val tint = if (isFolder) Color.White else Color(0xFFA1A1AA)
     Box(
-        modifier = mod,
+        modifier = baseMod.background(style.bg),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = icon,
+            imageVector = style.icon,
             contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(if (fillMaxWidth) 28.dp else 18.dp),
+            tint = style.iconTint,
+            modifier = Modifier.size(if (fillMaxWidth) 28.dp else 24.dp),
         )
     }
 }

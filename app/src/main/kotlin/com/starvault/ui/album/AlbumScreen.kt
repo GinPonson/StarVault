@@ -678,13 +678,13 @@ private fun FolderRow(
             modifier = Modifier
                 .size(24.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(color),
+                .background(Color(0xFFF4F4F5)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Folder,
                 contentDescription = null,
-                tint = Color.White,
+                tint = Color(0xFF52525B),
                 modifier = Modifier.size(14.dp),
             )
         }

@@ -115,7 +115,7 @@ fun AddMenu(
                             imageVector = Icons.NewFolder,
                             contentDescription = null,
                             tint = c.fg,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(24.dp),
                         )
                         Text("新建文件夹", style = t.body, color = c.fg)
                     }
