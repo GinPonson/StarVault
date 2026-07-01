@@ -4,30 +4,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.starvault.component.icons.*
 
 /**
- * StarVault icon library — 两套图标源,按视觉权重分工:
+ * StarVault icon library — Solar Bold (61 个) + Solar Linear (1 个):
  *
- *  • **Solar Bold (61 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
+ *  • **Solar Bold (61 个)** — BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
  *    Files toolbar 10 + Profile 5 + Home Quick/Section/Album 9 + Transfers/Login/
- *    WallpaperCard 6 — App 内视觉权重最高 / 最显眼的 icon 区域,统一走 Solar Bold
- *    Solid Fill 系列 (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
+ *    WallpaperCard 6。视觉权重最高 / 最显眼的 icon 区域,统一走 Solar Bold Solid
+ *    Fill (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
  *    `com.starvault.component.icons.Solar*`。跨屏视觉一致。
  *
- *  • **Solar Linear (1 个)**:Heart 三态(Heart / HeartFilled / HeartOutline 都指向
- *    `SolarHeart.kt`,Solar Bold 无 outline heart 形态,用 Linear 描边 + tint 切换
- *    实心/未填)。这是本仓库目前唯一的 Linear icon。
+ *  • **Solar Linear (1 个)** — `SolarHeart.kt`,三个 wrapper (Heart / HeartFilled /
+ *    HeartOutline) 共用。Solar Bold 没有 outline heart 形态,Linear 描边 + tint 切换
+ *    即可区分填充 / 未填态。
  *
- *  • **Material Icons Extended (0 个)**:**全部 53 个 wrapper 已迁移**。仅留
- *    `androidx.compose.material.icons.filled.PlayArrow` 静态 import 给 Album
- *    PlaySmall 提供 fallback(view 已切到 SolarPlay 但 import 暂留,后续清理)。
- *
- * Material 变体约定(只对 12 个 Material icon 适用):
- *  - `Outlined`              — 描边 icon(绝大多数导航/操作类)
- *  - `Filled`                — 实心 icon(Play / Pause / Star / Favorite / CheckCircle)
- *  - `AutoMirrored.Outlined` — 已废弃:Back / Help 都已迁移到 Solar Bold,Solar 无
- *    RTL 自动镜像,RTL 翻转为后续 task。
- *
- * 文件类型缩略图(**浅底背景 + 深彩色 icon**):Solar Bold 变体,见底部 [File thumbs] 分组。
- * 工具栏 / 透明背景 icon:Material Outlined 变体,视觉重量匹配透明背景。
+ * Solar 仓库无对应语义时(GridView / BrokenImage / ShareOut / Recycle)用近似 icon
+ * 替代,见各分组 section comment。Solar Bold 无 RTL 自动镜像——`Icons.Back` 在
+ * 真正需要 RTL 支持时,call site 加 `Modifier.graphicsLayer(scaleX = -1f)`。
+ * 当前 StarVault 主要 locale 是 zh-CN,RTL flip 未启用。
  */
 object Icons {
 
@@ -56,10 +48,8 @@ object Icons {
     val Back: ImageVector     get() = SolarBack
 
     /* ─────────────────── Player (11, Solar Bold) ─────────────────── */
-    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). Filled→Bold weight
-    // upgrade (Play / Pause / Star / Favorites):视觉重量比 Material Filled 重
-    // ~5–10%,应用 site 可通过 `Icons.Play` 24dp + tint 控制视觉比例;若觉过重
-    // 可改为 Linear 变体(同一 SVG 在 Linear/ 仓库)。
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0)。Solar Bold 是实心,
+    // Play / Pause / 时码类 icon 的视觉重量略高,call site 可用 24dp + tint 控制比例。
     val Subtitle: ImageVector     get() = SolarSubtitle
     val Cast: ImageVector         get() = SolarCast
     val Clock: ImageVector        get() = SolarClock
@@ -99,11 +89,8 @@ object Icons {
     val BrokenImage: ImageVector get() = SolarBrokenImage
 
     /* ─────────────────── Profile rows (5, Solar Bold) ─────────────────── */
-    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). ShareOut →
-    // Solar Export (Solar 无 iOS up-arrow,用箭头出框表示 share-out),MEDIUM confidence;
-    // 其它 icon 语义 1:1 还原。
-    // 备注:Batch 4 前存在 ShareAlt wrapper,grep 后 0 production caller,已随
-    // 本次 swap 一并删除。
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0)。ShareOut → Solar Export
+    // (箭头出框,share-out 语义近似);其它 icon 1:1 还原。
     val ShareOut: ImageVector   get() = SolarShareOut
     val Device: ImageVector     get() = SolarDevice
     val Privacy: ImageVector    get() = SolarPrivacy
@@ -123,15 +110,13 @@ object Icons {
     val Plus: ImageVector  get() = SolarPlus
 
     /* ─────────────────── Album (4, Solar Bold + Linear) ─────────────────── */
-    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). PlaySmall 复用
-    // SolarPlay (Batch 2)。三个 heart (Heart / HeartFilled / HeartOutline) 全用
-    // **Solar Linear** Heart (Solar Bold 没有 outline heart 形态),call site 用
-    // tint 切换填充 ↔ 未填。
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0)。PlaySmall 复用 SolarPlay
+    // 同一 Linear Heart。Heart / HeartFilled / HeartOutline 都指向 SolarHeart
+    // (Solar Linear 描边),call site 用 tint 切填充 ↔ 未填。
     val Camera: ImageVector    get() = SolarCamera
     val PlaySmall: ImageVector get() = SolarPlay
-    /** 相册喜欢(实心);Preview 屏 HeartFilled 的旧语义并入这里。 */
     val Heart: ImageVector     get() = SolarHeart
-    /** 同 [Heart];为兼容 Preview 屏 toggle 接口保留旧名字(都指向 Solar Heart)。 */
+    /** 同 [Heart];3 个 wrapper 共用 SolarHeart(Preview 屏 toggle 兼容)。 */
     val HeartFilled: ImageVector  get() = SolarHeart
     /** 同 [Heart](Solar Linear);call site 用 `tint = c.muted` 区分未填态。 */
     val HeartOutline: ImageVector get() = SolarHeart
@@ -143,9 +128,8 @@ object Icons {
     val RefreshAlt: ImageVector get() = SolarRefreshAlt
 
     /* ─────────────────── WallpaperCard (1, Solar Bold) ─────────────────── */
-    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0)。原 Material Outlined.Wallpaper
-    // 误用作存储卡 icon,Solar 仓库恰好有 Wallpaper.svg,语义比 Material 的更准确
-    // (Material 的 Outlined.Wallpaper 实际是纹理填充样式,Solar 是真正的壁纸/显示器概念)。
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0)。WallpaperScreen 本身
+    // 不用此 icon;实际渲染只在 ProfileScreen.WallpaperCard row,语义是存储卡入口。
     val Storage: ImageVector get() = SolarStorage
 
     /* ─────────────────── File thumbs (8, Solar Bold) ─────────────────── */
