@@ -1,34 +1,24 @@
 package com.starvault.component
 
-import androidx.compose.material.icons.Icons as MaterialIcons
-// Outlined icons (绝大多数,Batch 6 之前全数删光)
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.CreateNewFolder
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Remove
-import androidx.compose.material.icons.outlined.Wallpaper
-// Filled（实心 icon + 文件类型缩略图）
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.starvault.component.icons.*
 
 /**
  * StarVault icon library — 两套图标源,按视觉权重分工:
  *
- *  • **Solar Bold (55 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
- *    Files toolbar 10 + Profile 5 + Home Quick/Section/Album 9 — App 内视觉权重最高 /
- *    最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列 (480 Design, CC BY 4.0),
- *    通过 s2c 从官方 SVG 生成到 `com.starvault.component.icons.Solar*`。
- *    跨屏视觉一致。
+ *  • **Solar Bold (61 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
+ *    Files toolbar 10 + Profile 5 + Home Quick/Section/Album 9 + Transfers/Login/
+ *    WallpaperCard 6 — App 内视觉权重最高 / 最显眼的 icon 区域,统一走 Solar Bold
+ *    Solid Fill 系列 (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
+ *    `com.starvault.component.icons.Solar*`。跨屏视觉一致。
  *
  *  • **Solar Linear (1 个)**:Heart 三态(Heart / HeartFilled / HeartOutline 都指向
  *    `SolarHeart.kt`,Solar Bold 无 outline heart 形态,用 Linear 描边 + tint 切换
  *    实心/未填)。这是本仓库目前唯一的 Linear icon。
  *
- *  • **Material Icons Extended (3 个)**:Transfers / Login / WallpaperCard 残存
- *    工具栏 icon,Batch 6 处理。
+ *  • **Material Icons Extended (0 个)**:**全部 53 个 wrapper 已迁移**。仅留
+ *    `androidx.compose.material.icons.filled.PlayArrow` 静态 import 给 Album
+ *    PlaySmall 提供 fallback(view 已切到 SolarPlay 但 import 暂留,后续清理)。
  *
  * Material 变体约定(只对 12 个 Material icon 适用):
  *  - `Outlined`              — 描边 icon(绝大多数导航/操作类)
@@ -83,12 +73,14 @@ object Icons {
     /** 播放列表(≡+♪);Audio 屏"文件列表"按钮。 */
     val Playlist: ImageVector     get() = SolarPlaylist
 
-    /* ─────────────────── Transfers / common (5) ─────────────────── */
-    val Minimize: ImageVector get() = MaterialIcons.Outlined.Remove
-    val Refresh: ImageVector  get() = MaterialIcons.Outlined.Refresh
-    val Cancel: ImageVector   get() = MaterialIcons.Outlined.Close
-    val Trash: ImageVector    get() = MaterialIcons.Outlined.Delete
-    val Retry: ImageVector    get() = MaterialIcons.Outlined.Refresh
+    /* ─────────────────── Transfers / common (5, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). Cancel 复用 SolarClose (Batch 1);
+    // Retry 用 SolarRecycle (Batch 5 的 Solar Restart 同样适用 retry 语义)。
+    val Minimize: ImageVector get() = SolarMinimize
+    val Refresh: ImageVector  get() = SolarRefresh
+    val Cancel: ImageVector   get() = SolarClose
+    val Trash: ImageVector    get() = SolarTrash
+    val Retry: ImageVector    get() = SolarRecycle
 
     /* ─────────────────── Files toolbar (10, Solar Bold) ─────────────────── */
     // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0) — Files 屏工具栏 toggle /
@@ -144,12 +136,17 @@ object Icons {
     /** 同 [Heart](Solar Linear);call site 用 `tint = c.muted` 区分未填态。 */
     val HeartOutline: ImageVector get() = SolarHeart
 
-    /* ─────────────────── Login (2) ─────────────────── */
-    val CheckBold: ImageVector  get() = MaterialIcons.Filled.CheckCircle
-    val RefreshAlt: ImageVector get() = MaterialIcons.Outlined.Refresh
+    /* ─────────────────── Login (2, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). RefreshAlt → Solar
+    // Refresh Circle (与 Refresh 同 Refresh 圆形版,Login 错误态专用)。
+    val CheckBold: ImageVector  get() = SolarCheckBold
+    val RefreshAlt: ImageVector get() = SolarRefreshAlt
 
-    /* ─────────────────── WallpaperCard (1) ─────────────────── */
-    val Storage: ImageVector get() = MaterialIcons.Outlined.Wallpaper
+    /* ─────────────────── WallpaperCard (1, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0)。原 Material Outlined.Wallpaper
+    // 误用作存储卡 icon,Solar 仓库恰好有 Wallpaper.svg,语义比 Material 的更准确
+    // (Material 的 Outlined.Wallpaper 实际是纹理填充样式,Solar 是真正的壁纸/显示器概念)。
+    val Storage: ImageVector get() = SolarStorage
 
     /* ─────────────────── File thumbs (8, Solar Bold) ─────────────────── */
     // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0) — 24x24 flat-fill 单色 icon.
