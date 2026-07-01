@@ -5,28 +5,19 @@ import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Devices
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.DriveFileMove
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.ImageNotSupported
-import androidx.compose.material.icons.outlined.SwapVert
-import androidx.compose.material.icons.outlined.ViewList
-import androidx.compose.material.icons.outlined.ViewModule
 import androidx.compose.material.icons.outlined.Wallpaper
 // AutoMirrored
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -41,13 +32,14 @@ import com.starvault.component.icons.*
 /**
  * StarVault icon library — 两套图标源,按视觉权重分工:
  *
- *  • **Solar Bold (31 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 —
- *    App 内视觉权重最高 / 最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列
- *    (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
+ *  • **Solar Bold (41 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
+ *    Files toolbar 10 — App 内视觉权重最高 / 最显眼的 icon 区域,统一走 Solar Bold
+ *    Solid Fill 系列 (480 Design, CC BY 4.0),通过 s2c 从官方 SVG 生成到
  *    `com.starvault.component.icons.Solar*`。跨屏视觉一致。
  *
- *  • **Material Icons Extended (27 个)**:工具栏 / Profile 行 /
- *    列表操作 — 次要 icon 维持 Material Outlined (Apache 2.0),减少 s2c 生成工作量。
+ *  • **Material Icons Extended (17 个)**:Profile 行 / Transfers / Login /
+ *    Home Quick/Section/Album / WallpaperCard — 次要 icon 维持 Material Outlined
+ *    (Apache 2.0),减少 s2c 生成工作量。
  *
  * Material 变体约定(只对 46 个 Material icon 适用):
  *  - `Outlined`              — 描边 icon(绝大多数导航/操作类)
@@ -108,17 +100,21 @@ object Icons {
     val Trash: ImageVector    get() = MaterialIcons.Outlined.Delete
     val Retry: ImageVector    get() = MaterialIcons.Outlined.Refresh
 
-    /* ─────────────────── Files toolbar (9) ─────────────────── */
-    val Transfers: ImageVector   get() = MaterialIcons.Outlined.SwapVert
-    val ListView: ImageVector    get() = MaterialIcons.Outlined.ViewList
-    val GridView: ImageVector    get() = MaterialIcons.Outlined.ViewModule
-    val ChevronDown: ImageVector get() = MaterialIcons.Outlined.KeyboardArrowDown
-    val ChevronRight: ImageVector get() = MaterialIcons.Outlined.ChevronRight
-    val Download: ImageVector    get() = MaterialIcons.Outlined.Download
-    val Share: ImageVector       get() = MaterialIcons.Outlined.Share
-    val Move: ImageVector        get() = MaterialIcons.Outlined.DriveFileMove
-    val Rename: ImageVector      get() = MaterialIcons.Outlined.Edit
-    val BrokenImage: ImageVector get() = MaterialIcons.Outlined.ImageNotSupported
+    /* ─────────────────── Files toolbar (10, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0) — Files 屏工具栏 toggle /
+    // 行操作。GridView → Solar Gallery (4 缩略图网格),BrokenImage → Solar Gallery Remove
+    // (图库 + 减号,表示加载失败) — Solar 无 "view-module 3×3 grid" / "broken-image"
+    // 概念,这 2 个 MEDIUM confidence;其余 icon 语义 1:1 还原。
+    val Transfers: ImageVector   get() = SolarTransfers
+    val ListView: ImageVector    get() = SolarListView
+    val GridView: ImageVector    get() = SolarGridView
+    val ChevronDown: ImageVector get() = SolarChevronDown
+    val ChevronRight: ImageVector get() = SolarChevronRight
+    val Download: ImageVector    get() = SolarDownload
+    val Share: ImageVector       get() = SolarShare
+    val Move: ImageVector        get() = SolarMove
+    val Rename: ImageVector      get() = SolarRename
+    val BrokenImage: ImageVector get() = SolarBrokenImage
 
     /* ─────────────────── Profile rows (6) ─────────────────── */
     val ShareOut: ImageVector   get() = MaterialIcons.Outlined.IosShare
