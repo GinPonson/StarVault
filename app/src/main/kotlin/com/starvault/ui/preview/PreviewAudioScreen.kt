@@ -597,7 +597,9 @@ private fun AudioControls(
             PreviewCtrlBtn(
                 icon = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
                 contentDescription = if (isStarred) "已收藏" else "收藏",
-                tint = c.fg,
+                // Filled → fg (active);Outline → muted (inactive)。两个 wrapper 都指向
+                // Solar Linear Heart,所以靠 tint 区分(Linear Bold 没有 outline heart 形态)。
+                tint = if (isStarred) c.fg else c.muted,
                 onClick = onToggleStar,
             )
             PreviewCtrlBtn(

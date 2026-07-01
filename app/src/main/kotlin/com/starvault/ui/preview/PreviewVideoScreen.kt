@@ -674,6 +674,9 @@ private fun PreviewTopBar(
         PreviewIconBtn(
             icon = if (isStarred) Icons.HeartFilled else Icons.HeartOutline,
             contentDescription = if (isStarred) "已收藏" else "收藏",
+            // 线性 Heart (HeartFilled/Outline 同 shape),用 tint 区分:已收藏=白(active),
+            // 未收藏=半透明白(inactive)。Linear 描边随 alpha 透出黑底屏面而淡化。
+            tint = if (isStarred) Color.White else Color.White.copy(alpha = 0.5f),
             onClick = onToggleStar,
         )
         Box {
@@ -720,6 +723,7 @@ private fun PreviewTopBar(
 private fun PreviewIconBtn(
     icon: ImageVector,
     contentDescription: String,
+    tint: Color = Color.White,
     onClick: () -> Unit,
 ) {
     Box(
@@ -732,7 +736,7 @@ private fun PreviewIconBtn(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = Color.White,
+            tint = tint,
             modifier = Modifier.size(20.dp),
         )
     }

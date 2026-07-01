@@ -1,38 +1,34 @@
 package com.starvault.component
 
 import androidx.compose.material.icons.Icons as MaterialIcons
-// Outlined icons (绝大多数)
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.Check
+// Outlined icons (绝大多数,Batch 6 之前全数删光)
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
-import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Wallpaper
 // Filled（实心 icon + 文件类型缩略图）
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.starvault.component.icons.*
 
 /**
  * StarVault icon library — 两套图标源,按视觉权重分工:
  *
- *  • **Solar Bold (46 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
- *    Files toolbar 10 + Profile 5 — App 内视觉权重最高 / 最显眼的 icon 区域,
- *    统一走 Solar Bold Solid Fill 系列 (480 Design, CC BY 4.0),通过 s2c 从官方
- *    SVG 生成到 `com.starvault.component.icons.Solar*`。跨屏视觉一致。
+ *  • **Solar Bold (55 个)**:BottomNav 4 + File thumbs 8 + AppBar 8 + Player 11 +
+ *    Files toolbar 10 + Profile 5 + Home Quick/Section/Album 9 — App 内视觉权重最高 /
+ *    最显眼的 icon 区域,统一走 Solar Bold Solid Fill 系列 (480 Design, CC BY 4.0),
+ *    通过 s2c 从官方 SVG 生成到 `com.starvault.component.icons.Solar*`。
+ *    跨屏视觉一致。
  *
- *  • **Material Icons Extended (12 个)**:Transfers / Login /
- *    Home Quick/Section/Album / WallpaperCard — 次要 icon 维持 Material Outlined
- *    (Apache 2.0),减少 s2c 生成工作量。
+ *  • **Solar Linear (1 个)**:Heart 三态(Heart / HeartFilled / HeartOutline 都指向
+ *    `SolarHeart.kt`,Solar Bold 无 outline heart 形态,用 Linear 描边 + tint 切换
+ *    实心/未填)。这是本仓库目前唯一的 Linear icon。
+ *
+ *  • **Material Icons Extended (3 个)**:Transfers / Login / WallpaperCard 残存
+ *    工具栏 icon,Batch 6 处理。
  *
  * Material 变体约定(只对 12 个 Material icon 适用):
  *  - `Outlined`              — 描边 icon(绝大多数导航/操作类)
@@ -122,23 +118,31 @@ object Icons {
     val Appearance: ImageVector get() = SolarAppearance
     val Help: ImageVector       get() = SolarHelp
 
-    /* ─────────────────── Home Quick (3) ─────────────────── */
-    val Favorites: ImageVector get() = MaterialIcons.Filled.Star
-    val Upload: ImageVector    get() = MaterialIcons.Outlined.FileUpload
-    val Recycle: ImageVector   get() = MaterialIcons.Outlined.RestoreFromTrash
+    /* ─────────────────── Home Quick (3, Solar Bold) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). Recycle →
+    // Solar Restart (Solar 无 "restore from trash" 概念,用循环箭头表示重做),
+    // MEDIUM confidence;其它 icon 语义 1:1 还原。
+    val Favorites: ImageVector get() = SolarFavorites
+    val Upload: ImageVector    get() = SolarUpload
+    val Recycle: ImageVector   get() = SolarRecycle
 
-    /* ─────────────────── Home section (2) ─────────────────── */
-    val Check: ImageVector get() = MaterialIcons.Outlined.Check
-    val Plus: ImageVector  get() = MaterialIcons.Outlined.Add
+    /* ─────────────────── Home section (2, Solar Bold) ─────────────────── */
+    val Check: ImageVector get() = SolarCheck
+    val Plus: ImageVector  get() = SolarPlus
 
-    /* ─────────────────── Album (3) ─────────────────── */
-    val Camera: ImageVector    get() = MaterialIcons.Outlined.CameraAlt
-    val PlaySmall: ImageVector get() = MaterialIcons.Filled.PlayArrow
-    val Heart: ImageVector     get() = MaterialIcons.Filled.Favorite
-    /** 实心 ❤️；Preview 屏 star toggle 用,区别于 Icons.Heart(相册喜欢)。 */
-    val HeartFilled: ImageVector  get() = MaterialIcons.Filled.Favorite
-    /** 空心 ♡；Preview 屏 star 未收藏态。 */
-    val HeartOutline: ImageVector get() = MaterialIcons.Outlined.FavoriteBorder
+    /* ─────────────────── Album (4, Solar Bold + Linear) ─────────────────── */
+    // Solar Bold from 480-Design/Solar-Icon-Set (CC BY 4.0). PlaySmall 复用
+    // SolarPlay (Batch 2)。三个 heart (Heart / HeartFilled / HeartOutline) 全用
+    // **Solar Linear** Heart (Solar Bold 没有 outline heart 形态),call site 用
+    // tint 切换填充 ↔ 未填。
+    val Camera: ImageVector    get() = SolarCamera
+    val PlaySmall: ImageVector get() = SolarPlay
+    /** 相册喜欢(实心);Preview 屏 HeartFilled 的旧语义并入这里。 */
+    val Heart: ImageVector     get() = SolarHeart
+    /** 同 [Heart];为兼容 Preview 屏 toggle 接口保留旧名字(都指向 Solar Heart)。 */
+    val HeartFilled: ImageVector  get() = SolarHeart
+    /** 同 [Heart](Solar Linear);call site 用 `tint = c.muted` 区分未填态。 */
+    val HeartOutline: ImageVector get() = SolarHeart
 
     /* ─────────────────── Login (2) ─────────────────── */
     val CheckBold: ImageVector  get() = MaterialIcons.Filled.CheckCircle
